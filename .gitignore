@@ -26,6 +26,8 @@ frontend/*.log
 # ===== 本地个人产物（简历/照片等，与项目无关）=====
 output/
 tmp/
+tmp_cred.txt
+tmp_cred_err.txt
 
 # ===== IDE / OS =====
 .idea/
