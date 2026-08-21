@@ -37,7 +37,7 @@ public class AuthService {
         return tokens(user);
     }
 
-    public Map<String, String> register(String username, String password, String role, String nickname) {
+    public Map<String, String> register(String username, String password, String nickname) {
         if (username == null || username.isBlank() || password == null || password.isBlank()) {
             throw new BizException("用户名与密码不能为空");
         }
@@ -48,7 +48,6 @@ public class AuthService {
         u.setTenantId(1L);
         u.setUsername(username);
         u.setPassword(hash(password));
-        u.setRole("user");
         u.setNickname(nickname == null || nickname.isBlank() ? username : nickname);
         u.setCreatedAt(LocalDateTime.now());
         userMapper.insert(u);
@@ -60,7 +59,7 @@ public class AuthService {
     }
 
     private Map<String, String> tokens(User user) {
-        AuthUser au = new AuthUser(user.getId(), user.getUsername(), user.getRole(), user.getNickname(), user.getTenantId());
+        AuthUser au = new AuthUser(user.getId(), user.getUsername(), user.getNickname(), user.getTenantId());
         return Map.of(
                 "accessToken", jwtTokenService.createAccessToken(au),
                 "refreshToken", jwtTokenService.createRefreshToken(au));

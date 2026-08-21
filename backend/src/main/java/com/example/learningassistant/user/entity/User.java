@@ -21,7 +21,6 @@ public class User {
     private String username;
     /** BCrypt 哈希（骨架阶段沿用 SHA-256 加盐，见 AuthService） */
     private String password;
-    private String role;
     private String nickname;
     private LocalDateTime createdAt;
 }

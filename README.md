@@ -43,13 +43,15 @@ cp .env.example .env      # 填入 AI_API_KEY
 
 ## 三、演示账号（密码均为 123456）
 
-| 账号 | 角色 |
-|------|------|
-| `student` | 学生 |
-| `teacher` | 教师 |
-| `admin` | 管理员 |
+系统为个人学习助手，所有用户权限一致（无角色区分），多账号用于演示多用户数据隔离：
 
-登录：`POST /api/auth/login {"username":"student","password":"123456"}` → 返回 `accessToken` / `refreshToken`（JWT），后续请求头带 `Authorization: Bearer <accessToken>`。
+| 账号 | 昵称 |
+|------|------|
+| `xiaoming` | 小明 |
+| `xiaohong` | 小红 |
+| `xiaoyu` | 小宇 |
+
+登录：`POST /api/auth/login {"username":"xiaoming","password":"123456"}` → 返回 `accessToken` / `refreshToken`（JWT），后续请求头带 `Authorization: Bearer <accessToken>`。
 
 ## 四、已验证接口（全功能阶段）
 
@@ -95,7 +97,7 @@ app:
     mq-mode: memory         # memory | rabbit
 ```
 
-数据库：默认 H2，切换 MySQL 见 `application.yml` 中 datasource 注释。
+数据库：默认 H2（Docker 部署即默认）；本地开发切 MySQL：`java -jar target/learning-assistant-1.0.0.jar --spring.profiles.active=mysql`（连接信息见 `application-mysql.yml`）。
 
 ## 六、工程结构（backend/ 单模块）
 

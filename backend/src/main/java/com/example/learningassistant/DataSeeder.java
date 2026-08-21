@@ -30,11 +30,11 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        Long studentId = seedUser("student", "张三同学");
-        seedUser("teacher", "王老师");
-        seedUser("admin", "管理员");
-        Long courseId = seedCourse();
-        seedMasteryAndPractices(studentId, courseId);
+        Long xiaomingId = seedUser("xiaoming", "小明");
+        seedUser("xiaohong", "小红");
+        seedUser("xiaoyu", "小宇");
+        Long courseId = seedCourse(xiaomingId);
+        seedMasteryAndPractices(xiaomingId, courseId);
         seedQuestions(courseId);
         seedKb(courseId);
         kbService.reindexFromChunks();
@@ -49,14 +49,13 @@ public class DataSeeder implements CommandLineRunner {
         u.setTenantId(1L);
         u.setUsername(username);
         u.setPassword(AuthService.hash("123456"));
-        u.setRole("user");
         u.setNickname(nickname);
         u.setCreatedAt(LocalDateTime.now());
         userMapper.insert(u);
         return u.getId();
     }
 
-    private Long seedCourse() {
+    private Long seedCourse(Long ownerId) {
         Long existing = courseMapper.selectCount(null);
         if (existing != null && existing > 0) {
             return courseMapper.selectList(null).get(0).getId();
@@ -64,24 +63,24 @@ public class DataSeeder implements CommandLineRunner {
         Course c = new Course();
         c.setName("Java 编程基础");
         c.setDescription("涵盖 Java 核心语法、面向对象、集合框架、多线程等知识点的入门课程。");
-        c.setTeacherId(2L);
-        c.setTeacherName("王老师");
+        c.setOwnerId(ownerId);
+        c.setOwnerName("小明");
         c.setCreatedAt(LocalDateTime.now());
         courseMapper.insert(c);
         return c.getId();
     }
 
-    private void seedMasteryAndPractices(Long studentId, Long courseId) {
+    private void seedMasteryAndPractices(Long userId, Long courseId) {
         // 掌握度样例：3 个知识点，掌握度依次为 40 / 65 / 90
-        upsertMastery(studentId, courseId, "HashMap原理", 40, 10, 4);
-        upsertMastery(studentId, courseId, "Java集合框架", 65, 20, 13);
-        upsertMastery(studentId, courseId, "Java多线程", 90, 15, 13);
+        upsertMastery(userId, courseId, "HashMap原理", 40, 10, 4);
+        upsertMastery(userId, courseId, "Java集合框架", 65, 20, 13);
+        upsertMastery(userId, courseId, "Java多线程", 90, 15, 13);
 
-        // 练习样例：3 次练习记录（供学生练习总览聚合查询）
+        // 练习样例：3 次练习记录（供练习总览聚合查询）
         if (practiceMapper.selectCount(null) == 0) {
-            insertPractice(studentId, courseId, "AI 智能练习", 50, 35);
-            insertPractice(studentId, courseId, "集合专项练习", 30, 30);
-            insertPractice(studentId, courseId, "多线程综合练习", 50, 45);
+            insertPractice(userId, courseId, "AI 智能练习", 50, 35);
+            insertPractice(userId, courseId, "集合专项练习", 30, 30);
+            insertPractice(userId, courseId, "多线程综合练习", 50, 45);
         }
     }
 

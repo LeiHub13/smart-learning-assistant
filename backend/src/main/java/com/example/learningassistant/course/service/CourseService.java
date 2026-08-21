@@ -42,7 +42,7 @@ public class CourseService {
             m.put("id", c.getId());
             m.put("name", c.getName());
             m.put("description", c.getDescription());
-            m.put("teacherName", c.getTeacherName());
+            m.put("ownerName", c.getOwnerName());
             m.put("enrolled", enrolledCourseIds.contains(c.getId()));
             m.put("kbCount", kbMapper.selectCount(new LambdaQueryWrapper<KnowledgeBase>()
                     .eq(KnowledgeBase::getCourseId, c.getId())).intValue());
@@ -52,15 +52,15 @@ public class CourseService {
         }).toList();
     }
 
-    public Course create(String name, String description, Long teacherId, String teacherName) {
+    public Course create(String name, String description, Long ownerId, String ownerName) {
         Course c = new Course();
         c.setName(name);
         c.setDescription(description);
-        c.setTeacherId(teacherId);
-        c.setTeacherName(teacherName);
+        c.setOwnerId(ownerId);
+        c.setOwnerName(ownerName);
         c.setCreatedAt(LocalDateTime.now());
         courseMapper.insert(c);
-        enroll(teacherId, c.getId());
+        enroll(ownerId, c.getId());
         return c;
     }
 

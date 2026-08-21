@@ -43,7 +43,6 @@ public class JwtTokenService {
         return Jwts.builder()
                 .subject(String.valueOf(user.id()))
                 .claim("username", user.username())
-                .claim("role", user.role())
                 .claim("nickname", user.nickname())
                 .claim("tenantId", user.tenantId() == null ? 1L : user.tenantId())
                 .issuedAt(new Date(now))
@@ -63,7 +62,6 @@ public class JwtTokenService {
             return new AuthUser(
                     Long.valueOf(c.getSubject()),
                     c.get("username", String.class),
-                    c.get("role", String.class),
                     c.get("nickname", String.class),
                     tid == null ? 1L : Long.valueOf(String.valueOf(tid)));
         } catch (Exception e) {

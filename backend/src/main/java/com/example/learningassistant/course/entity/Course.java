@@ -20,7 +20,7 @@ public class Course {
     private Long tenantId;
     private String name;
     private String description;
-    private Long teacherId;
-    private String teacherName;
+    private Long ownerId;
+    private String ownerName;
     private LocalDateTime createdAt;
 }

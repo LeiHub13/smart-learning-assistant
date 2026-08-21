@@ -176,7 +176,7 @@ curl -I http://127.0.0.1/                      # Nginx 正常
 # 后端日志确认模型路由
 sudo journalctl -u learning-assistant -f | grep "LLM 提供方"
 
-# 浏览器打开 http://<服务器IP> → student/123456 登录 → 答疑提问，
+# 浏览器打开 http://<服务器IP> → xiaoming/123456 登录 → 答疑提问，
 # 观察回答是否逐字流式出现（验证 SSE 透传）。
 ```
 

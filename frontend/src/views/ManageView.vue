@@ -27,7 +27,7 @@
         <div style="flex:1">
           <h3 style="margin-bottom:4px">{{ c.name }}
             <span v-if="c.enrolled" class="tag ok">已加入</span>
-            <span class="tag">创建者：{{ c.teacherName }}</span>
+            <span class="tag">创建者：{{ c.ownerName }}</span>
           </h3>
           <div style="color:var(--muted)">{{ c.description }}</div>
           <div style="margin-top:6px;font-size:12px;color:var(--muted)">知识库 {{ c.kbCount }} 个 · 题库 {{ c.questionCount }} 题</div>

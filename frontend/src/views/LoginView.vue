@@ -19,7 +19,7 @@
       <div v-if="error" class="err">{{ error }}</div>
       <div class="f">
         <span class="label">用户名</span>
-        <input v-model="form.username" type="text" placeholder="输入用户名，如 student" />
+        <input v-model="form.username" type="text" placeholder="输入用户名，如 xiaoming" />
       </div>
       <div class="f">
         <span class="label">密码</span>
@@ -35,7 +35,7 @@
       </div>
       <div class="tips">
         <b>演示账号</b>（密码均为 123456）：<br />
-        学生 student · 教师 teacher · 管理员 admin
+        xiaoming（小明） · xiaohong（小红） · xiaoyu（小宇）
       </div>
     </div>
   </div>

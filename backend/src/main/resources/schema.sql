@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS t_user (
     tenant_id   BIGINT DEFAULT 1,
     username    VARCHAR(50)  NOT NULL UNIQUE,
     password    VARCHAR(100) NOT NULL,
-    role        VARCHAR(20)  NOT NULL,
     nickname    VARCHAR(50),
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -16,8 +15,8 @@ CREATE TABLE IF NOT EXISTS t_course (
     tenant_id    BIGINT DEFAULT 1,
     name         VARCHAR(100) NOT NULL,
     description  VARCHAR(500),
-    teacher_id   BIGINT,
-    teacher_name VARCHAR(50),
+    owner_id     BIGINT,
+    owner_name   VARCHAR(50),
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

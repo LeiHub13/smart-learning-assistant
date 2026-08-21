@@ -5,10 +5,10 @@ spring:
   application:
     name: learning-assistant
   datasource:
-    url: jdbc:mysql://localhost:3306/learning_assistant?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
-    password: 1234
+    url: jdbc:h2:file:./data/learnassist;MODE=MySQL;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
   sql:
     init:
       mode: always

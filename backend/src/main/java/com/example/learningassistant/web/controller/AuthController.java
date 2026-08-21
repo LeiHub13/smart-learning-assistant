@@ -33,7 +33,7 @@ public class AuthController {
     @PostMapping("/register")
     public ApiResponse<Map<String, String>> register(@RequestBody Map<String, String> body) {
         return ApiResponse.ok(authService.register(
-                body.get("username"), body.get("password"), body.get("role"), body.get("nickname")));
+                body.get("username"), body.get("password"), body.get("nickname")));
     }
 
     @GetMapping("/me")
@@ -43,7 +43,6 @@ public class AuthController {
         return ApiResponse.ok(Map.of(
                 "id", String.valueOf(user.getId()),
                 "username", user.getUsername(),
-                "role", user.getRole(),
                 "nickname", user.getNickname()));
     }
 }
