@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.learningassistant.analytics.mapper.AnalyticsMapper">
+
+    <!--
+      复杂查询落点示例：统计某课程下各知识点的练习量、平均掌握度、薄弱排名。
+      resultType 使用 DTO，列名下划线风格由 map-underscore-to-camel-case 自动映射到驼峰属性。
+      骨架阶段基于 t_knowledge_mastery 演示聚合；后续宽表统计在
+      t_study_stats / t_exam_analysis 上扩展（架构文档 §6.7）。
+    -->
+    <select id="kpMasteryStats" resultType="com.example.learningassistant.analytics.mapper.AnalyticsMapper$KpMasteryStat">
+        SELECT kp_name,
+               COUNT(*)                              AS attempts,
+               ROUND(AVG(mastery), 1)                AS avg_mastery,
+               ROUND(SUM(correct_count) * 100.0 / NULLIF(SUM(attempts), 0), 1) AS accuracy
+        FROM t_knowledge_mastery
+        WHERE course_id = #{courseId}
+        GROUP BY kp_name
+        ORDER BY avg_mastery ASC
+    </select>
+
+    <!-- 学生练习总览：联表统计各学生练习次数、平均得分、最高分 -->
+    <select id="studentPracticeOverview" resultType="com.example.learningassistant.analytics.mapper.AnalyticsMapper$StudentPracticeStat">
+        SELECT u.nickname,
+               COUNT(p.id)             AS practice_count,
+               ROUND(AVG(p.score), 1)  AS avg_score,
+               MAX(p.score)            AS max_score
+        FROM t_practice p
+                 LEFT JOIN t_user u ON u.id = p.user_id
+        WHERE p.course_id = #{courseId}
+        GROUP BY u.id, u.nickname
+        ORDER BY practice_count DESC
+    </select>
+
+    <!-- LLM 调用统计：按场景聚合调用次数与平均耗时（t_llm_call_log 落库后生效） -->
+    <select id="llmCallStats" resultType="com.example.learningassistant.analytics.mapper.AnalyticsMapper$LlmCallStat">
+        SELECT scene,
+               COUNT(*)                   AS call_count,
+               ROUND(AVG(latency_ms), 0)  AS avg_latency_ms,
+               SUM(prompt_tokens)         AS prompt_tokens,
+               SUM(completion_tokens)     AS completion_tokens
+        FROM t_llm_call_log
+        WHERE (#{scene} IS NULL OR scene = #{scene})
+        GROUP BY scene
+        ORDER BY call_count DESC
+    </select>
+
+</mapper>

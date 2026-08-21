@@ -1,0 +1,35 @@
+# ===== 密钥与本地配置（严禁入库）=====
+.env
+*.env
+!.env.example
+
+# ===== Java 后端 =====
+backend/target/
+backend/data/
+backend/*.log
+backend/*.db
+*.class
+
+# ===== Python AI 服务 =====
+ai-service/.venv/
+ai-service/data/
+ai-service/*.log
+ai-service/ai*.log
+__pycache__/
+*.pyc
+
+# ===== 前端 =====
+frontend/node_modules/
+frontend/dist/
+frontend/*.log
+
+# ===== 本地个人产物（简历/照片等，与项目无关）=====
+output/
+tmp/
+
+# ===== IDE / OS =====
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

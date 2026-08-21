@@ -1,0 +1,66 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: learning-assistant
+  datasource:
+    url: jdbc:mysql://localhost:3306/learning_assistant?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: 1234
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+  jackson:
+    time-zone: Asia/Shanghai
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+  # 复杂查询 SQL 落点：各模块 resources/mapper/*.xml
+  mapper-locations: classpath*:mapper/**/*.xml
+
+app:
+  security:
+    # 生产环境务必更换并通过环境变量注入
+    jwt-secret: learning-assistant-v2-jwt-secret-please-change-me-0123456789
+    access-ttl-ms: 7200000      # 2h
+    refresh-ttl-ms: 604800000   # 7d
+  model:
+    # LLM 接入：python(Python langchain ai-service) | openai-compatible(OpenAI/通义/DeepSeek/智谱等) | spring-ai(Spring AI 框架, 内置 Tool Calling)
+    provider: python
+    python-base-url: http://localhost:8000
+    # Agent 模式：true 时答疑(RAG_QA/FREE)升级为 ReAct Agent，模型自主调用检索工具，接口不变
+    agent-enabled: true
+    base-url: https://api.openai.com/v1
+    api-key: ""
+    model-name: gpt-4o-mini
+    temperature: 0.7
+  infra:
+    # 中间件开关：配置了真实中间件即切换，未配置/未填则自动使用内存降级实现
+    cache-mode: memory      # memory | redis
+    vector-mode: memory     # memory | milvus
+    storage-mode: local     # local | minio
+    mq-mode: memory         # memory | rabbit
+    storage:
+      local-path: ./data/files
+      minio:
+        endpoint: http://localhost:9000
+        access-key: minioadmin
+        secret-key: minioadmin
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.example.learningassistant: info

@@ -1,0 +1,65 @@
+# Docker Compose 一键编排：前端(nginx) + 后端(Java) + AI 服务(Python)
+# 用法：根目录建 .env（复制 .env.example）→ 填 AI_API_KEY → ./deploy.sh up
+name: learning-assistant
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: la-backend
+    restart: unless-stopped
+    environment:
+      # 容器内访问 ai-service 容器名，覆盖 application.yml 的 localhost:8000
+      SPRING_APP_MODEL_PYTHON_BASE_URL: http://ai-service:8000
+      SPRING_APP_MODEL_PROVIDER: python
+      # 生产建议通过环境变量覆盖默认密钥
+      SPRING_APP_SECURITY_JWT_SECRET: ${JWT_SECRET:-learning-assistant-v2-jwt-secret-please-change-me-0123456789}
+    volumes:
+      - backend-data:/app/data
+    ports:
+      - "8080:8080"
+    networks: [la-net]
+    depends_on:
+      ai-service:
+        condition: service_healthy
+
+  ai-service:
+    build:
+      context: ./ai-service
+    container_name: la-ai
+    restart: unless-stopped
+    environment:
+      AI_PROVIDER: ${AI_PROVIDER:-deepseek}
+      AI_API_KEY: ${AI_API_KEY:?请在根目录 .env 配置 AI_API_KEY}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.deepseek.com}
+      AI_MODEL: ${AI_MODEL:-deepseek-chat}
+      AI_HOST: 0.0.0.0
+      AI_PORT: 8000
+    volumes:
+      - ai-data:/app/data
+    networks: [la-net]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/ai/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: la-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    networks: [la-net]
+    depends_on:
+      - backend
+
+volumes:
+  backend-data:
+  ai-data:
+
+networks:
+  la-net:
+    driver: bridge
