@@ -141,19 +141,26 @@ const toggleExpand = async (c) => {
     return
   }
   expanded.value = c.id
-  const kbs = await api('/api/courses/' + c.id + '/kb')
+  await refreshKbs(c.id)
+}
+
+/** 原位刷新某课程的知识库列表：不整体替换 courses、不折叠，避免闪烁 */
+const refreshKbs = async (courseId) => {
+  const c = courses.value.find((x) => x.id === courseId)
+  if (!c) return
+  const kbs = await api('/api/courses/' + courseId + '/kb')
   for (const kb of kbs) {
     kb.docs = await api('/api/kb/' + kb.id + '/documents')
   }
   c.kbs = kbs
+  c.kbCount = kbs.length
+  expanded.value = courseId
 }
 
 const createKb = async (courseId) => {
   await api('/api/courses/' + courseId + '/kb', { method: 'POST', body: { name: newKbName.value || '新知识库' } })
   newKbName.value = ''
-  const c = courses.value.find((x) => x.id === courseId)
-  await toggleExpand(c)
-  await toggleExpand(c)
+  await refreshKbs(courseId)
 }
 
 const toggleUpload = (kbId) => {
@@ -184,14 +191,13 @@ const doUpload = async (courseId, kbId) => {
   fd.append('file', new File([docContent.value], name, { type: 'text/plain' }))
   await api('/api/kb/' + kbId + '/documents/upload', { method: 'POST', body: fd })
   uploadingKb.value = null
-  const c = courses.value.find((x) => x.id === courseId)
-  await toggleExpand(c)
+  await refreshKbs(courseId)
 }
 
 const deleteDoc = async (kbId, docId) => {
   await api('/api/kb/' + kbId + '/documents/' + docId, { method: 'DELETE' })
   const c = courses.value.find((x) => x.kbs && x.kbs.some((k) => k.id === kbId))
-  if (c) await toggleExpand(c)
+  if (c) await refreshKbs(c.id)
 }
 
 const askDeleteKb = (courseId, kbId, name) => {
@@ -203,18 +209,8 @@ const doDeleteKb = async () => {
   confirmKb.value = null
   try {
     await api('/api/kb/' + kbId, { method: 'DELETE' })
-    // 强制刷新该课程的知识库列表（不要用 toggleExpand，它会折叠）
-    const c = courses.value.find((x) => x.id === courseId)
-    if (c) {
-      const kbs = await api('/api/courses/' + courseId + '/kb')
-      for (const kb of kbs) {
-        kb.docs = await api('/api/kb/' + kb.id + '/documents')
-      }
-      c.kbs = kbs
-      // 保持展开状态
-      expanded.value = courseId
-    }
-    courses.value = await getCourses(true)
+    // 原位更新，不整体替换 courses，避免重渲染闪烁
+    await refreshKbs(courseId)
     showHint('知识库已删除')
   } catch (e) {
     showHint(e.message)
