@@ -1,0 +1,2 @@
+{"question": "HashMap 的底层数据结构是什么？", "chunks": [{"content": "HashMap 在 JDK 1.8 中基于数组 + 链表 + 红黑树实现。"}, {"content": "当链表长度超过 8 且数组长度大于 64 时，链表会转换为红黑树。"}], "keywords": ["数组", "红黑树"]}
+{"question": "Java 中如何实现线程安全？", "chunks": [{"content": "可以使用 synchronized 关键字、ReentrantLock 或并发集合如 ConcurrentHashMap。"}], "keywords": ["synchronized", "ConcurrentHashMap"]}

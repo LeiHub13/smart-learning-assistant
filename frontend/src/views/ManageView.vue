@@ -61,12 +61,12 @@
                 <div class="btns">
                 <label class="btn ghost small" style="cursor:pointer">
                   📄 选择文件
-                  <input type="file" accept=".txt,.md,.markdown,.java,.json,.xml,.yml,.sql" style="display:none" @change="pickFile" />
+                  <input type="file" accept=".txt,.md,.markdown,.pdf,.doc,.docx,.java,.json,.xml,.yml,.sql" style="display:none" @change="pickFile" />
                 </label>
                 <button class="btn small" @click="doUpload(c.id, kb.id)">解析入库</button>
               </div>
               </div>
-              <textarea v-model="docContent" placeholder="选择 .txt/.md 等文本文件自动读取，或直接粘贴文档内容；系统自动分块向量化…"
+              <textarea v-model="docContent" placeholder="支持 .txt/.md/.pdf/.doc/.docx；选择文件自动解析，或直接粘贴文档内容；系统自动分块向量化…"
                         style="margin-top:8px;min-height:130px"></textarea>
             </div>
           </div>

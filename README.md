@@ -79,6 +79,12 @@ cp .env.example .env      # 填入 AI_API_KEY
 | GET /api/progress/summary?courseId | 学情汇总（掌握度 / 平均 / 错题本 / AI 建议） |
 | GET /api/analytics/kp-stats?courseId=1 | 知识点掌握度聚合（**XML Mapper 复杂查询示例**） |
 | GET /api/analytics/practice-overview?courseId=1 | 学生练习联表统计（XML Mapper 示例） |
+| POST /api/chat/sessions/{id}/stream | SSE 流式答疑（RAG + Query 改写 + Rerank + 薄弱知识点注入） |
+| POST /api/generate/lecture/stream | 流式讲义生成（SSE） |
+| POST /api/generate/questions | AI 自适应出题（按掌握度调整难度） |
+| GET/POST /api/plans /{id} /tasks/{id}/checkin | 学习计划生成 / 详情 / 每日打卡 |
+| GET/POST /api/reports /weekly /{id}/pdf | 学习周报 / PDF 导出 |
+| GET /api/notifications /unread-count | 站内通知 / 未读数 |
 
 接口文档：`/swagger-ui.html`（springdoc）。
 
@@ -90,6 +96,13 @@ app:
     provider: python        # python(Python langchain ai-service) | openai-compatible
     python-base-url: http://localhost:8000
     api-key: ""             # openai-compatible 时填写
+    agent-enabled: true     # true 时答疑升级为 ReAct Agent（自主调用检索/学情工具）
+  embedding:
+    provider: hash          # hash（离线） | dashscope（通义 text-embedding-v3）
+    api-key: ""             # dashscope 时填写
+  rag:
+    rewrite-enabled: true   # 多轮对话查询改写
+    rerank-enabled: true    # LLM 精排重排序
   infra:
     cache-mode: memory      # memory | redis
     vector-mode: memory     # memory | milvus
@@ -98,6 +111,8 @@ app:
 ```
 
 数据库：默认 H2（Docker 部署即默认）；本地开发切 MySQL：`java -jar target/learning-assistant-1.0.0.jar --spring.profiles.active=mysql`（连接信息见 `application-mysql.yml`）。
+
+Agent 工具回调：ai-service 通过 `JAVA_TOOL_BASE` 回调 Java `/internal/tools/**` 取错题/掌握度/练习/知识库数据；Docker 环境已自动配置为 `http://backend:8080`，本地开发保持默认 `http://localhost:8080` 即可。
 
 ## 六、工程结构（backend/ 单模块）
 
@@ -115,11 +130,14 @@ backend/
     ├── generate/       AI 内容生成
     ├── practice/       题库练习与 AI 批改
     ├── progress/       学情分析
+    ├── plan/           学习计划（生成 + 打卡）
+    ├── report/         学习报告（周报 + PDF 导出）
+    ├── progress/       学情分析 + 间隔重复复习提醒
     ├── exam/           考试中心（骨架）
     ├── assignment/     作业中心（骨架）
     ├── analytics/      统计分析（XML Mapper 复杂查询示例）
     ├── recommend/      个性化推荐（骨架）
-    ├── notify/         通知中心（骨架）
+    ├── notify/         通知中心
     └── web/            接入层：Controller 聚合、OpenAPI
 （启动类 LearningAssistantApplication 位于根包；配置/建表脚本/演示数据在 src/main/resources）
 ```
@@ -131,10 +149,13 @@ ai-service/
 ├── requirements.txt         # Python 依赖
 ├── .env                     # 模型提供商配置（API Key）
 └── app/
-    ├── main.py              # FastAPI 入口：/ai/health、/ai/complete、/ai/stream(SSE)
+    ├── main.py              # FastAPI 入口：/ai/health、/ai/complete、/ai/stream(SSE)、/ai/stats
     ├── config.py            # 环境变量配置
-    ├── memory.py            # 会话记忆（JSONL 持久化，按 sessionId）
-    └── chains.py            # langchain 场景链：rag_qa/free/lecture/questions/review/advice
+    ├── memory.py            # 会话记忆（JSONL 持久化 + 滚动摘要压缩）
+    ├── chains.py            # langchain 场景链：rag_qa/free/lecture/questions/review/advice/rewrite/rerank/plan/report
+    ├── agent.py             # ReAct Agent + 回调 Java 内部工具
+    ├── stats.py             # LLM 调用观测统计
+    └── tools.py             #（预留）工具集合
 ```
 
 Java 与 Python 的分工：Java 负责向量检索（VectorStore + chunk 表）、会话/消息/题目落库、判分与掌握度聚合；Python 负责大模型生成与对话记忆（按 sessionId 持久化，支持多轮指代）。场景标记（RAG_QA/GEN_LECTURE 等）由 `PythonAIChatModel` 解析后映射为 Python 场景。

@@ -54,6 +54,14 @@ app:
         endpoint: http://localhost:9000
         access-key: minioadmin
         secret-key: minioadmin
+  embedding:
+    # 向量模型：hash（默认，离线） | dashscope（通义 text-embedding-v3）
+    provider: hash
+    api-key: ${DASHSCOPE_API_KEY:}
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    model: text-embedding-v3
+  # 内部工具 API 鉴权（ai-service 的 Agent 工具回调 Java 取数）
+  internal-tool-token: ${INTERNAL_TOOL_TOKEN:internal-tool-token}
 
 springdoc:
   api-docs:

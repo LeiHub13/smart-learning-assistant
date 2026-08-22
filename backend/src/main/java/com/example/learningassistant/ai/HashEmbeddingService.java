@@ -1,5 +1,6 @@
 package com.example.learningassistant.ai;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -8,9 +9,10 @@ import java.util.List;
 
 /**
  * 基于字符 n-gram 哈希的演示用向量化（128 维），离线可用、零外部依赖。
- * 生产环境建议替换为真实 Embedding 服务（如 text-embedding-3-small）以提升检索质量。
+ * 生产环境建议切换 app.embedding.provider=dashscope 以提升检索质量。
  */
 @Service
+@ConditionalOnProperty(name = "app.embedding.provider", havingValue = "hash", matchIfMissing = true)
 public class HashEmbeddingService implements EmbeddingService {
 
     private static final int DIM = 128;

@@ -46,7 +46,7 @@ export function resetApiCache() {
   coursesCache = null
 }
 
-/** 解析 SSE 流：onDelta(chunk) onDone(sources) */
+/** 解析 SSE 流：onDelta(chunk) onDone(sources|done) */
 export async function sseStream(path, body, onDelta, onDone) {
   const res = await fetch(path, {
     method: 'POST',
@@ -71,7 +71,32 @@ export async function sseStream(path, body, onDelta, onDone) {
         const d = JSON.parse(line.slice(5).trim())
         if (d.delta !== undefined) onDelta(d.delta)
         if (d.sources !== undefined) onDone(d.sources || '')
+        if (d.done) onDone('')
       } catch (e) { /* ignore */ }
     }
   }
+}
+
+/** 学习计划 */
+export async function listPlans() { return api('/api/plans') }
+export async function getPlan(id) { return api(`/api/plans/${id}`) }
+export async function createPlan(body) { return api('/api/plans', { method: 'POST', body }) }
+export async function checkInTask(taskId) { return api(`/api/plans/tasks/${taskId}/checkin`, { method: 'POST' }) }
+export async function deletePlan(id) { return api(`/api/plans/${id}`, { method: 'DELETE' }) }
+
+/** 学习报告 */
+export async function listReports() { return api('/api/reports') }
+export async function getReport(id) { return api(`/api/reports/${id}`) }
+export async function generateWeeklyReport(courseId) { return api(`/api/reports/weekly?courseId=${courseId}`, { method: 'POST' }) }
+export function reportPdfUrl(id) { return `/api/reports/${id}/pdf` }
+
+/** 通知 */
+export async function listNotifications() { return api('/api/notifications') }
+export async function unreadCount() { return api('/api/notifications/unread-count') }
+export async function markRead(id) { return api(`/api/notifications/${id}/read`, { method: 'POST' }) }
+export async function markAllRead() { return api('/api/notifications/read-all', { method: 'POST' }) }
+
+/** 流式讲义 */
+export async function streamLecture(body, onDelta, onDone) {
+  return sseStream('/api/generate/lecture/stream', body, onDelta, onDone)
 }

@@ -55,7 +55,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { api, getCourses } from '../api'
+import { api, getCourses, streamLecture } from '../api'
 import { parseOptions } from '../utils'
 
 defineOptions({ name: 'GenerateView' })
@@ -82,15 +82,15 @@ const genLecture = async () => {
   busy.value = true
   error.value = ''
   questions.value = []
+  lecture.value = ''
   try {
-    const g = await api('/api/generate/lecture', {
-      method: 'POST',
-      body: { courseId: courseId.value, topic: topic.value.trim(), kp: kp.value.trim() }
-    })
-    lecture.value = g.content
+    await streamLecture(
+      { courseId: courseId.value, topic: topic.value.trim(), kp: kp.value.trim() },
+      (delta) => { lecture.value += delta },
+      () => { busy.value = false }
+    )
   } catch (e) {
     error.value = e.message
-  } finally {
     busy.value = false
   }
 }

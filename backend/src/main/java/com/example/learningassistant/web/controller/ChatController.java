@@ -66,7 +66,8 @@ public class ChatController {
     }
 
     @PostMapping("/{id}/stream")
-    public SseEmitter stream(@PathVariable Long id, @RequestBody Map<String, String> body) {
+    public SseEmitter stream(HttpServletRequest request, @PathVariable Long id, @RequestBody Map<String, String> body) {
+        AuthUser u = CurrentUser.get(request);
         SseEmitter emitter = new SseEmitter(300_000L);
         String question = body.get("message");
         if (question == null || question.isBlank()) {
@@ -78,7 +79,7 @@ public class ChatController {
             }
             return emitter;
         }
-        chatService.streamMessage(id, question,
+        chatService.streamMessage(id, question, u.id(),
                 delta -> safeSend(emitter, Map.of("delta", delta)),
                 sources -> {
                     try {

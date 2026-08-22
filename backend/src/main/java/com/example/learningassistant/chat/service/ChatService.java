@@ -1,5 +1,6 @@
 package com.example.learningassistant.chat.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.learningassistant.ai.AIChatMessage;
 import com.example.learningassistant.ai.ChatModel;
 import com.example.learningassistant.ai.ChatModelFactory;
@@ -13,8 +14,13 @@ import com.example.learningassistant.infra.vector.VectorStore;
 import com.example.learningassistant.infra.vector.VectorStore.ScoredId;
 import com.example.learningassistant.kb.entity.Chunk;
 import com.example.learningassistant.kb.mapper.ChunkMapper;
+import com.example.learningassistant.progress.entity.KnowledgeMastery;
+import com.example.learningassistant.progress.mapper.KnowledgeMasteryMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -43,9 +49,18 @@ public class ChatService {
     private final VectorStore vectorStore;
     private final EmbeddingService embeddingService;
     private final ChunkMapper chunkMapper;
+    private final KnowledgeMasteryMapper masteryMapper;
+    private final ObjectMapper objectMapper;
 
     private static final int HISTORY_ROUNDS = 5;
     private static final int RAG_TOP_K = 5;
+    private static final int RAG_RERANK_CANDIDATES = 20;
+
+    @Value("${app.rag.rewrite-enabled:true}")
+    private boolean rewriteEnabled;
+
+    @Value("${app.rag.rerank-enabled:true}")
+    private boolean rerankEnabled;
 
     public List<ChatSession> sessions(Long userId) {
         return sessionMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ChatSession>()
@@ -97,9 +112,9 @@ public class ChatService {
     }
 
     /**
-     * 流式对话：RAG 检索 + 历史拼装 -> 流式生成 -> 落库。
+     * 流式对话：可选 query 改写 -> RAG 检索（可选 Rerank） -> 历史拼装 -> 流式生成 -> 落库。
      */
-    public void streamMessage(Long sessionId, String question,
+    public void streamMessage(Long sessionId, String question, Long userId,
                               Consumer<String> onDelta, Consumer<String> onDone) {
         ChatSession session = requireSession(sessionId);
         LocalDateTime now = LocalDateTime.now();
@@ -112,11 +127,16 @@ public class ChatService {
         messageMapper.insert(userMsg);
 
         List<AIChatMessage> history = historyMessages(sessionId, HISTORY_ROUNDS);
+        String effectiveQuestion = question;
+        if (rewriteEnabled && !history.isEmpty()) {
+            effectiveQuestion = rewriteQuery(question, history);
+        }
+
         final String sources;
         StringBuilder system = new StringBuilder();
 
         if (session.getKbId() != null) {
-            String ctx = buildContext(session.getKbId(), question);
+            String ctx = buildContext(session.getKbId(), effectiveQuestion);
             if (ctx.contains("暂无相关资料")) {
                 sources = "";
                 system.append("RAG_QA\n你是智能学习助手，用中文友好地解答问题。\n【知识库资料】").append(ctx).append("【资料结束】");
@@ -130,7 +150,15 @@ public class ChatService {
             sources = "";
             system.append("FREE\n你是智能学习助手，用中文友好地解答学生的学习问题。");
         }
-        system.append("\nSESSION_ID:").append(sessionId);
+
+        String profile = weakKpProfile(userId, session.getCourseId());
+        if (!profile.isEmpty()) {
+            system.append("\n").append(profile);
+        }
+
+        system.append("\nUSER_ID:").append(userId)
+                .append("\nCOURSE_ID:").append(session.getCourseId() == null ? 0 : session.getCourseId())
+                .append("\nSESSION_ID:").append(sessionId);
 
         List<AIChatMessage> messages = new ArrayList<>();
         messages.add(new AIChatMessage("system", system.toString()));
@@ -168,22 +196,103 @@ public class ChatService {
     }
 
     private String buildContext(Long kbId, String question) {
-        List<ScoredId> hits = vectorStore.search(embeddingService.embed(question), RAG_TOP_K);
+        int topN = rerankEnabled ? RAG_RERANK_CANDIDATES : RAG_TOP_K;
+        List<ScoredId> hits = vectorStore.search(embeddingService.embed(question), topN);
         if (hits.isEmpty()) {
             return "暂无相关资料";
         }
         List<Long> chunkIds = hits.stream().map(ScoredId::id).toList();
         List<Chunk> chunks = chunkMapper.selectBatchIds(chunkIds);
         Map<Long, Chunk> byId = chunks.stream().collect(Collectors.toMap(Chunk::getId, c -> c));
-        StringBuilder sb = new StringBuilder();
-        int n = 1;
+
+        List<Chunk> ordered = new ArrayList<>();
         for (Long cid : chunkIds) {
             Chunk c = byId.get(cid);
-            if (c == null) {
-                continue;
+            if (c != null) {
+                ordered.add(c);
             }
+        }
+        if (rerankEnabled && ordered.size() > RAG_TOP_K) {
+            ordered = rerankChunks(question, ordered);
+        }
+
+        StringBuilder sb = new StringBuilder();
+        int n = 1;
+        for (Chunk c : ordered.subList(0, Math.min(ordered.size(), RAG_TOP_K))) {
             sb.append('[').append(n).append("] ").append(c.getContent()).append('\n');
             n++;
+        }
+        return sb.toString();
+    }
+
+    private String rewriteQuery(String question, List<AIChatMessage> history) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (AIChatMessage m : history) {
+                sb.append(m.role()).append(":").append(m.content()).append("\n");
+            }
+            sb.append("user:").append(question);
+            ChatModel model = modelFactory.get();
+            String rewritten = model.complete(List.of(
+                    new AIChatMessage("system", "REWRITE\n你是查询改写器。把用户最新问题改写成独立完整的检索查询。只输出改写后的查询本身。"),
+                    new AIChatMessage("user", sb.toString())));
+            if (rewritten != null && !rewritten.isBlank()) {
+                return rewritten.trim();
+            }
+        } catch (Exception e) {
+            log.warn("Query 改写失败，使用原问题: {}", e.getMessage());
+        }
+        return question;
+    }
+
+    private List<Chunk> rerankChunks(String question, List<Chunk> candidates) {
+        try {
+            StringBuilder prompt = new StringBuilder();
+            prompt.append("问题：").append(question).append("\n\n");
+            for (int i = 0; i < candidates.size(); i++) {
+                prompt.append("[").append(i + 1).append("] ")
+                        .append(candidates.get(i).getContent()).append("\n");
+            }
+            ChatModel model = modelFactory.get();
+            String raw = model.complete(List.of(
+                    new AIChatMessage("system", "RERANK\n你是相关性排序器。按与问题的相关程度从高到低排序，只输出 JSON 数组（元素为片段编号整数）。"),
+                    new AIChatMessage("user", prompt.toString())));
+            List<Integer> indices = objectMapper.readValue(raw, new TypeReference<List<Integer>>() {
+            });
+            List<Chunk> result = new ArrayList<>();
+            for (Integer idx : indices) {
+                if (idx != null && idx >= 1 && idx <= candidates.size()) {
+                    result.add(candidates.get(idx - 1));
+                    if (result.size() >= RAG_TOP_K) {
+                        break;
+                    }
+                }
+            }
+            if (!result.isEmpty()) {
+                return result;
+            }
+        } catch (Exception e) {
+            log.warn("Rerank 失败，使用向量原排序: {}", e.getMessage());
+        }
+        return candidates;
+    }
+
+    private String weakKpProfile(Long userId, Long courseId) {
+        if (userId == null || courseId == null) {
+            return "";
+        }
+        List<KnowledgeMastery> list = masteryMapper.selectList(new LambdaQueryWrapper<KnowledgeMastery>()
+                .eq(KnowledgeMastery::getUserId, userId)
+                .eq(KnowledgeMastery::getCourseId, courseId)
+                .lt(KnowledgeMastery::getMastery, 50.0)
+                .orderByAsc(KnowledgeMastery::getMastery)
+                .last("LIMIT 5"));
+        if (list.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("【该学生薄弱知识点（掌握度<50%）】");
+        for (KnowledgeMastery m : list) {
+            sb.append(m.getKpName()).append("(").append(Math.round(m.getMastery())).append("%); ");
         }
         return sb.toString();
     }

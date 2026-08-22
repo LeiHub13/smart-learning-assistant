@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS t_question (
     answer     TEXT,
     analysis   TEXT,
     kp_name    VARCHAR(50),
+    difficulty VARCHAR(20),
     source     VARCHAR(10),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

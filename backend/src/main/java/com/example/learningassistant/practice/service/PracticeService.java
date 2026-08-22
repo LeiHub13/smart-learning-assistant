@@ -43,7 +43,7 @@ public class PracticeService {
 
     private static final int FULL_SCORE_PER_QUESTION = 10;
 
-    public List<Map<String, Object>> paper(Long courseId, int count) {
+    public List<Map<String, Object>> paper(Long userId, Long courseId, int count) {
         if (count < 1) {
             count = 5;
         }
@@ -51,11 +51,38 @@ public class PracticeService {
                 .eq(Question::getCourseId, courseId)
                 .orderByAsc(Question::getId)
                 .last("LIMIT " + Math.max(count, 200)));
+        // 自适应抽题：按用户平均掌握度优先匹配对应难度的题目
+        if (userId != null) {
+            qs = adaptivePick(userId, courseId, qs, count);
+        }
         java.util.Collections.shuffle(qs);
         if (qs.size() > count) {
             qs = qs.subList(0, count);
         }
         return qs.stream().map(this::toPaperItem).toList();
+    }
+
+    private List<Question> adaptivePick(Long userId, Long courseId, List<Question> all, int count) {
+        List<KnowledgeMastery> masteries = masteryMapper.selectList(new LambdaQueryWrapper<KnowledgeMastery>()
+                .eq(KnowledgeMastery::getUserId, userId)
+                .eq(KnowledgeMastery::getCourseId, courseId));
+        double avg = masteries.isEmpty() ? 50.0
+                : masteries.stream().mapToDouble(KnowledgeMastery::getMastery).average().orElse(50.0);
+        String targetDiff;
+        if (avg < 40.0) {
+            targetDiff = "基础";
+        } else if (avg > 80.0) {
+            targetDiff = "综合";
+        } else {
+            targetDiff = "进阶";
+        }
+        List<Question> matched = all.stream()
+                .filter(q -> targetDiff.equals(q.getDifficulty())).toList();
+        if (matched.size() >= count / 2) {
+            java.util.Collections.shuffle(matched);
+            return matched;
+        }
+        return all;
     }
 
     public Practice submit(Long userId, Long courseId, List<Map<String, Object>> items) {
@@ -163,9 +190,10 @@ public class PracticeService {
                 km.setAttempts(0);
                 km.setCorrectCount(0);
             }
-            km.setAttempts(km.getAttempts() + e.getValue()[0]);
-            km.setCorrectCount(km.getCorrectCount() + e.getValue()[1]);
-            km.setMastery(km.getAttempts() == 0 ? 0.0 : km.getCorrectCount() * 100.0 / km.getAttempts());
+        km.setAttempts(km.getAttempts() + e.getValue()[0]);
+        km.setCorrectCount(km.getCorrectCount() + e.getValue()[1]);
+        km.setMastery(km.getAttempts() == 0 ? 0.0 : km.getCorrectCount() * 100.0 / km.getAttempts());
+        km.setLastPracticeAt(LocalDateTime.now());
             if (km.getId() == null) {
                 masteryMapper.insert(km);
             } else {

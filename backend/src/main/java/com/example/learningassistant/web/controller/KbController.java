@@ -3,6 +3,7 @@ package com.example.learningassistant.web.controller;
 import com.example.learningassistant.common.ApiResponse;
 import com.example.learningassistant.kb.entity.Document;
 import com.example.learningassistant.kb.entity.KnowledgeBase;
+import com.example.learningassistant.kb.service.DocumentParser;
 import com.example.learningassistant.kb.service.KbService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -30,6 +31,7 @@ import java.util.Set;
 public class KbController {
 
     private final KbService kbService;
+    private final DocumentParser documentParser;
 
     @GetMapping("/api/courses/{courseId}/kb")
     public ApiResponse<List<KnowledgeBase>> kbList(@PathVariable Long courseId) {
@@ -58,7 +60,9 @@ public class KbController {
         return ApiResponse.ok(m);
     }
 
-    private static final Set<String> SUPPORTED_EXT = Set.of("txt", "md", "markdown", "java", "json", "xml", "yml", "yaml", "sql");
+    private static final Set<String> SUPPORTED_EXT = Set.of(
+            "txt", "md", "markdown", "java", "json", "xml", "yml", "yaml", "sql",
+            "pdf", "doc", "docx");
 
     @PostMapping(value = "/api/kb/{kbId}/documents/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<Map<String, Object>> uploadDocument(@PathVariable Long kbId,
@@ -66,11 +70,11 @@ public class KbController {
         String name = file.getOriginalFilename() == null ? "未命名文档" : file.getOriginalFilename();
         String ext = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1).toLowerCase() : "";
         if (!SUPPORTED_EXT.contains(ext)) {
-            throw new com.example.learningassistant.common.BizException("仅支持 .txt/.md/.java/.json 等文本文件，其他格式请复制内容后粘贴上传");
+            throw new com.example.learningassistant.common.BizException("仅支持 .txt/.md/.pdf/.doc/.docx 及代码文件");
         }
         final String content;
         try {
-            content = new String(file.getBytes(), StandardCharsets.UTF_8);
+            content = documentParser.parse(name, file.getContentType(), file.getBytes());
         } catch (IOException e) {
             throw new com.example.learningassistant.common.BizException("文件读取失败: " + e.getMessage());
         }

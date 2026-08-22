@@ -24,6 +24,7 @@ public class Question {
     private String answer;
     private String analysis;
     private String kpName;
+    private String difficulty; // 基础 / 进阶 / 综合
     private String source;
     private LocalDateTime createdAt;
 }

@@ -154,6 +154,14 @@ public class PythonAIChatModel implements ChatModel {
             scene = "review";
         } else if (system.contains("ADVICE")) {
             scene = "advice";
+        } else if (system.contains("REWRITE")) {
+            scene = "rewrite";
+        } else if (system.contains("RERANK")) {
+            scene = "rerank";
+        } else if (system.contains("PLAN")) {
+            scene = "plan";
+        } else if (system.contains("REPORT")) {
+            scene = "report";
         } else {
             scene = "free";
         }
@@ -161,7 +169,8 @@ public class PythonAIChatModel implements ChatModel {
         if (agentEnabled && ("rag_qa".equals(scene) || "free".equals(scene))) {
             scene = "agent";
         }
-        return new RequestPayload(scene, lastUser, extractChunks(system), extractSessionId(system));
+        return new RequestPayload(scene, lastUser, extractChunks(system), extractSessionId(system),
+                extractMarker(system, "USER_ID"), extractMarker(system, "COURSE_ID"));
     }
 
     private List<String> extractChunks(String system) {
@@ -185,17 +194,23 @@ public class PythonAIChatModel implements ChatModel {
     }
 
     private String extractSessionId(String system) {
-        int s = system.indexOf("SESSION_ID:");
+        return extractMarker(system, "SESSION_ID");
+    }
+
+    private String extractMarker(String system, String key) {
+        String prefix = key + ":";
+        int s = system.indexOf(prefix);
         if (s < 0) {
             return null;
         }
-        String rest = system.substring(s + "SESSION_ID:".length());
+        String rest = system.substring(s + prefix.length());
         int j = rest.indexOf('\n');
         String id = (j > 0 ? rest.substring(0, j) : rest).trim();
         return id.isEmpty() ? null : id;
     }
 
-    private record RequestPayload(String scene, String question, List<String> chunks, String sessionId) {
+    private record RequestPayload(String scene, String question, List<String> chunks, String sessionId,
+                                  String userId, String courseId) {
         Map<String, Object> toMap() {
             Map<String, Object> m = new java.util.LinkedHashMap<>();
             m.put("scene", scene);
@@ -205,6 +220,20 @@ public class PythonAIChatModel implements ChatModel {
             }
             if (sessionId != null) {
                 m.put("sessionId", sessionId);
+            }
+            if (userId != null) {
+                try {
+                    m.put("userId", Integer.parseInt(userId));
+                } catch (NumberFormatException e) {
+                    // ignore
+                }
+            }
+            if (courseId != null) {
+                try {
+                    m.put("courseId", Integer.parseInt(courseId));
+                } catch (NumberFormatException e) {
+                    // ignore
+                }
             }
             return m;
         }
