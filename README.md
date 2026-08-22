@@ -112,6 +112,10 @@ app:
 
 数据库：默认 H2（Docker 部署即默认）；本地开发切 MySQL：`java -jar target/learning-assistant-1.0.0.jar --spring.profiles.active=mysql`（连接信息见 `application-mysql.yml`）。
 
+缓存：默认内存；切 Redis 时启用 profile 并确保 Redis 可达：`java -jar target/learning-assistant-1.0.0.jar --spring.profiles.active=redis`（配置见 `application-redis.yml`）。
+
+Profile 可叠加：`--spring.profiles.active=mysql,redis`。
+
 Agent 工具回调：ai-service 通过 `JAVA_TOOL_BASE` 回调 Java `/internal/tools/**` 取错题/掌握度/练习/知识库数据；Docker 环境已自动配置为 `http://backend:8080`，本地开发保持默认 `http://localhost:8080` 即可。
 
 ## 六、工程结构（backend/ 单模块）

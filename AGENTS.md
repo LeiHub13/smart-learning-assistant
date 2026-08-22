@@ -6,7 +6,7 @@
 
 ## 架构
 
-- `backend/`：Java 业务骨架（Spring Boot 3 + MyBatis-Plus，8080 端口），默认 H2 文件库（`./data/learnassist`），MySQL 为可选 profile（`--spring.profiles.active=mysql`，配置见 `application-mysql.yml`）
+- `backend/`：Java 业务骨架（Spring Boot 3 + MyBatis-Plus，8080 端口），默认 H2 文件库（`./data/learnassist`），MySQL 为可选 profile（`--spring.profiles.active=mysql`，配置见 `application-mysql.yml`），Redis 为可选 profile（`--spring.profiles.active=redis`，配置见 `application-redis.yml`）
 - `ai-service/`：Python AI 服务（FastAPI + langchain + DeepSeek，8000 端口），负责生成/批改/答疑与会话记忆（JSONL 持久化，按 sessionId）
 - `frontend/`：Vue3 前端（5173 dev / Nginx 生产）
 

@@ -1,0 +1,24 @@
+# 启用 Redis 缓存时的 profile 配置
+# 使用方式：
+#   java -jar target/learning-assistant-1.0.0.jar --spring.profiles.active=redis
+# 可与 MySQL profile 叠加：
+#   --spring.profiles.active=mysql,redis
+
+app:
+  infra:
+    cache-mode: redis
+
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DB:0}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: 1000ms

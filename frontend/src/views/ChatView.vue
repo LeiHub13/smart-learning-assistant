@@ -110,11 +110,13 @@ const scrollDown = () => {
   })
 }
 
+const sessionMode = (s) => (s && s.kbId ? 'kb' : 'free')
+
 onMounted(async () => {
   courses.value = await getCourses()
   const list = await api('/api/chat/sessions')
   sessions.value = list
-  if (list.length) openSession(list[0].id)
+  if (list.length) await openSession(list[0].id)
 })
 
 const setMode = async (m) => {
@@ -125,14 +127,7 @@ const setMode = async (m) => {
     kbId.value = null
     kbs.value = []
   }
-  if (sessionId.value) {
-    await api('/api/chat/sessions/' + sessionId.value, {
-      method: 'PUT',
-      body: { courseId: courseId.value, kbId: kbId.value }
-    })
-  } else {
-    await newSession()
-  }
+  // 切换模式不再新建/修改会话；新建会话或发送消息时才按需创建
 }
 
 const loadKb = async () => {
@@ -168,6 +163,10 @@ const showHint = (msg) => {
 const onNewSession = async () => {
   if (sessionId.value && !messages.value.length) {
     showHint('当前会话还没有对话，无需新建')
+    return
+  }
+  if (mode.value === 'kb' && !kbId.value) {
+    showHint('请先选择课程和知识库，再新建会话')
     return
   }
   await newSession()
@@ -224,6 +223,21 @@ const doDelete = async () => {
 const openSession = async (id) => {
   sessionId.value = id
   messages.value = await api('/api/chat/sessions/' + id + '/messages')
+  const s = sessions.value.find((x) => x.id === id)
+  if (s) {
+    mode.value = sessionMode(s)
+    if (mode.value === 'kb') {
+      courseId.value = s.courseId || null
+      kbId.value = s.kbId || null
+      if (courseId.value) {
+        try { kbs.value = await api('/api/courses/' + courseId.value + '/kb') } catch (e) { kbs.value = [] }
+      }
+    } else {
+      courseId.value = null
+      kbId.value = null
+      kbs.value = []
+    }
+  }
   scrollDown()
 }
 
@@ -235,6 +249,10 @@ const quickAsk = (q) => {
 const send = async () => {
   const text = input.value.trim()
   if (!text || streaming.value) return
+  if (mode.value === 'kb' && !kbId.value) {
+    showHint('请先选择知识库再提问')
+    return
+  }
   if (!sessionId.value) await newSession()
   messages.value.push({ role: 'user', content: text })
   messages.value.push({ role: 'assistant', content: '' })
