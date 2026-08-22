@@ -176,8 +176,19 @@ const deleteDoc = async (kbId, docId) => {
 }
 
 const deleteKb = async (courseId, kbId) => {
+  if (!confirm('确定删除这个知识库吗？其中的文档和向量索引也会被清除。')) return
   await api('/api/kb/' + kbId, { method: 'DELETE' })
+  // 强制刷新该课程的知识库列表（不要用 toggleExpand，它会折叠）
   const c = courses.value.find((x) => x.id === courseId)
-  if (c) await toggleExpand(c)
+  if (c) {
+    const kbs = await api('/api/courses/' + courseId + '/kb')
+    for (const kb of kbs) {
+      kb.docs = await api('/api/kb/' + kb.id + '/documents')
+    }
+    c.kbs = kbs
+    // 保持展开状态
+    expanded.value = courseId
+  }
+  courses.value = await getCourses(true)
 }
 </script>

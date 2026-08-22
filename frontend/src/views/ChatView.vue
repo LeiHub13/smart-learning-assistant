@@ -21,18 +21,19 @@
         </select>
       </template>
       <div style="flex:1;overflow:auto;margin-top:10px">
-        <div v-for="s in sessions" :key="s.id" class="sess" :class="{ on: s.id === sessionId }" @click="openSession(s.id)">
+        <div v-for="s in filteredSessions" :key="s.id" class="sess" :class="{ on: s.id === sessionId }" @click="openSession(s.id)">
           <input v-if="renamingId === s.id" v-model="renameVal" class="sess-input"
                  @click.stop @keyup.enter="doRename(s)" @keyup.esc="cancelRename" @blur="doRename(s)" />
           <template v-else>
             <span class="sess-title">{{ s.title }}</span>
+            <span class="sess-mode-tag">{{ s.kbId ? '知识库' : '自由' }}</span>
             <span class="sess-ops" @click.stop>
               <button class="sess-btn" title="重命名" @click="startRename(s)">✎</button>
               <button class="sess-btn" title="删除" @click="removeSession(s)">✕</button>
             </span>
           </template>
         </div>
-        <div v-if="!sessions.length" class="empty">暂无会话</div>
+        <div v-if="!filteredSessions.length" class="empty">暂无会话</div>
       </div>
     </div>
 
@@ -82,7 +83,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { api, sseStream, getCourses } from '../api'
 import { mdToHtml } from '../utils'
 
@@ -111,6 +112,7 @@ const scrollDown = () => {
 }
 
 const sessionMode = (s) => (s && s.kbId ? 'kb' : 'free')
+const filteredSessions = computed(() => sessions.value.filter((s) => sessionMode(s) === mode.value))
 
 onMounted(async () => {
   courses.value = await getCourses()
@@ -127,7 +129,12 @@ const setMode = async (m) => {
     kbId.value = null
     kbs.value = []
   }
-  // 切换模式不再新建/修改会话；新建会话或发送消息时才按需创建
+  // 当前会话与新模式不匹配时，清空当前会话，让用户重新选择或新建
+  const current = sessions.value.find((x) => x.id === sessionId.value)
+  if (current && sessionMode(current) !== m) {
+    sessionId.value = null
+    messages.value = []
+  }
 }
 
 const loadKb = async () => {

@@ -178,6 +178,11 @@ textarea { resize: vertical; min-height: 80px; }
   overflow: hidden; margin-bottom: 3px;
 }
 .sess .sess-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sess-mode-tag {
+  font-size: 10px; padding: 1px 6px; border-radius: 8px; background: #e2e8f0;
+  color: #475569; flex-shrink: 0;
+}
+.sess.on .sess-mode-tag { background: #c7d2fe; color: var(--primary-dark); }
 .sess-ops { display: none; gap: 2px; flex-shrink: 0; }
 .sess:hover .sess-ops { display: flex; }
 .sess.on .sess-ops { display: flex; }
