@@ -48,7 +48,7 @@
               <b>{{ kb.name }}</b>
               <span class="tag">知识库</span>
               <button class="btn ghost small" style="margin-left:auto" @click="toggleUpload(kb.id)">上传文档</button>
-              <button class="btn danger small" style="margin-left:8px" @click="deleteKb(c.id, kb.id)">删除知识库</button>
+              <button class="btn danger small" style="margin-left:8px" @click="askDeleteKb(c.id, kb.id, kb.name)">删除知识库</button>
             </div>
             <div v-for="d in kb.docs" :key="d.id" class="ans" style="margin:4px 0">
               <div class="row" style="justify-content:space-between">
@@ -77,6 +77,17 @@
         {{ expanded === c.id ? '收起' : '查看知识库' }}
       </button>
     </div>
+
+    <div v-if="confirmKb" class="modal-mask" @click.self="confirmKb = null">
+      <div class="modal-box">
+        <h3>删除知识库</h3>
+        <p>确定删除知识库「{{ confirmKb.name }}」吗？其中的文档和向量索引也会一并清除，且无法恢复。</p>
+        <div class="modal-ops">
+          <button class="btn ghost small" @click="confirmKb = null">取消</button>
+          <button class="btn danger small" @click="doDeleteKb">删除</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -95,6 +106,14 @@ const newKbName = ref('')
 const docName = ref('')
 const docContent = ref('')
 const error = ref('')
+const confirmKb = ref(null)
+
+let hintTimer = null
+const showHint = (msg) => {
+  error.value = msg
+  clearTimeout(hintTimer)
+  hintTimer = setTimeout(() => (error.value = ''), 2800)
+}
 
 onMounted(async () => {
   courses.value = await getCourses()
@@ -175,20 +194,30 @@ const deleteDoc = async (kbId, docId) => {
   if (c) await toggleExpand(c)
 }
 
-const deleteKb = async (courseId, kbId) => {
-  if (!confirm('确定删除这个知识库吗？其中的文档和向量索引也会被清除。')) return
-  await api('/api/kb/' + kbId, { method: 'DELETE' })
-  // 强制刷新该课程的知识库列表（不要用 toggleExpand，它会折叠）
-  const c = courses.value.find((x) => x.id === courseId)
-  if (c) {
-    const kbs = await api('/api/courses/' + courseId + '/kb')
-    for (const kb of kbs) {
-      kb.docs = await api('/api/kb/' + kb.id + '/documents')
+const askDeleteKb = (courseId, kbId, name) => {
+  confirmKb.value = { courseId, kbId, name }
+}
+
+const doDeleteKb = async () => {
+  const { courseId, kbId } = confirmKb.value
+  confirmKb.value = null
+  try {
+    await api('/api/kb/' + kbId, { method: 'DELETE' })
+    // 强制刷新该课程的知识库列表（不要用 toggleExpand，它会折叠）
+    const c = courses.value.find((x) => x.id === courseId)
+    if (c) {
+      const kbs = await api('/api/courses/' + courseId + '/kb')
+      for (const kb of kbs) {
+        kb.docs = await api('/api/kb/' + kb.id + '/documents')
+      }
+      c.kbs = kbs
+      // 保持展开状态
+      expanded.value = courseId
     }
-    c.kbs = kbs
-    // 保持展开状态
-    expanded.value = courseId
+    courses.value = await getCourses(true)
+    showHint('知识库已删除')
+  } catch (e) {
+    showHint(e.message)
   }
-  courses.value = await getCourses(true)
 }
 </script>
