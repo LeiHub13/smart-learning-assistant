@@ -15,6 +15,7 @@ import com.example.learningassistant.kb.mapper.KnowledgeBaseMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -54,6 +55,17 @@ public class KbService {
         return kbMapper.selectList(new LambdaQueryWrapper<KnowledgeBase>()
                 .eq(KnowledgeBase::getCourseId, courseId)
                 .orderByDesc(KnowledgeBase::getCreatedAt));
+    }
+
+    @Transactional
+    public void deleteKb(Long kbId) {
+        requireKb(kbId);
+        List<Document> docs = documents(kbId);
+        for (Document doc : docs) {
+            deleteDocument(doc.getId());
+        }
+        kbMapper.deleteById(kbId);
+        log.info("知识库 {} 已删除，共清理 {} 个文档", kbId, docs.size());
     }
 
     public KnowledgeBase requireKb(Long id) {

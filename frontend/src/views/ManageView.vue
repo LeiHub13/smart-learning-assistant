@@ -48,6 +48,7 @@
               <b>{{ kb.name }}</b>
               <span class="tag">知识库</span>
               <button class="btn ghost small" style="margin-left:auto" @click="toggleUpload(kb.id)">上传文档</button>
+              <button class="btn danger small" style="margin-left:8px" @click="deleteKb(c.id, kb.id)">删除知识库</button>
             </div>
             <div v-for="d in kb.docs" :key="d.id" class="ans" style="margin:4px 0">
               <div class="row" style="justify-content:space-between">
@@ -171,6 +172,12 @@ const doUpload = async (courseId, kbId) => {
 const deleteDoc = async (kbId, docId) => {
   await api('/api/kb/' + kbId + '/documents/' + docId, { method: 'DELETE' })
   const c = courses.value.find((x) => x.kbs && x.kbs.some((k) => k.id === kbId))
+  if (c) await toggleExpand(c)
+}
+
+const deleteKb = async (courseId, kbId) => {
+  await api('/api/kb/' + kbId, { method: 'DELETE' })
+  const c = courses.value.find((x) => x.id === courseId)
   if (c) await toggleExpand(c)
 }
 </script>

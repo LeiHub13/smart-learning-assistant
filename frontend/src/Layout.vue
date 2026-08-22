@@ -56,7 +56,7 @@ const keepAliveViews = ['ChatView', 'GenerateView', 'PracticeView', 'ProgressVie
 
 const menus = [
   { key: 'chat', title: '智能答疑', path: '/chat' },
-  { key: 'generate', title: 'AI 内容生成', path: '/generate' },
+  { key: 'generate', title: '讲义/练习题 生成', path: '/generate' },
   { key: 'practice', title: '题库练习', path: '/practice' },
   { key: 'progress', title: '学情分析', path: '/progress' },
   { key: 'manage', title: '课程与知识库', path: '/manage' },

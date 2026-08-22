@@ -43,6 +43,12 @@ public class KbController {
         return ApiResponse.ok(kbService.createKb(courseId, body.get("name")));
     }
 
+    @DeleteMapping("/api/kb/{kbId}")
+    public ApiResponse<Void> deleteKb(@PathVariable Long kbId) {
+        kbService.deleteKb(kbId);
+        return ApiResponse.ok(null);
+    }
+
     @GetMapping("/api/kb/{kbId}/documents")
     public ApiResponse<List<Document>> documents(@PathVariable Long kbId) {
         return ApiResponse.ok(kbService.documents(kbId));
