@@ -1,23 +1,67 @@
 package com.example.learningassistant.notify.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.learningassistant.notify.entity.Notification;
+import com.example.learningassistant.notify.mapper.NotificationMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 /**
- * 通知中心服务（新增模块骨架）。
- *
- * 后续迭代：站内信（WebSocket/轮询）、邮件、WebHook（钉钉/企微）、
- *           模板管理（占位符渲染）、发送限频、失败重试、发送记录。
+ * 通知中心：站内通知落库 + 未读查询 + 标记已读。
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class NotifyService {
 
+    private final NotificationMapper notificationMapper;
+
     /**
-     * 发送站内信（骨架）。
+     * 发送站内通知。
      */
-    public void sendInApp(Long userId, String title, String content) {
-        // TODO: t_notice 落库 + WebSocket/轮询推送
-        log.info("站内信占位: userId={}, title={}", userId, title);
+    public void send(Long userId, String type, String title, String content) {
+        Notification n = new Notification();
+        n.setUserId(userId);
+        n.setType(type);
+        n.setTitle(title);
+        n.setContent(content);
+        n.setReadFlag(false);
+        n.setCreatedAt(LocalDateTime.now());
+        notificationMapper.insert(n);
+    }
+
+    public List<Notification> list(Long userId) {
+        return notificationMapper.selectList(new LambdaQueryWrapper<Notification>()
+                .eq(Notification::getUserId, userId)
+                .orderByDesc(Notification::getCreatedAt)
+                .last("LIMIT 50"));
+    }
+
+    public long unreadCount(Long userId) {
+        return notificationMapper.selectCount(new LambdaQueryWrapper<Notification>()
+                .eq(Notification::getUserId, userId)
+                .eq(Notification::getReadFlag, false));
+    }
+
+    public void markRead(Long userId, Long id) {
+        Notification n = notificationMapper.selectById(id);
+        if (n != null && n.getUserId().equals(userId)) {
+            n.setReadFlag(true);
+            notificationMapper.updateById(n);
+        }
+    }
+
+    public void markAllRead(Long userId) {
+        List<Notification> unread = notificationMapper.selectList(new LambdaQueryWrapper<Notification>()
+                .eq(Notification::getUserId, userId)
+                .eq(Notification::getReadFlag, false));
+        for (Notification n : unread) {
+            n.setReadFlag(true);
+            notificationMapper.updateById(n);
+        }
     }
 }

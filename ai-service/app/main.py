@@ -20,7 +20,8 @@ logger = logging.getLogger("ai-service")
 
 app = FastAPI(title="AI Service (langchain)", version="1.0.0")
 
-SCENES = {"rag_qa", "free", "agent", "lecture", "questions", "review", "advice"}
+SCENES = {"rag_qa", "free", "agent", "lecture", "questions", "review", "advice",
+          "rewrite", "rerank", "plan", "report"}
 
 
 class CompleteRequest(BaseModel):
@@ -28,6 +29,7 @@ class CompleteRequest(BaseModel):
     question: str
     chunks: list | None = Field(default=None)
     sessionId: str | None = Field(default=None)
+    userId: int | None = Field(default=None)
 
 
 class StreamRequest(CompleteRequest):
@@ -50,7 +52,11 @@ def complete(req: CompleteRequest):
     if req.scene not in SCENES:
         raise HTTPException(400, f"未知场景: {req.scene}")
     try:
-        content = chains.complete(req.scene, req.question, req.chunks, req.sessionId)
+        if req.scene == "agent":
+            from app import agent
+            content = agent.complete_agent(chains.get_model(), req.question, req.chunks, req.sessionId, req.userId)
+        else:
+            content = chains.complete(req.scene, req.question, req.chunks, req.sessionId)
         return {"content": content}
     except RuntimeError as e:
         logger.error("complete 失败: %s", e)
@@ -64,7 +70,12 @@ async def stream(req: StreamRequest):
 
     def gen():
         try:
-            for delta in chains.stream(req.scene, req.question, req.chunks, req.sessionId):
+            if req.scene == "agent":
+                from app import agent
+                deltas = agent.stream_agent(chains.get_model(), req.question, req.chunks, req.sessionId, req.userId)
+            else:
+                deltas = chains.stream(req.scene, req.question, req.chunks, req.sessionId)
+            for delta in deltas:
                 yield {"event": "message", "data": json.dumps({"delta": delta}, ensure_ascii=False)}
             yield {"event": "message", "data": json.dumps({"done": True})}
         except RuntimeError as e:
@@ -78,6 +89,13 @@ async def stream(req: StreamRequest):
 def history(session_id: str):
     from app import memory
     return {"messages": memory.recent(session_id, rounds=50)}
+
+
+@app.get("/ai/stats")
+def ai_stats(hours: int = 24):
+    """LLM 调用观测：最近 N 小时的调用量/成功率/分场景耗时。"""
+    from app import stats
+    return stats.aggregate(hours)
 
 
 if __name__ == "__main__":

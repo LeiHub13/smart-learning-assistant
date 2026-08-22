@@ -18,3 +18,11 @@ os.makedirs(MEMORY_DIR, exist_ok=True)
 
 # 对话记忆保留轮数
 HISTORY_ROUNDS = int(os.getenv("AI_HISTORY_ROUNDS", "5"))
+
+# LLM 并发上限与超时（限流与熔断）
+LLM_MAX_CONCURRENCY = os.getenv("AI_MAX_CONCURRENCY", "8")
+LLM_TIMEOUT = int(os.getenv("AI_TIMEOUT", "120"))
+
+# Java 骨架内部工具 API 地址（agent 工具回调取数用）
+JAVA_TOOL_BASE = os.getenv("JAVA_TOOL_BASE", "http://localhost:8080")
+JAVA_TOOL_TOKEN = os.getenv("JAVA_TOOL_TOKEN", "internal-tool-token")

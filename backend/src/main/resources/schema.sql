@@ -148,3 +148,54 @@ CREATE TABLE IF NOT EXISTS t_practice_question (
     review      TEXT,
     kp_name     VARCHAR(50)
 );
+
+-- ========== 新增：学习计划 / 打卡 / 通知 / 学习报告 ==========
+
+CREATE TABLE IF NOT EXISTS t_study_plan (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   BIGINT DEFAULT 1,
+    user_id     BIGINT,
+    course_id   BIGINT,
+    goal        VARCHAR(500),
+    days        INT DEFAULT 7,
+    status      VARCHAR(20) DEFAULT 'active',
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS t_plan_task (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   BIGINT DEFAULT 1,
+    plan_id     BIGINT,
+    day_no      INT,
+    task_date   DATE,
+    title       VARCHAR(200),
+    tasks       TEXT,
+    focus_kp    VARCHAR(100),
+    done        BOOLEAN DEFAULT FALSE,
+    done_at     TIMESTAMP NULL
+);
+
+CREATE TABLE IF NOT EXISTS t_notification (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   BIGINT DEFAULT 1,
+    user_id     BIGINT,
+    type        VARCHAR(20) DEFAULT 'review',
+    title       VARCHAR(200),
+    content     TEXT,
+    read_flag   BOOLEAN DEFAULT FALSE,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS t_report (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   BIGINT DEFAULT 1,
+    user_id     BIGINT,
+    course_id   BIGINT,
+    period      VARCHAR(20),
+    title       VARCHAR(200),
+    content     TEXT,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 掌握度衰减：记录最近练习时间，供间隔重复复习提醒计算
+ALTER TABLE t_knowledge_mastery ADD COLUMN IF NOT EXISTS last_practice_at TIMESTAMP NULL;
