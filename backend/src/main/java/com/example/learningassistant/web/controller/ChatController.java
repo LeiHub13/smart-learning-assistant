@@ -47,21 +47,25 @@ public class ChatController {
     }
 
     @GetMapping("/{id}/messages")
-    public ApiResponse<List<ChatMessage>> messages(@PathVariable Long id) {
-        return ApiResponse.ok(chatService.messages(id));
+    public ApiResponse<List<ChatMessage>> messages(HttpServletRequest request, @PathVariable Long id) {
+        AuthUser u = CurrentUser.get(request);
+        return ApiResponse.ok(chatService.messages(id, u.id()));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<ChatSession> rename(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+    public ApiResponse<ChatSession> rename(HttpServletRequest request, @PathVariable Long id,
+                                           @RequestBody Map<String, Object> body) {
+        AuthUser u = CurrentUser.get(request);
         String title = (String) body.get("title");
         Long courseId = body.get("courseId") == null ? null : Long.valueOf(String.valueOf(body.get("courseId")));
         Long kbId = body.get("kbId") == null ? null : Long.valueOf(String.valueOf(body.get("kbId")));
-        return ApiResponse.ok(chatService.updateSession(id, title, courseId, kbId));
+        return ApiResponse.ok(chatService.updateSession(id, u.id(), title, courseId, kbId));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable Long id) {
-        chatService.deleteSession(id);
+    public ApiResponse<Void> delete(HttpServletRequest request, @PathVariable Long id) {
+        AuthUser u = CurrentUser.get(request);
+        chatService.deleteSession(id, u.id());
         return ApiResponse.ok(null);
     }
 

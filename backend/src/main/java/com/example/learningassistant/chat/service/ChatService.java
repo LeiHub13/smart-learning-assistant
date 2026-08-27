@@ -63,7 +63,7 @@ public class ChatService {
     private boolean rerankEnabled;
 
     public List<ChatSession> sessions(Long userId) {
-        return sessionMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ChatSession>()
+        return sessionMapper.selectList(new LambdaQueryWrapper<ChatSession>()
                 .eq(ChatSession::getUserId, userId)
                 .orderByDesc(ChatSession::getCreatedAt));
     }
@@ -87,26 +87,41 @@ public class ChatService {
         return s;
     }
 
-    public ChatSession updateSession(Long id, String title, Long courseId, Long kbId) {
+    /** 归属校验：会话不存在或不属于当前用户一律拒绝（防越权读写他人会话）。 */
+    public ChatSession requireOwnedSession(Long id, Long userId) {
         ChatSession s = requireSession(id);
+        if (userId == null || !userId.equals(s.getUserId())) {
+            throw new BizException("会话不存在或无权访问");
+        }
+        return s;
+    }
+
+    public ChatSession updateSession(Long id, Long userId, String title, Long courseId, Long kbId) {
+        ChatSession s = requireOwnedSession(id, userId);
         if (title != null && !title.isBlank()) {
             s.setTitle(title.trim());
         }
-        s.setCourseId(courseId);
-        s.setKbId(kbId);
+        // 只覆盖显式传入的字段，避免重命名时误清知识库绑定
+        if (courseId != null) {
+            s.setCourseId(courseId);
+        }
+        if (kbId != null) {
+            s.setKbId(kbId);
+        }
         sessionMapper.updateById(s);
         return s;
     }
 
-    public void deleteSession(Long id) {
-        requireSession(id);
-        messageMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ChatMessage>()
+    public void deleteSession(Long id, Long userId) {
+        requireOwnedSession(id, userId);
+        messageMapper.delete(new LambdaQueryWrapper<ChatMessage>()
                 .eq(ChatMessage::getSessionId, id));
         sessionMapper.deleteById(id);
     }
 
-    public List<ChatMessage> messages(Long sessionId) {
-        return messageMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ChatMessage>()
+    public List<ChatMessage> messages(Long sessionId, Long userId) {
+        requireOwnedSession(sessionId, userId);
+        return messageMapper.selectList(new LambdaQueryWrapper<ChatMessage>()
                 .eq(ChatMessage::getSessionId, sessionId)
                 .orderByAsc(ChatMessage::getCreatedAt));
     }
@@ -116,7 +131,7 @@ public class ChatService {
      */
     public void streamMessage(Long sessionId, String question, Long userId,
                               Consumer<String> onDelta, Consumer<String> onDone) {
-        ChatSession session = requireSession(sessionId);
+        ChatSession session = requireOwnedSession(sessionId, userId);
         LocalDateTime now = LocalDateTime.now();
 
         ChatMessage userMsg = new ChatMessage();
@@ -186,7 +201,10 @@ public class ChatService {
     }
 
     private List<AIChatMessage> historyMessages(Long sessionId, int rounds) {
-        List<ChatMessage> all = messages(sessionId);
+        List<ChatMessage> all = messageMapper.selectList(
+                new LambdaQueryWrapper<ChatMessage>()
+                        .eq(ChatMessage::getSessionId, sessionId)
+                        .orderByAsc(ChatMessage::getCreatedAt));
         int size = all.size();
         if (size <= rounds) {
             return all.stream().map(m -> new AIChatMessage(m.getRole(), m.getContent())).toList();
