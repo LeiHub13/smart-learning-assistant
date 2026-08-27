@@ -13,7 +13,7 @@
 | Python | 3.10+（开发环境 3.13） |
 | DeepSeek API Key | 在线大模型 |
 
-数据库默认 H2 文件库（免安装），首次启动自动建表并写入演示数据。中间件（Redis/Milvus/MinIO/RabbitMQ）**全部可选**，默认内存降级。
+数据库默认 MySQL（`localhost:3306/learning_assistant`，root/1234，可用 DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD 环境变量覆盖），首次启动自动建表并写入演示数据。中间件（Redis/Milvus/MinIO/RabbitMQ）**全部可选**，默认内存降级。
 
 ## 二、启动
 
@@ -110,11 +110,9 @@ app:
     mq-mode: memory         # memory | rabbit
 ```
 
-数据库：默认 H2（Docker 部署即默认）；本地开发切 MySQL：`java -jar target/learning-assistant-1.0.0.jar --spring.profiles.active=mysql`（连接信息见 `application-mysql.yml`）。
+数据库：默认 MySQL，无需 profile；连接参数用环境变量 `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` 覆盖（H2 已移除，数据迁移见 Git 历史）。
 
 缓存：默认内存；切 Redis 时启用 profile 并确保 Redis 可达：`java -jar target/learning-assistant-1.0.0.jar --spring.profiles.active=redis`（配置见 `application-redis.yml`）。
-
-Profile 可叠加：`--spring.profiles.active=mysql,redis`。
 
 Agent 工具回调：ai-service 通过 `JAVA_TOOL_BASE` 回调 Java `/internal/tools/**` 取错题/掌握度/练习/知识库数据；Docker 环境已自动配置为 `http://backend:8080`，本地开发保持默认 `http://localhost:8080` 即可。
 

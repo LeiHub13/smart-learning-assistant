@@ -6,7 +6,7 @@
 
 ## 架构
 
-- `backend/`：Java 业务骨架（Spring Boot 3 + MyBatis-Plus，8080 端口），默认 H2 文件库（`./data/learnassist`），MySQL 为可选 profile（`--spring.profiles.active=mysql`，配置见 `application-mysql.yml`），Redis 为可选 profile（`--spring.profiles.active=redis`，配置见 `application-redis.yml`）
+- `backend/`：Java 业务骨架（Spring Boot 3 + MyBatis-Plus，8080 端口），默认 MySQL（localhost:3306/learning_assistant，连接参数可用 DB_* 环境变量覆盖；H2 已移除），Redis 为可选 profile（`--spring.profiles.active=redis`，配置见 `application-redis.yml`）
 - `ai-service/`：Python AI 服务（FastAPI + langchain + DeepSeek，8000 端口），负责生成/批改/答疑与会话记忆（JSONL 持久化，按 sessionId）
 - `frontend/`：Vue3 前端（5173 dev / Nginx 生产）
 
@@ -17,7 +17,7 @@
 - 系统无用户角色概念：所有用户权限一致，资源按 userId 隔离；演示账号 xiaoming/xiaohong/xiaoyu（密码 123456）
 - RAG 链路与向量检索在 Java 侧（内存向量库），Python 只做生成与记忆
 - 一键部署：根目录 `docker-compose.yml` + `deploy.sh`（三镜像编排，详见 `docs/05-Docker部署.md`）
-- 我叫你push的时候，你再push
+- push到远程仓库的时候要询问我！！！！
 
 ## 验证
 

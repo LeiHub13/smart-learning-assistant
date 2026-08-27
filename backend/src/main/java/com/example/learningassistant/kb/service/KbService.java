@@ -164,15 +164,22 @@ public class KbService {
         return vectorStore.size();
     }
 
+    public int chunkCount() {
+        return chunkMapper.selectCount(null).intValue();
+    }
+
     /**
-     * 从 chunk 表重建内存向量库（重启后向量库丢失时调用）。
+     * 从 chunk 表重建向量库索引（内存模式重启后 / Milvus 维度变更后调用）。
+     *
+     * @return 重建的向量条数
      */
-    public void reindexFromChunks() {
+    public int reindexFromChunks() {
         List<Chunk> chunks = chunkMapper.selectList(null);
         for (Chunk c : chunks) {
             vectorStore.put(c.getId(), embeddingService.embed(c.getContent()));
         }
         log.info("向量库重建完成，共 {} 条 chunk", chunks.size());
+        return chunks.size();
     }
 
     private List<String> split(String text, int size) {

@@ -11,9 +11,14 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-# 2. 构建镜像并启动
+# 2. 构建镜像并启动（.env 中 VECTOR_MODE=milvus 时附带启用 milvus 容器组）
+COMPOSE_ARGS=(-d --build)
+if grep -qE '^VECTOR_MODE=milvus' .env; then
+  echo "[2/4] 检测到 VECTOR_MODE=milvus，附加 milvus profile..."
+  COMPOSE_ARGS=(--profile milvus -d --build)
+fi
 echo "[2/4] 构建镜像并启动服务..."
-docker compose up -d --build
+docker compose "${COMPOSE_ARGS[@]}" up
 
 # 3. 等待 AI 服务健康
 echo "[3/4] 等待 ai-service 健康检查..."

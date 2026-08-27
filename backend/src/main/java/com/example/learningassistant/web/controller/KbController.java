@@ -98,4 +98,13 @@ public class KbController {
         kbService.deleteDocument(docId);
         return ApiResponse.ok(null);
     }
+
+    /**
+     * 手动重建向量库索引：内存模式重启丢索引、或 Milvus 集合因 Embedding 维度变更被重建后使用。
+     */
+    @PostMapping("/api/kb/reindex")
+    public ApiResponse<Map<String, Object>> reindex() {
+        int n = kbService.reindexFromChunks();
+        return ApiResponse.ok(Map.of("indexed", n, "vectorCount", kbService.vectorCount()));
+    }
 }

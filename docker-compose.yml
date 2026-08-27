@@ -1,19 +1,46 @@
-# Docker Compose 一键编排：前端(nginx) + 后端(Java) + AI 服务(Python)
+# Docker Compose 一键编排：前端(nginx) + 后端(Java) + AI 服务(Python) + MySQL
 # 用法：根目录建 .env（复制 .env.example）→ 填 AI_API_KEY → ./deploy.sh up
 name: learning-assistant
 
 services:
+  mysql:
+    image: mysql:8.4
+    container_name: la-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-learning_assistant}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-123456}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [la-net]
+
   backend:
     build:
       context: ./backend
     container_name: la-backend
     restart: unless-stopped
     environment:
+      # 数据库：连接 compose 内的 mysql 服务（镜像内 schema.sql 自动建表）
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME:-learning_assistant}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
       # 容器内访问 ai-service 容器名，覆盖 application.yml 的 localhost:8000
-      SPRING_APP_MODEL_PYTHON_BASE_URL: http://ai-service:8000
-      SPRING_APP_MODEL_PROVIDER: python
-      # 生产建议通过环境变量覆盖默认密钥
-      SPRING_APP_SECURITY_JWT_SECRET: ${JWT_SECRET:-learning-assistant-v2-jwt-secret-please-change-me-0123456789}
+      # 注意：属性路径为 app.model.*，对应环境变量前缀 APP_MODEL_*（此前误写为 SPRING_APP_*，覆盖不生效）
+      APP_MODEL_PYTHON_BASE_URL: http://ai-service:8000
+      APP_MODEL_PROVIDER: python
+      # 生产建议通过环境变量覆盖默认密钥（属性路径 app.security.jwt-secret）
+      APP_SECURITY_JWT_SECRET: ${JWT_SECRET:-learning-assistant-v2-jwt-secret-please-change-me-0123456789}
+      # 向量库切换：.env 设 VECTOR_MODE=milvus 并配合 --profile milvus 启动 Milvus 容器组
+      APP_INFRA_VECTOR_MODE: ${VECTOR_MODE:-memory}
+      APP_INFRA_MILVUS_HOST: ${MILVUS_HOST:-milvus}
+      APP_INFRA_MILVUS_PORT: ${MILVUS_PORT:-19530}
     volumes:
       - backend-data:/app/data
     ports:
@@ -21,6 +48,8 @@ services:
     networks: [la-net]
     depends_on:
       ai-service:
+        condition: service_healthy
+      mysql:
         condition: service_healthy
 
   ai-service:
@@ -59,9 +88,89 @@ services:
     depends_on:
       - backend
 
+  # ===== 可选：Milvus 向量库（--profile milvus 启用） =====
+  # 用法：.env 中设 VECTOR_MODE=milvus，然后 docker compose --profile milvus up -d
+  etcd:
+    profiles: ["milvus"]
+    image: quay.io/coreos/etcd:v3.5.18
+    container_name: la-etcd
+    restart: unless-stopped
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - etcd-data:/etcd
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    networks: [la-net]
+
+  milvus-minio:
+    profiles: ["milvus"]
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: la-milvus-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - milvus-minio-data:/minio_data
+    command: minio server /minio_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks: [la-net]
+
+  # 预创建 Milvus 所需的 bucket（a-bucket）
+  milvus-minio-init:
+    profiles: ["milvus"]
+    image: minio/mc
+    depends_on:
+      milvus-minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      until /usr/bin/mc alias set myminio http://milvus-minio:9000 minioadmin minioadmin; do
+        echo waiting for minio...; sleep 2;
+      done;
+      /usr/bin/mc mb --ignore-existing myminio/a-bucket;
+      exit 0"
+    networks: [la-net]
+
+  milvus:
+    profiles: ["milvus"]
+    image: milvusdb/milvus:v2.5.6
+    container_name: la-milvus
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+    volumes:
+      - milvus-data:/var/lib/milvus
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      - etcd
+      - milvus-minio-init
+    networks: [la-net]
+
 volumes:
+  mysql-data:
   backend-data:
   ai-data:
+  etcd-data:
+  milvus-minio-data:
+  milvus-data:
 
 networks:
   la-net:

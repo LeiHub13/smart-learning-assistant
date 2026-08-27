@@ -29,6 +29,9 @@ tmp/
 tmp_cred.txt
 tmp_cred_err.txt
 
+# ===== 文档目录（本地保留，不入库）=====
+docs/
+
 # ===== IDE / OS =====
 .idea/
 .vscode/

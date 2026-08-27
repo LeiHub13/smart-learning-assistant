@@ -21,14 +21,15 @@ CREATE TABLE IF NOT EXISTS t_course (
 );
 
 CREATE TABLE IF NOT EXISTS t_knowledge_mastery (
-    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
-    tenant_id     BIGINT DEFAULT 1,
-    user_id       BIGINT,
-    course_id     BIGINT,
-    kp_name       VARCHAR(50) NOT NULL,
-    mastery       DOUBLE DEFAULT 0,
-    attempts      INT DEFAULT 0,
-    correct_count INT DEFAULT 0,
+    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id        BIGINT DEFAULT 1,
+    user_id          BIGINT,
+    course_id        BIGINT,
+    kp_name          VARCHAR(50) NOT NULL,
+    mastery          DOUBLE DEFAULT 0,
+    attempts         INT DEFAULT 0,
+    correct_count    INT DEFAULT 0,
+    last_practice_at TIMESTAMP NULL,
     UNIQUE (user_id, course_id, kp_name)
 );
 
@@ -198,5 +199,5 @@ CREATE TABLE IF NOT EXISTS t_report (
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 掌握度衰减：记录最近练习时间，供间隔重复复习提醒计算
-ALTER TABLE t_knowledge_mastery ADD COLUMN IF NOT EXISTS last_practice_at TIMESTAMP NULL;
+-- 注：last_practice_at（间隔重复复习提醒）已并入上方 t_knowledge_mastery 建表语句。
+-- 旧 H2 库无需处理：历史上通过 ALTER 添加的列仍在；新建库直接由 CREATE TABLE 带出。

@@ -24,6 +24,7 @@
         <mybatis-plus.version>3.5.7</mybatis-plus.version>
         <jjwt.version>0.12.6</jjwt.version>
         <minio.version>8.5.12</minio.version>
+        <milvus-sdk.version>2.5.17</milvus-sdk.version>
         <springdoc.version>2.6.0</springdoc.version>
         <spring-ai.version>1.0.1</spring-ai.version>
     </properties>
@@ -76,6 +77,12 @@
             <artifactId>minio</artifactId>
             <version>${minio.version}</version>
         </dependency>
+        <!-- Milvus 向量数据库客户端（app.infra.vector-mode=milvus 时使用） -->
+        <dependency>
+            <groupId>io.milvus</groupId>
+            <artifactId>milvus-sdk-java</artifactId>
+            <version>${milvus-sdk.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
@@ -100,11 +107,6 @@
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-client-chat</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>com.mysql</groupId>

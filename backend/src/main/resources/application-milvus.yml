@@ -1,0 +1,14 @@
+# 启用 Milvus 向量库时的 profile 配置
+# 使用方式（本地）：
+#   先启动 Milvus：docker compose --profile milvus up -d etcd milvus-minio milvus-minio-init milvus
+#   再启动后端：
+#   java -jar target/learning-assistant-1.0.0.jar --spring.profiles.active=milvus
+# 可与 MySQL / Redis profile 叠加，如 --spring.profiles.active=mysql,milvus
+
+app:
+  infra:
+    vector-mode: milvus
+    milvus:
+      host: ${MILVUS_HOST:localhost}
+      port: ${MILVUS_PORT:19530}
+      collection: ${MILVUS_COLLECTION:learnassist_vectors}
