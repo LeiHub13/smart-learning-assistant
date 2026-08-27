@@ -3,7 +3,7 @@
 #   先启动 Milvus：docker compose --profile milvus up -d etcd milvus-minio milvus-minio-init milvus
 #   再启动后端：
 #   java -jar target/learning-assistant-1.0.0.jar --spring.profiles.active=milvus
-# 可与 MySQL / Redis profile 叠加，如 --spring.profiles.active=mysql,milvus
+# 可与 Redis profile 叠加，如 --spring.profiles.active=milvus,redis
 
 app:
   infra:

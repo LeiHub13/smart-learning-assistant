@@ -9,7 +9,7 @@ RUN mvn package -DskipTests -B
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=build /build/target/learning-assistant-1.0.0.jar app.jar
-# H2 文件库 + 上传文件 + 日志（挂载卷）
+# 上传文件 + 日志（挂载卷；数据库在独立 mysql 容器）
 VOLUME /app/data
 EXPOSE 8080
 ENV JAVA_OPTS="-Xmx512m"

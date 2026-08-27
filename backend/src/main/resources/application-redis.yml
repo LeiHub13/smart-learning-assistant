@@ -1,8 +1,8 @@
 # 启用 Redis 缓存时的 profile 配置
 # 使用方式：
 #   java -jar target/learning-assistant-1.0.0.jar --spring.profiles.active=redis
-# 可与 MySQL profile 叠加：
-#   --spring.profiles.active=mysql,redis
+# 可与 Milvus profile 叠加：
+#   --spring.profiles.active=redis,milvus
 
 app:
   infra:

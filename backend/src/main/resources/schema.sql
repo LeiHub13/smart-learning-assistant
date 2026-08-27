@@ -1,4 +1,4 @@
--- V2 骨架建表脚本（H2 MODE=MySQL 兼容；MySQL 8 可直接使用）
+-- V2 建表脚本（MySQL 8；历史开发期曾以 H2 MODE=MySQL 兼容运行，H2 已移除）
 -- 仅包含骨架可运行所需的最小表集，完整表设计见 docs/02-系统架构设计.md §6
 
 CREATE TABLE IF NOT EXISTS t_user (
