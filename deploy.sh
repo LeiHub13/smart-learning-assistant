@@ -18,7 +18,7 @@ if grep -qE '^VECTOR_MODE=milvus' .env; then
   COMPOSE_ARGS=(--profile milvus -d --build)
 fi
 echo "[2/4] 构建镜像并启动服务..."
-docker compose "${COMPOSE_ARGS[@]}" up
+docker compose up "${COMPOSE_ARGS[@]}"
 
 # 3. 等待 AI 服务健康
 echo "[3/4] 等待 ai-service 健康检查..."
