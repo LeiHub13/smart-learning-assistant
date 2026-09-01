@@ -6,40 +6,50 @@
         {{ m.title }}
       </button>
     </nav>
-    <div class="foot">
-      <div class="bell" @click="toggleBell">
-        🔔
-        <span v-if="unread" class="badge">{{ unread > 99 ? '99+' : unread }}</span>
-        <div v-if="bellOpen" class="notify-pop" @click.stop>
-          <div class="notify-head">
-            <b>通知</b>
-            <a @click="readAll">全部已读</a>
-          </div>
-          <div v-if="!notifies.length" class="notify-empty">暂无通知</div>
-          <div v-for="n in notifies" :key="n.id" :class="['notify-item', { unread: !n.readFlag }]" @click="readOne(n)">
-            <div class="notify-title">{{ n.title }}</div>
-            <div class="notify-content">{{ n.content }}</div>
+  </aside>
+
+  <div class="right">
+    <header class="topbar">
+      <div class="tb-title">{{ pageTitle }}</div>
+      <div class="tb-right">
+        <div class="bell" @click.stop="toggleBell">
+          🔔
+          <span v-if="unread" class="badge">{{ unread > 99 ? '99+' : unread }}</span>
+          <div v-if="bellOpen" class="notify-pop" @click.stop>
+            <div class="notify-head">
+              <b>通知</b>
+              <a @click="readAll">全部已读</a>
+            </div>
+            <div v-if="!notifies.length" class="notify-empty">暂无通知</div>
+            <div v-for="n in notifies" :key="n.id" :class="['notify-item', { unread: !n.readFlag }]" @click="readOne(n)">
+              <div class="notify-title">{{ n.title }}</div>
+              <div class="notify-content">{{ n.content }}</div>
+            </div>
           </div>
         </div>
+        <div class="tb-user">
+          <span class="avatar">{{ avatarChar }}</span>
+          <div class="tb-user-info">
+            <div class="tb-name">{{ me?.nickname || '…' }}</div>
+            <div class="tb-role">用户</div>
+          </div>
+        </div>
+        <button class="btn ghost small" @click="logout">退出</button>
       </div>
-      <div>
-        <div>{{ me?.nickname || '…' }}</div>
-        <div class="role">用户</div>
-      </div>
-      <button class="btn ghost small" @click="logout">退出</button>
-    </div>
-  </aside>
-  <main class="main" ref="mainRef">
-    <router-view v-slot="{ Component }">
-      <KeepAlive :include="keepAliveViews">
-        <component :is="Component" />
-      </KeepAlive>
-    </router-view>
-  </main>
+    </header>
+
+    <main class="main" ref="mainRef">
+      <router-view v-slot="{ Component }">
+        <KeepAlive :include="keepAliveViews">
+          <component :is="Component" />
+        </KeepAlive>
+      </router-view>
+    </main>
+  </div>
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, getToken, clearToken, resetApiCache, listNotifications, unreadCount, markRead, markAllRead } from './api'
 
@@ -63,6 +73,13 @@ const menus = [
   { key: 'plan', title: '学习计划', path: '/plans' },
   { key: 'report', title: '学习报告', path: '/reports' }
 ]
+
+const pageTitle = computed(() => {
+  const m = menus.find((x) => route.path.startsWith(x.path))
+  return m ? m.title : ''
+})
+
+const avatarChar = computed(() => (me.value?.nickname || '?').trim().slice(0, 1).toUpperCase())
 
 const isActive = (m) => route.path.startsWith(m.path)
 
@@ -105,7 +122,10 @@ const readAll = async () => {
   unread.value = 0
 }
 
+const closeBell = () => { bellOpen.value = false }
+
 onMounted(async () => {
+  document.addEventListener('click', closeBell)
   if (!getToken()) {
     router.replace('/login')
     return
@@ -122,6 +142,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('click', closeBell)
   if (notifyTimer) clearInterval(notifyTimer)
 })
 
@@ -134,9 +155,13 @@ watch(
 </script>
 
 <style scoped>
-.bell { position: relative; cursor: pointer; font-size: 18px; padding: 6px; }
-.bell .badge { position: absolute; top: -2px; right: -4px; background: #ff4d4f; color: #fff; font-size: 10px; border-radius: 8px; padding: 0 5px; line-height: 14px; }
-.notify-pop { position: absolute; bottom: 52px; left: 12px; width: 280px; max-height: 360px; overflow: auto; background: #fff; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 10px 0; z-index: 100; }
+.bell { cursor: pointer; font-size: 18px; padding: 6px; line-height: 1; }
+.bell .badge { position: absolute; top: -4px; right: -8px; background: #ff4d4f; color: #fff; font-size: 10px; border-radius: 8px; padding: 0 5px; line-height: 14px; }
+.notify-pop {
+  position: absolute; top: 42px; right: -10px; width: 300px; max-height: 380px; overflow: auto;
+  background: #fff; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  padding: 10px 0; z-index: 100;
+}
 .notify-head { display: flex; justify-content: space-between; align-items: center; padding: 0 12px 8px; border-bottom: 1px solid #eee; }
 .notify-head a { color: #1677ff; font-size: 12px; cursor: pointer; }
 .notify-empty { padding: 20px; text-align: center; color: #999; font-size: 13px; }

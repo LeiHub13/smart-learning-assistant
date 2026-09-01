@@ -51,11 +51,25 @@ body {
 }
 .sidebar nav button:hover { background: rgba(255,255,255,.07); color: #fff; }
 .sidebar nav button.on { background: var(--primary); color: #fff; font-weight: 600; }
-.sidebar .foot {
-  padding: 14px 18px; border-top: 1px solid rgba(255,255,255,.09);
-  display: flex; justify-content: space-between; align-items: center;
+
+/* ======== 顶栏 ======== */
+.right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar {
+  height: 48px; flex-shrink: 0; background: var(--card);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 18px; gap: 12px;
 }
-.sidebar .foot .role { color: #8fa3c8; font-size: 12px; }
+.topbar .tb-title { font-size: 15px; font-weight: 700; }
+.topbar .tb-right { position: relative; display: flex; align-items: center; gap: 14px; }
+.topbar .tb-user { display: flex; align-items: center; gap: 8px; }
+.topbar .avatar {
+  width: 28px; height: 28px; border-radius: 50%; background: var(--primary);
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
+}
+.topbar .tb-name { font-size: 13px; font-weight: 600; line-height: 1.2; }
+.topbar .tb-role { font-size: 11px; color: var(--muted); line-height: 1.2; }
 
 /* ======== 主区域 ======== */
 .main {
@@ -162,7 +176,7 @@ textarea { resize: vertical; min-height: 80px; }
 .login .sw a { color: var(--primary); cursor: pointer; }
 
 /* ======== 答疑 ======== */
-.chat-wrap { display: flex; gap: 14px; height: calc(100vh - 44px); }
+.chat-wrap { display: flex; gap: 14px; height: calc(100vh - 48px - 44px); }
 .side {
   width: 250px; flex-shrink: 0; display: flex; flex-direction: column;
 }
@@ -324,10 +338,14 @@ a.link { color: var(--primary); cursor: pointer; }
     width: auto; flex: 1 0 auto; text-align: center;
     padding: 8px 10px; font-size: 13px; margin: 0; white-space: nowrap;
   }
-  .sidebar .foot { padding: 0; border: none; flex-shrink: 0; }
-  .sidebar .foot > div:first-child { display: none; }
 
-  /* 主区域 */
+  /* 顶栏 */
+  .topbar { padding: 0 12px; gap: 8px; }
+  .topbar .tb-title { font-size: 14px; }
+  .topbar .tb-right { gap: 10px; }
+  .topbar .tb-user-info { display: none; }
+
+  /* 主区?*/
   .main { padding: 14px 12px calc(22px + env(safe-area-inset-bottom)); }
 
   /* 表单行纵向堆叠，按钮组保持横排 */
@@ -341,7 +359,7 @@ a.link { color: var(--primary); cursor: pointer; }
   .login .box { flex: 1; padding: 30px 22px; min-width: 0; }
 
   /* 答疑：会话栏转顶部卡片 */
-  .chat-wrap { flex-direction: column; height: calc(100dvh - 64px); }
+  .chat-wrap { flex-direction: column; height: calc(100dvh - 48px - 36px); }
   .side { width: 100%; max-height: 240px; min-height: 0; }
   .chatbox { min-height: 0; }
   .m .bub { max-width: 88%; }
