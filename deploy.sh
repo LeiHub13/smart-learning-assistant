@@ -20,10 +20,11 @@ fi
 echo "[2/4] 构建镜像并启动服务..."
 docker compose up "${COMPOSE_ARGS[@]}"
 
-# 3. 等待 AI 服务健康
+# 3. 等待 AI 服务健康（ai-service 未映射宿主机端口，直接查容器 healthcheck）
 echo "[3/4] 等待 ai-service 健康检查..."
 for i in $(seq 1 30); do
-  if curl -sf http://127.0.0.1:8000/ai/health >/dev/null 2>&1; then
+  status=$(docker inspect --format='{{.State.Health.Status}}' la-ai 2>/dev/null || echo "missing")
+  if [ "$status" = "healthy" ]; then
     echo "      ai-service 就绪 ✓"
     break
   fi
@@ -45,7 +46,7 @@ done
 echo ""
 echo "部署完成："
 echo "  前端    http://<服务器IP>      (xiaoming/123456)"
-echo "  后端    http://127.0.0.1:8080"
-echo "  AI 服务 http://127.0.0.1:8000/ai/health"
+echo "  后端    http://127.0.0.1:8080  (仅宿主机可访问)"
+echo "  AI 服务 容器内网 ai-service:8000（不对外）"
 echo "查看日志: docker compose logs -f"
 echo "停止:     docker compose down"

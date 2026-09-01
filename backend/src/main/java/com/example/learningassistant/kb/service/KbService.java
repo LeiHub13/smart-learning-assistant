@@ -28,7 +28,7 @@ import java.util.List;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor // 给final字段自动注入依赖
 public class KbService {
 
     private final KnowledgeBaseMapper kbMapper;
