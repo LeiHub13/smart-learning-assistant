@@ -41,6 +41,10 @@ services:
       APP_INFRA_VECTOR_MODE: ${VECTOR_MODE:-memory}
       APP_INFRA_MILVUS_HOST: ${MILVUS_HOST:-milvus}
       APP_INFRA_MILVUS_PORT: ${MILVUS_PORT:-19530}
+      # 编排内未部署 Redis/RabbitMQ：显式回退内存实现（application.yml 本地默认为 redis/rabbit，
+      # 且 Redis 为 fail-fast、Rabbit 无交换机声明，容器内不能沿用）
+      APP_INFRA_CACHE_MODE: ${CACHE_MODE:-memory}
+      APP_INFRA_MQ_MODE: ${MQ_MODE:-memory}
     volumes:
       - backend-data:/app/data
     ports:
