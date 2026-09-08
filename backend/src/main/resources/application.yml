@@ -45,10 +45,10 @@ app:
     temperature: 0.7
   infra:
     # 中间件开关：配置了真实中间件即切换，未配置/未填则自动使用内存降级实现
-    cache-mode: memory      # memory | redis
+    cache-mode: redis      # memory | redis
     vector-mode: memory     # memory | milvus
     storage-mode: local     # local | minio
-    mq-mode: memory         # memory | rabbit
+    mq-mode: rabbit        # memory | rabbit
     milvus:
       host: ${MILVUS_HOST:localhost}
       port: ${MILVUS_PORT:19530}
