@@ -106,14 +106,14 @@ onMounted(load)
 </script>
 
 <style scoped>
-.plan-item { border: 1px solid #eee; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
-.plan-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: #fafafa; cursor: pointer; }
+.plan-item { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+.plan-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: var(--soft); cursor: pointer; }
 .plan-body { padding: 14px; }
-.progress-bar { height: 6px; background: #eee; border-radius: 3px; margin-bottom: 12px; }
-.progress-bar .fill { height: 100%; background: #52c41a; border-radius: 3px; transition: width .3s; }
+.progress-bar { height: 7px; background: #eee8df; border-radius: 4px; margin-bottom: 12px; }
+.progress-bar .fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width .3s; }
 .tasks { display: grid; gap: 10px; }
-.task { display: flex; gap: 10px; padding: 10px; border: 1px solid #f0f0f0; border-radius: 6px; cursor: pointer; }
-.task.done { opacity: .7; background: #f6ffed; }
+.task { display: flex; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.task.done { opacity: .7; background: #f7f2ec; }
 .cb { font-size: 18px; }
 .small { font-size: 12px; }
 .muted { color: #888; }

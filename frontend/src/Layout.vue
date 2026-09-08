@@ -163,10 +163,10 @@ watch(
   padding: 10px 0; z-index: 100;
 }
 .notify-head { display: flex; justify-content: space-between; align-items: center; padding: 0 12px 8px; border-bottom: 1px solid #eee; }
-.notify-head a { color: #1677ff; font-size: 12px; cursor: pointer; }
+.notify-head a { color: #8c6844; font-size: 12px; cursor: pointer; }
 .notify-empty { padding: 20px; text-align: center; color: #999; font-size: 13px; }
 .notify-item { padding: 8px 12px; border-bottom: 1px solid #f5f5f5; cursor: pointer; }
-.notify-item.unread { background: #f0f7ff; }
+.notify-item.unread { background: #f7f2ec; }
 .notify-item:hover { background: #f5f5f5; }
 .notify-title { font-weight: 600; font-size: 13px; }
 .notify-content { font-size: 12px; color: #666; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

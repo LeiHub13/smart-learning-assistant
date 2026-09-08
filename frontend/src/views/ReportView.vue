@@ -77,8 +77,8 @@ onMounted(load)
 </script>
 
 <style scoped>
-.report-item { border: 1px solid #eee; border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
-.report-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: #fafafa; cursor: pointer; }
+.report-item { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+.report-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: var(--soft); cursor: pointer; }
 .report-body { padding: 14px; }
 .md { line-height: 1.7; margin-bottom: 14px; }
 .small { font-size: 12px; }
