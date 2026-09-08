@@ -21,7 +21,7 @@
         </div>
         <div v-if="current?.id === r.id" class="report-body">
           <div class="md" v-html="renderMd(current.content)"></div>
-          <a class="btn ghost small" :href="pdfUrl(r.id)" target="_blank">下载 PDF</a>
+          <button class="btn ghost small" :disabled="downloading" @click="downloadPdf(r)">下载 PDF</button>
         </div>
       </div>
     </div>
@@ -30,13 +30,14 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getCourses, listReports, generateWeeklyReport, reportPdfUrl } from '../api'
+import { getCourses, listReports, generateWeeklyReport, downloadFile } from '../api'
 
 const courses = ref([])
 const reports = ref([])
 const current = ref(null)
 const courseId = ref(1)
 const loading = ref(false)
+const downloading = ref(false)
 
 const load = async () => {
   courses.value = await getCourses()
@@ -58,7 +59,14 @@ const show = (r) => {
   current.value = current.value?.id === r.id ? null : r
 }
 
-const pdfUrl = (id) => reportPdfUrl(id) + '?t=' + Date.now()
+const downloadPdf = async (r) => {
+  downloading.value = true
+  try {
+    await downloadFile(`/api/reports/${r.id}/pdf`, `学习报告-${r.title}.pdf`)
+  } finally {
+    downloading.value = false
+  }
+}
 
 const formatTime = (s) => s ? new Date(s).toLocaleString() : ''
 

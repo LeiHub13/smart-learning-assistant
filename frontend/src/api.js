@@ -88,7 +88,19 @@ export async function deletePlan(id) { return api(`/api/plans/${id}`, { method: 
 export async function listReports() { return api('/api/reports') }
 export async function getReport(id) { return api(`/api/reports/${id}`) }
 export async function generateWeeklyReport(courseId) { return api(`/api/reports/weekly?courseId=${courseId}`, { method: 'POST' }) }
-export function reportPdfUrl(id) { return `/api/reports/${id}/pdf` }
+
+/** 带认证头的文件下载：fetch blob 后触发浏览器保存 */
+export async function downloadFile(path, filename) {
+  const res = await fetch(path, { headers: { Authorization: 'Bearer ' + getToken() } })
+  if (!res.ok) throw new Error('下载失败(' + res.status + ')')
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 /** 通知 */
 export async function listNotifications() { return api('/api/notifications') }
