@@ -21,6 +21,22 @@ services:
       start_period: 30s
     networks: [la-net]
 
+  # Redis 缓存：backend 默认 cache-mode=redis，经 healthcheck 就绪后再启动 backend
+  redis:
+    image: redis:7-alpine
+    container_name: la-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks: [la-net]
+
   backend:
     build:
       context: ./backend
@@ -41,9 +57,11 @@ services:
       APP_INFRA_VECTOR_MODE: ${VECTOR_MODE:-memory}
       APP_INFRA_MILVUS_HOST: ${MILVUS_HOST:-milvus}
       APP_INFRA_MILVUS_PORT: ${MILVUS_PORT:-19530}
-      # 编排内未部署 Redis/RabbitMQ：显式回退内存实现（application.yml 本地默认为 redis/rabbit，
-      # 且 Redis 为 fail-fast、Rabbit 无交换机声明，容器内不能沿用）
-      APP_INFRA_CACHE_MODE: ${CACHE_MODE:-memory}
+      # Redis 缓存：默认启用，指向 compose 内 redis 服务
+      APP_INFRA_CACHE_MODE: ${CACHE_MODE:-redis}
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
+      # RabbitMQ 缺交换机声明与消费者，编排内保持内存实现
       APP_INFRA_MQ_MODE: ${MQ_MODE:-memory}
     volumes:
       - backend-data:/app/data
@@ -54,6 +72,8 @@ services:
       ai-service:
         condition: service_healthy
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   ai-service:
@@ -170,6 +190,7 @@ services:
 
 volumes:
   mysql-data:
+  redis-data:
   backend-data:
   ai-data:
   etcd-data:
