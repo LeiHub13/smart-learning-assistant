@@ -58,6 +58,8 @@ public class PracticeService {
         if (userId != null) {
             qs = adaptivePick(userId, courseId, qs, count);
         }
+        // toList() 产生不可变列表，shuffle 前必须包一层可变副本
+        qs = new ArrayList<>(qs);
         java.util.Collections.shuffle(qs);
         if (qs.size() > count) {
             qs = qs.subList(0, count);
@@ -83,8 +85,9 @@ public class PracticeService {
         List<Question> matched = all.stream()
                 .filter(q -> targetDiff.equals(q.getDifficulty())).toList();
         if (matched.size() >= count / 2) {
-            java.util.Collections.shuffle(matched);
-            return matched;
+            List<Question> picked = new ArrayList<>(matched);
+            java.util.Collections.shuffle(picked);
+            return picked;
         }
         return all;
     }
