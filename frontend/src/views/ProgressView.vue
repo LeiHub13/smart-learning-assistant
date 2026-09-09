@@ -56,7 +56,14 @@
       </div>
 
       <div class="card">
-        <h3>AI 复习建议</h3>
+        <div class="row" style="justify-content:space-between">
+          <h3 style="margin:0">AI 复习建议
+            <span v-if="summary.adviceCached" class="tag" title="读取缓存，点击重新生成可更新">缓存 · 7天内有效</span>
+          </h3>
+          <button class="btn ghost small" :disabled="refreshingAdvice" @click="refreshAdvice">
+            {{ refreshingAdvice ? 'AI 生成中…' : '重新生成' }}
+          </button>
+        </div>
         <div style="line-height:1.9;color:#334155">
           <p v-for="(line, i) in adviceLines" :key="i">{{ line }}</p>
         </div>
@@ -104,6 +111,21 @@ const courses = ref([])
 const courseId = ref(null)
 const summary = ref(null)
 const study = ref(null)
+const refreshingAdvice = ref(false)
+
+const refreshAdvice = async () => {
+  if (!courseId.value) return
+  refreshingAdvice.value = true
+  try {
+    const r = await api('/api/progress/advice/refresh?courseId=' + courseId.value, { method: 'POST' })
+    if (summary.value) {
+      summary.value.advice = r.advice
+      summary.value.adviceCached = false
+    }
+  } catch (e) { /* 保留旧建议 */ } finally {
+    refreshingAdvice.value = false
+  }
+}
 
 const adviceLines = computed(() => {
   if (!summary.value || !summary.value.advice) return []

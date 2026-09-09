@@ -7,6 +7,7 @@ import com.example.learningassistant.security.CurrentUser;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,5 +32,16 @@ public class ProgressController {
             courseId = 1L;
         }
         return ApiResponse.ok(progressService.summary(u.id(), courseId));
+    }
+
+    /** 强制重新生成 AI 复习建议（绕过缓存，结果写回 Redis/内存）。 */
+    @PostMapping("/advice/refresh")
+    public ApiResponse<Map<String, Object>> refreshAdvice(HttpServletRequest request,
+                                                          @RequestParam(required = false) Long courseId) {
+        AuthUser u = CurrentUser.get(request);
+        if (courseId == null) {
+            courseId = 1L;
+        }
+        return ApiResponse.ok(progressService.regenerateAdvice(u.id(), courseId));
     }
 }
