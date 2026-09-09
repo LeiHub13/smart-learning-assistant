@@ -72,7 +72,8 @@ public class MinioFileStorage implements FileStorage {
 
     @Override
     public String url(String bucket, String objectName) {
-        return "/api/files/" + bucket + "/" + objectName;
+        // 与 LocalFileStorage 统一路径：走 FileController 的 /files 直读（download 经 MinIO 客户端取回）
+        return "/files/" + bucket + "/" + objectName;
     }
 
     private void ensureBucket(String bucket) throws Exception {
