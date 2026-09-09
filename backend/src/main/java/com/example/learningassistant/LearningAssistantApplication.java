@@ -20,3 +20,7 @@ public class LearningAssistantApplication {
         SpringApplication.run(LearningAssistantApplication.class, args);
     }
 }
+
+// kb -- knowledge base 知识库
+// kp -- knowledge point 知识点
+// km -- knowledge mastery 知识掌握度

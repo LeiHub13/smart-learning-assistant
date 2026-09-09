@@ -51,8 +51,16 @@ public class PracticeController {
         return ApiResponse.ok(practiceService.history(u.id()));
     }
 
+    @GetMapping("/trend")
+    public ApiResponse<List<Map<String, Object>>> trend(HttpServletRequest request,
+                                                        @RequestParam(required = false) Long courseId) {
+        AuthUser u = CurrentUser.get(request);
+        return ApiResponse.ok(practiceService.trend(u.id(), courseId));
+    }
+
     @GetMapping("/{id}")
-    public ApiResponse<Map<String, Object>> report(@PathVariable Long id) {
-        return ApiResponse.ok(practiceService.report(id));
+    public ApiResponse<Map<String, Object>> report(HttpServletRequest request, @PathVariable Long id) {
+        AuthUser u = CurrentUser.get(request);
+        return ApiResponse.ok(practiceService.report(u.id(), id));
     }
 }
