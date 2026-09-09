@@ -28,24 +28,6 @@
       </div>
 
       <div class="card">
-        <h3>AI 复习建议</h3>
-        <div style="line-height:1.9;color:#334155">
-          <p v-for="(line, i) in adviceLines" :key="i">{{ line }}</p>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>知识点掌握度</h3>
-        <div v-if="!summary.masteries.length" class="empty">暂无练习数据，去「题库练习」做一组题后生成</div>
-        <div v-for="m in summary.masteries" :key="m.id" class="mb">
-          <div class="nm">{{ m.kpName }}</div>
-          <div class="tr"><div class="fl" :style="{ width: m.mastery + '%' }"></div></div>
-          <div class="vl">{{ Math.round(m.mastery) }}%</div>
-          <div class="ct">{{ m.correctCount }}/{{ m.attempts }} 对</div>
-        </div>
-      </div>
-
-      <div class="card">
         <h3>学习时长</h3>
         <div class="row">
           <div class="stat" style="flex:1"><div class="num">{{ fmtHours(study?.totalMinutes) }}</div><div class="lab">总时长</div></div>
@@ -71,6 +53,24 @@
           </tbody>
         </table>
         <div v-else class="empty">暂无课程时长数据（页面停留期间每分钟自动记录）</div>
+      </div>
+
+      <div class="card">
+        <h3>AI 复习建议</h3>
+        <div style="line-height:1.9;color:#334155">
+          <p v-for="(line, i) in adviceLines" :key="i">{{ line }}</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>知识点掌握度</h3>
+        <div v-if="!summary.masteries.length" class="empty">暂无练习数据，去「题库练习」做一组题后生成</div>
+        <div v-for="m in summary.masteries" :key="m.id" class="mb">
+          <div class="nm">{{ m.kpName }}</div>
+          <div class="tr"><div class="fl" :style="{ width: m.mastery + '%' }"></div></div>
+          <div class="vl">{{ Math.round(m.mastery) }}%</div>
+          <div class="ct">{{ m.correctCount }}/{{ m.attempts }} 对</div>
+        </div>
       </div>
 
       <div class="card">
