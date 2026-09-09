@@ -63,6 +63,14 @@ services:
       SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
       # RabbitMQ 缺交换机声明与消费者，编排内保持内存实现
       APP_INFRA_MQ_MODE: ${MQ_MODE:-memory}
+      # 邮件通知渠道：.env 配置 MAIL_ENABLED=true + SMTP 参数后启用
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-465}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SSL: ${MAIL_SSL:-true}
+      MAIL_STARTTLS: ${MAIL_STARTTLS:-false}
     volumes:
       - backend-data:/app/data
     ports:

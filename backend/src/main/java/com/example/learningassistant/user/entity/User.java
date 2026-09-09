@@ -22,5 +22,7 @@ public class User {
     /** BCrypt 哈希（骨架阶段沿用 SHA-256 加盐，见 AuthService） */
     private String password;
     private String nickname;
+    /** 接收通知邮件的邮箱（可空；NotifyService 邮件渠道依赖此字段） */
+    private String email;
     private LocalDateTime createdAt;
 }

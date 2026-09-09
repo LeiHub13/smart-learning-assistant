@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS t_user (
     username    VARCHAR(50)  NOT NULL UNIQUE,
     password    VARCHAR(100) NOT NULL,
     nickname    VARCHAR(50),
+    email       VARCHAR(100),
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -3,7 +3,8 @@
     <div class="logo"><i></i>智学助手</div>
     <nav>
       <button v-for="m in menus" :key="m.key" :class="{ on: isActive(m) }" @click="switchTo(m.path)">
-        {{ m.title }}
+        <span class="m-ico">{{ m.icon }}</span>
+        <span class="m-txt">{{ m.title }}</span>
       </button>
     </nav>
   </aside>
@@ -27,11 +28,11 @@
             </div>
           </div>
         </div>
-        <div class="tb-user">
+        <div class="tb-user" title="点击绑定通知邮箱" @click="bindEmail">
           <span class="avatar">{{ avatarChar }}</span>
           <div class="tb-user-info">
             <div class="tb-name">{{ me?.nickname || '…' }}</div>
-            <div class="tb-role">用户</div>
+            <div class="tb-role">{{ me?.email || '未绑定邮箱' }}</div>
           </div>
         </div>
         <button class="btn ghost small" @click="logout">退出</button>
@@ -40,9 +41,11 @@
 
     <main class="main" ref="mainRef">
       <router-view v-slot="{ Component }">
-        <KeepAlive :include="keepAliveViews">
-          <component :is="Component" />
-        </KeepAlive>
+        <Transition name="page-fade" mode="out-in">
+          <KeepAlive :include="keepAliveViews">
+            <component :is="Component" />
+          </KeepAlive>
+        </Transition>
       </router-view>
     </main>
   </div>
@@ -65,13 +68,13 @@ let notifyTimer = null
 const keepAliveViews = ['ChatView', 'GenerateView', 'PracticeView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView']
 
 const menus = [
-  { key: 'chat', title: '智能答疑', path: '/chat' },
-  { key: 'generate', title: '讲义/练习题 生成', path: '/generate' },
-  { key: 'practice', title: '题库练习', path: '/practice' },
-  { key: 'progress', title: '学情分析', path: '/progress' },
-  { key: 'manage', title: '课程与知识库', path: '/manage' },
-  { key: 'plan', title: '学习计划', path: '/plans' },
-  { key: 'report', title: '学习报告', path: '/reports' }
+  { key: 'chat', title: '智能答疑', path: '/chat', icon: '💬' },
+  { key: 'generate', title: '讲义/练习题 生成', path: '/generate', icon: '✨' },
+  { key: 'practice', title: '题库练习', path: '/practice', icon: '📝' },
+  { key: 'progress', title: '学情分析', path: '/progress', icon: '📈' },
+  { key: 'manage', title: '课程与知识库', path: '/manage', icon: '📚' },
+  { key: 'plan', title: '学习计划', path: '/plans', icon: '🗓️' },
+  { key: 'report', title: '学习报告', path: '/reports', icon: '📄' }
 ]
 
 const pageTitle = computed(() => {
@@ -92,6 +95,17 @@ const logout = () => {
   resetApiCache()
   me.value = null
   router.replace('/login')
+}
+
+const bindEmail = async () => {
+  const email = prompt('绑定接收通知的邮箱（复习提醒将同步发送邮件）：', me.value?.email || '')
+  if (email === null) return
+  try {
+    await api('/api/auth/me/email', { method: 'PUT', body: { email } })
+    me.value = await api('/api/auth/me')
+  } catch (e) {
+    alert(e.message)
+  }
 }
 
 const loadNotify = async () => {
@@ -155,19 +169,31 @@ watch(
 </script>
 
 <style scoped>
-.bell { cursor: pointer; font-size: 18px; padding: 6px; line-height: 1; }
-.bell .badge { position: absolute; top: -4px; right: -8px; background: #ff4d4f; color: #fff; font-size: 10px; border-radius: 8px; padding: 0 5px; line-height: 14px; }
-.notify-pop {
-  position: absolute; top: 42px; right: -10px; width: 300px; max-height: 380px; overflow: auto;
-  background: #fff; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.12);
-  padding: 10px 0; z-index: 100;
+.tb-user { cursor: pointer; border-radius: 10px; padding: 4px 6px; transition: background .2s ease; }
+.tb-user:hover { background: rgba(26,26,26,.05); }
+.bell {
+  position: relative; cursor: pointer; font-size: 17px; width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px; transition: background .2s ease;
 }
-.notify-head { display: flex; justify-content: space-between; align-items: center; padding: 0 12px 8px; border-bottom: 1px solid #eee; }
+.bell:hover { background: rgba(26,26,26,.05); }
+.bell .badge { position: absolute; top: 1px; right: 0; background: #ff4d4f; color: #fff; font-size: 10px; border-radius: 8px; padding: 0 5px; line-height: 14px; box-shadow: 0 0 0 2px #fff; }
+.notify-pop {
+  position: absolute; top: 42px; right: -10px; width: 320px; max-height: 400px; overflow: auto;
+  background: #fff; border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.14);
+  padding: 6px 0; z-index: 100;
+  animation: pop-in .16s ease;
+}
+@keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
+.notify-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px 9px; border-bottom: 1px solid #f0ece6; }
+.notify-head b { font-size: 14px; letter-spacing: -.01em; }
 .notify-head a { color: #8c6844; font-size: 12px; cursor: pointer; }
-.notify-empty { padding: 20px; text-align: center; color: #999; font-size: 13px; }
-.notify-item { padding: 8px 12px; border-bottom: 1px solid #f5f5f5; cursor: pointer; }
-.notify-item.unread { background: #f7f2ec; }
-.notify-item:hover { background: #f5f5f5; }
+.notify-head a:hover { text-decoration: underline; }
+.notify-empty { padding: 24px; text-align: center; color: #999; font-size: 13px; }
+.notify-item { padding: 9px 14px; border-bottom: 1px solid #f7f4ef; cursor: pointer; transition: background .15s ease; }
+.notify-item.unread { background: #faf6ef; }
+.notify-item.unread .notify-title::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #c98f4e; margin-right: 6px; vertical-align: 1px; }
+.notify-item:hover { background: #f5f2ec; }
 .notify-title { font-weight: 600; font-size: 13px; }
 .notify-content { font-size: 12px; color: #666; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

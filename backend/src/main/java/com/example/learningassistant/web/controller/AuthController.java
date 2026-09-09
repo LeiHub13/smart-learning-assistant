@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -43,6 +44,14 @@ public class AuthController {
         return ApiResponse.ok(Map.of(
                 "id", String.valueOf(user.getId()),
                 "username", user.getUsername(),
-                "nickname", user.getNickname()));
+                "nickname", user.getNickname() == null ? "" : user.getNickname(),
+                "email", user.getEmail() == null ? "" : user.getEmail()));
+    }
+
+    @PutMapping("/me/email")
+    public ApiResponse<Void> bindEmail(HttpServletRequest request, @RequestBody Map<String, String> body) {
+        AuthUser u = CurrentUser.get(request);
+        authService.bindEmail(u.id(), body.get("email"));
+        return ApiResponse.ok(null);
     }
 }

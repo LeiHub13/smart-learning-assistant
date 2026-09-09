@@ -16,6 +16,22 @@ spring:
       schema-locations: classpath:schema.sql
   jackson:
     time-zone: Asia/Shanghai
+  mail:
+    # 邮件通知：默认关闭，设 MAIL_ENABLED=true 且提供 SMTP 参数后启用
+    # QQ 邮箱示例：MAIL_HOST=smtp.qq.com，密码填授权码（非登录密码）
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:3917997689@qq.com}
+    password: ${MAIL_PASSWORD:jdnazkyybfmmcgdd}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: ${MAIL_SSL:true}   # 465 端口用 SSL；587 端口设 false 并开 starttls
+          starttls:
+            enable: ${MAIL_STARTTLS:false}
 
 mybatis-plus:
   configuration:
@@ -67,6 +83,9 @@ app:
     model: text-embedding-v3
   # 内部工具 API 鉴权（ai-service 的 Agent 工具回调 Java 取数）
   internal-tool-token: ${INTERNAL_TOOL_TOKEN:internal-tool-token}
+  notify:
+    # 邮件渠道开关：true 时站内信同步外发邮件（用户已绑定邮箱才会发）
+    email-enabled: ${MAIL_ENABLED:false}
 
 springdoc:
   api-docs:

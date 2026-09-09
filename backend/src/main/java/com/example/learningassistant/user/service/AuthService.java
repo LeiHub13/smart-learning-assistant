@@ -58,6 +58,19 @@ public class AuthService {
         return userMapper.selectById(userId);
     }
 
+    /** 绑定/更新接收通知邮件的邮箱。 */
+    public void bindEmail(Long userId, String email) {
+        if (email == null || !email.matches("^[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+$")) {
+            throw new BizException("邮箱格式不正确");
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException("用户不存在");
+        }
+        user.setEmail(email.trim());
+        userMapper.updateById(user);
+    }
+
     private Map<String, String> tokens(User user) {
         AuthUser au = new AuthUser(user.getId(), user.getUsername(), user.getNickname(), user.getTenantId());
         return Map.of(
