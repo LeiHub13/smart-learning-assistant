@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Maven 镜像加速：central 走阿里云（国内服务器必需，否则 17kB/s） -->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
+    <mirrors>
+        <mirror>
+            <id>aliyun</id>
+            <mirrorOf>central</mirrorOf>
+            <url>https://maven.aliyun.com/repository/public</url>
+        </mirror>
+    </mirrors>
+</settings>
