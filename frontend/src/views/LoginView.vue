@@ -140,7 +140,7 @@ const submit = async () => {
   display: grid;
   grid-template-columns: 1fr 520px;
   min-height: 100vh;
-  background: #f5f3ef;
+  background: transparent;
   font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #1a1a1a;
 }
