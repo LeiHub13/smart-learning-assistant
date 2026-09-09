@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -25,6 +26,7 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final com.example.learningassistant.user.service.AvatarService avatarService;
 
     @PostMapping("/login")
     public ApiResponse<Map<String, String>> login(@RequestBody Map<String, String> body) {
@@ -45,7 +47,8 @@ public class AuthController {
                 "id", String.valueOf(user.getId()),
                 "username", user.getUsername(),
                 "nickname", user.getNickname() == null ? "" : user.getNickname(),
-                "email", user.getEmail() == null ? "" : user.getEmail()));
+                "email", user.getEmail() == null ? "" : user.getEmail(),
+                "avatar", user.getAvatar() == null ? "" : user.getAvatar()));
     }
 
     @PutMapping("/me/email")
@@ -53,5 +56,26 @@ public class AuthController {
         AuthUser u = CurrentUser.get(request);
         authService.bindEmail(u.id(), body.get("email"));
         return ApiResponse.ok(null);
+    }
+
+    @PutMapping("/me/profile")
+    public ApiResponse<Void> updateProfile(HttpServletRequest request, @RequestBody Map<String, String> body) {
+        AuthUser u = CurrentUser.get(request);
+        authService.updateNickname(u.id(), body.get("nickname"));
+        return ApiResponse.ok(null);
+    }
+
+    @PutMapping("/me/password")
+    public ApiResponse<Void> changePassword(HttpServletRequest request, @RequestBody Map<String, String> body) {
+        AuthUser u = CurrentUser.get(request);
+        authService.changePassword(u.id(), body.get("oldPassword"), body.get("newPassword"));
+        return ApiResponse.ok(null);
+    }
+
+    @PostMapping(value = "/me/avatar", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<Map<String, String>> uploadAvatar(HttpServletRequest request,
+                                                         @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        AuthUser u = CurrentUser.get(request);
+        return ApiResponse.ok(Map.of("avatar", avatarService.upload(u.id(), file)));
     }
 }

@@ -71,6 +71,35 @@ public class AuthService {
         userMapper.updateById(user);
     }
 
+    /** 更新昵称。 */
+    public void updateNickname(Long userId, String nickname) {
+        if (nickname == null || nickname.isBlank()) {
+            throw new BizException("昵称不能为空");
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException("用户不存在");
+        }
+        user.setNickname(nickname.trim());
+        userMapper.updateById(user);
+    }
+
+    /** 修改密码：校验原密码，新密码至少 6 位。 */
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new BizException("新密码至少 6 位");
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException("用户不存在");
+        }
+        if (!user.getPassword().equals(hash(oldPassword))) {
+            throw new BizException("原密码错误");
+        }
+        user.setPassword(hash(newPassword));
+        userMapper.updateById(user);
+    }
+
     private Map<String, String> tokens(User user) {
         AuthUser au = new AuthUser(user.getId(), user.getUsername(), user.getNickname(), user.getTenantId());
         return Map.of(

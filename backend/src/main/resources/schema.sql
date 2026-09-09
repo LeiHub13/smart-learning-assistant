@@ -8,7 +8,18 @@ CREATE TABLE IF NOT EXISTS t_user (
     password    VARCHAR(100) NOT NULL,
     nickname    VARCHAR(50),
     email       VARCHAR(100),
+    avatar      VARCHAR(500),
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS t_study_log (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   BIGINT DEFAULT 1,
+    user_id     BIGINT NOT NULL,
+    course_id   BIGINT NOT NULL DEFAULT 0,
+    study_date  DATE NOT NULL,
+    minutes     INT DEFAULT 0,
+    UNIQUE KEY uk_study (user_id, course_id, study_date)
 );
 
 CREATE TABLE IF NOT EXISTS t_course (

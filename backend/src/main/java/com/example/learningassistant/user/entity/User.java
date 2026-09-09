@@ -24,5 +24,7 @@ public class User {
     private String nickname;
     /** 接收通知邮件的邮箱（可空；NotifyService 邮件渠道依赖此字段） */
     private String email;
+    /** 头像访问 URL（/files/avatars/...，可空，为空时前端显示昵称首字） */
+    private String avatar;
     private LocalDateTime createdAt;
 }

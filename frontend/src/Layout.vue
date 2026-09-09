@@ -28,8 +28,9 @@
             </div>
           </div>
         </div>
-        <div class="tb-user" title="点击绑定通知邮箱" @click="bindEmail">
-          <span class="avatar">{{ avatarChar }}</span>
+        <div class="tb-user" title="进入个人中心" @click="switchTo('/profile')">
+          <img v-if="me?.avatar" :src="me.avatar" class="avatar" alt="头像" />
+          <span v-else class="avatar">{{ avatarChar }}</span>
           <div class="tb-user-info">
             <div class="tb-name">{{ me?.nickname || '…' }}</div>
             <div class="tb-role">{{ me?.email || '未绑定邮箱' }}</div>
@@ -65,7 +66,7 @@ const notifies = ref([])
 const bellOpen = ref(false)
 let notifyTimer = null
 
-const keepAliveViews = ['ChatView', 'GenerateView', 'PracticeView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView']
+const keepAliveViews = ['ChatView', 'GenerateView', 'PracticeView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'ProfileView']
 
 const menus = [
   { key: 'chat', title: '智能答疑', path: '/chat', icon: '💬' },
@@ -74,7 +75,8 @@ const menus = [
   { key: 'progress', title: '学情分析', path: '/progress', icon: '📈' },
   { key: 'manage', title: '课程与知识库', path: '/manage', icon: '📚' },
   { key: 'plan', title: '学习计划', path: '/plans', icon: '🗓️' },
-  { key: 'report', title: '学习报告', path: '/reports', icon: '📄' }
+  { key: 'report', title: '学习报告', path: '/reports', icon: '📄' },
+  { key: 'profile', title: '个人中心', path: '/profile', icon: '👤' }
 ]
 
 const pageTitle = computed(() => {
@@ -97,15 +99,13 @@ const logout = () => {
   router.replace('/login')
 }
 
-const bindEmail = async () => {
-  const email = prompt('绑定接收通知的邮箱（复习提醒将同步发送邮件）：', me.value?.email || '')
-  if (email === null) return
-  try {
-    await api('/api/auth/me/email', { method: 'PUT', body: { email } })
-    me.value = await api('/api/auth/me')
-  } catch (e) {
-    alert(e.message)
-  }
+// 学习时长心跳：页面可见时每 60s 上报 1 分钟（后端上限 5 分钟/次防刷）
+let heartbeatTimer = null
+const startHeartbeat = () => {
+  heartbeatTimer = setInterval(() => {
+    if (document.visibilityState !== 'visible') return
+    api('/api/study/heartbeat', { method: 'POST', body: { minutes: 1 } }).catch(() => { /* 静默失败 */ })
+  }, 60_000)
 }
 
 const loadNotify = async () => {
@@ -148,6 +148,7 @@ onMounted(async () => {
     me.value = await api('/api/auth/me')
     await loadNotify()
     notifyTimer = setInterval(loadNotify, 30000)
+    startHeartbeat()
   } catch (e) {
     clearToken()
     resetApiCache()
@@ -158,6 +159,7 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('click', closeBell)
   if (notifyTimer) clearInterval(notifyTimer)
+  if (heartbeatTimer) clearInterval(heartbeatTimer)
 })
 
 watch(
@@ -169,6 +171,7 @@ watch(
 </script>
 
 <style scoped>
+img.avatar { object-fit: cover; padding: 0; }
 .tb-user { cursor: pointer; border-radius: 10px; padding: 4px 6px; transition: background .2s ease; }
 .tb-user:hover { background: rgba(26,26,26,.05); }
 .bell {
