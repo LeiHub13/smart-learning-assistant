@@ -143,21 +143,21 @@ public class DataSeeder implements CommandLineRunner {
         }
         insertQuestion(courseId, "单选", "HashMap 的默认初始容量是？",
                 "[{\"k\":\"A\",\"v\":\"8\"},{\"k\":\"B\",\"v\":\"16\"},{\"k\":\"C\",\"v\":\"32\"},{\"k\":\"D\",\"v\":\"64\"}]",
-                "B", "HashMap 默认初始容量为 16，负载因子 0.75。", "HashMap原理");
+                "B", "HashMap 默认初始容量为 16，负载因子 0.75。", "HashMap原理", "基础");
         insertQuestion(courseId, "多选", "下列属于 List 接口实现类的有？",
                 "[{\"k\":\"A\",\"v\":\"ArrayList\"},{\"k\":\"B\",\"v\":\"LinkedList\"},{\"k\":\"C\",\"v\":\"HashSet\"},{\"k\":\"D\",\"v\":\"HashMap\"}]",
-                "AB", "ArrayList 与 LinkedList 是 List 实现；HashSet 是 Set 实现，HashMap 是 Map 实现。", "Java集合框架");
+                "AB", "ArrayList 与 LinkedList 是 List 实现；HashSet 是 Set 实现，HashMap 是 Map 实现。", "Java集合框架", "基础");
         insertQuestion(courseId, "判断", "synchronized 修饰的实例方法锁住的是当前对象。",
                 "[{\"k\":\"对\",\"v\":\"正确\"},{\"k\":\"错\",\"v\":\"错误\"}]",
-                "对", "synchronized 实例方法以 this 作为内置锁。", "Java多线程");
+                "对", "synchronized 实例方法以 this 作为内置锁。", "Java多线程", "进阶");
         insertQuestion(courseId, "问答", "请简述面向对象三大特性的含义。",
                 null,
                 "封装：隐藏内部细节；继承：复用并扩展父类能力；多态：同一行为在不同对象上有不同表现。",
-                "评分按要点覆盖度（封装/继承/多态各 3 分，示例 1 分）。", "面向对象");
+                "评分按要点覆盖度（封装/继承/多态各 3 分，示例 1 分）。", "面向对象", "综合");
     }
 
     private void insertQuestion(Long courseId, String type, String stem, String options,
-                                String answer, String analysis, String kpName) {
+                                String answer, String analysis, String kpName, String difficulty) {
         var q = new Question();
         q.setCourseId(courseId);
         q.setType(type);
@@ -166,6 +166,7 @@ public class DataSeeder implements CommandLineRunner {
         q.setAnswer(answer);
         q.setAnalysis(analysis);
         q.setKpName(kpName);
+        q.setDifficulty(difficulty);
         q.setSource("SEED");
         q.setCreatedAt(LocalDateTime.now());
         questionMapper.insert(q);

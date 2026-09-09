@@ -51,6 +51,9 @@ public class PracticeService {
                 .eq(Question::getCourseId, courseId)
                 .orderByAsc(Question::getId)
                 .last("LIMIT " + Math.max(count, 200)));
+        if (qs.isEmpty()) {
+            throw new BizException("该课程暂无题目，请先为课程生成题库");
+        }
         // 自适应抽题：按用户平均掌握度优先匹配对应难度的题目
         if (userId != null) {
             qs = adaptivePick(userId, courseId, qs, count);
@@ -59,7 +62,8 @@ public class PracticeService {
         if (qs.size() > count) {
             qs = qs.subList(0, count);
         }
-        return qs.stream().map(this::toPaperItem).toList();
+        // 答题页不下发参考答案与解析
+        return qs.stream().map(q -> toPaperItem(q, false)).toList();
     }
 
     private List<Question> adaptivePick(Long userId, Long courseId, List<Question> all, int count) {
@@ -208,18 +212,43 @@ public class PracticeService {
                 .orderByDesc(Practice::getCreatedAt));
     }
 
-    public Map<String, Object> report(Long practiceId) {
+    /**
+     * 成绩曲线：某课程练习得分与正确率时间序列（时间升序，最近 50 次）。
+     * courseId 为空时聚合全部课程。
+     */
+    public List<Map<String, Object>> trend(Long userId, Long courseId) {
+        LambdaQueryWrapper<Practice> wrapper = new LambdaQueryWrapper<Practice>()
+                .eq(Practice::getUserId, userId);
+        if (courseId != null) {
+            wrapper.eq(Practice::getCourseId, courseId);
+        }
+        wrapper.orderByAsc(Practice::getCreatedAt).last("LIMIT 50");
+        return practiceMapper.selectList(wrapper).stream().map(p -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("date", p.getCreatedAt() == null ? "" : p.getCreatedAt().toLocalDate().toString());
+            m.put("title", p.getTitle());
+            m.put("score", p.getScore());
+            m.put("totalScore", p.getTotalScore());
+            m.put("rate", p.getTotalScore() == null || p.getTotalScore() == 0 ? 0
+                    : Math.round(p.getScore() * 1000.0 / p.getTotalScore()) / 10.0);
+            return m;
+        }).toList();
+    }
+
+    /** 归属校验：练习不存在或不属于当前用户一律拒绝（防越权查看他人报告）。 */
+    public Map<String, Object> report(Long userId, Long practiceId) {
         Practice p = practiceMapper.selectById(practiceId);
-        if (p == null) {
-            throw new BizException("练习不存在");
+        if (p == null || userId == null || !p.getUserId().equals(userId)) {
+            throw new BizException("练习不存在或无权访问");
         }
         List<PracticeQuestion> pqs = pqMapper.selectList(new LambdaQueryWrapper<PracticeQuestion>()
-                .eq(PracticeQuestion::getPracticeId, practiceId));
+                .eq(PracticeQuestion::getPracticeId, practiceId)
+                .orderByAsc(PracticeQuestion::getId));
         List<Map<String, Object>> items = pqs.stream().map(pq -> {
             Question q = questionMapper.selectById(pq.getQuestionId());
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("pq", pq);
-            m.put("q", toPaperItem(q));
+            m.put("q", toPaperItem(q, true));
             return m;
         }).toList();
 
@@ -234,15 +263,18 @@ public class PracticeService {
         return report;
     }
 
-    private Map<String, Object> toPaperItem(Question q) {
+    /** withAnswer=false 供答题页（隐藏答案），true 供报告页（展示答案与解析）。 */
+    private Map<String, Object> toPaperItem(Question q, boolean withAnswer) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", q.getId());
         m.put("type", q.getType());
         m.put("stem", q.getStem());
         m.put("options", q.getOptions());
-        m.put("answer", q.getAnswer());
-        m.put("analysis", q.getAnalysis());
         m.put("kpName", q.getKpName());
+        if (withAnswer) {
+            m.put("answer", q.getAnswer());
+            m.put("analysis", q.getAnalysis());
+        }
         return m;
     }
 

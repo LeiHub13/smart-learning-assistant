@@ -34,6 +34,11 @@
           </table>
           <div v-else class="empty">暂无练习记录</div>
         </div>
+        <div style="margin-top:14px">
+          <span class="label">成绩曲线（正确率 %，最近 50 次）</span>
+          <div ref="chartRef" class="trend-chart"></div>
+          <div v-if="!trend.length" class="empty">暂无曲线数据，完成一次练习后生成</div>
+        </div>
       </div>
     </template>
 
@@ -63,7 +68,7 @@
     <template v-else>
       <div class="card">
         <div class="row">
-          <div class="stat" style="flex:1"><div class="num">{{ report.practice.score }} / {{ report.practice.totalScore }}</div><div class="lab">总分</div></div>
+          <div class="stat" style="flex:1"><div class="num">{{ report.score }} / {{ report.totalScore }}</div><div class="lab">总分</div></div>
           <div class="stat" style="flex:1"><div class="num">{{ okCount }} / {{ report.items.length }}</div><div class="lab">答对</div></div>
           <div class="stat" style="flex:1"><div class="num">{{ rate }}%</div><div class="lab">正确率</div></div>
         </div>
@@ -84,9 +89,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import * as echarts from 'echarts/core'
+import { LineChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
 import { api, getCourses } from '../api'
 import { fmtTime, parseOptions } from '../utils'
+
+echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
 defineOptions({ name: 'PracticeView' })
 
@@ -96,10 +107,13 @@ const count = ref(5)
 const paper = ref([])
 const report = ref(null)
 const history = ref([])
+const trend = ref([])
 const loading = ref(false)
 const submitting = ref(false)
 const error = ref('')
 const answers = ref({})
+const chartRef = ref(null)
+let chart = null
 
 const courseName = computed(() => {
   const c = courses.value.find((x) => x.id === courseId.value)
@@ -115,6 +129,49 @@ onMounted(async () => {
   courses.value = await getCourses()
   if (courses.value.length) courseId.value = courses.value[0].id
   history.value = await api('/api/practice/history')
+  await refreshTrend()
+})
+
+watch(courseId, refreshTrend)
+
+const refreshTrend = async () => {
+  if (!courseId.value) return
+  try {
+    trend.value = await api('/api/practice/trend?courseId=' + courseId.value)
+  } catch (e) { /* 曲线失败不影响主流程 */ trend.value = [] }
+  nextTick(renderChart)
+}
+
+const renderChart = () => {
+  if (!chartRef.value || !trend.value.length) return
+  if (!chart) chart = echarts.init(chartRef.value)
+  chart.setOption({
+    tooltip: {
+      trigger: 'axis',
+      formatter: (ps) => {
+        const t = trend.value[ps[0].dataIndex]
+        return `${t.date}<br/>${t.title}<br/>得分：${t.score} / ${t.totalScore}<br/>正确率：${t.rate}%`
+      }
+    },
+    grid: { left: 44, right: 24, top: 24, bottom: 28 },
+    xAxis: { type: 'category', data: trend.value.map((t) => t.date) },
+    yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' } },
+    series: [{
+      name: '正确率',
+      type: 'line',
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 7,
+      data: trend.value.map((t) => t.rate),
+      lineStyle: { width: 2.5 },
+      areaStyle: { opacity: 0.12 },
+      itemStyle: { color: '#1a1a1a' }
+    }]
+  })
+}
+
+onBeforeUnmount(() => {
+  if (chart) { chart.dispose(); chart = null }
 })
 
 const isSel = (q, k) => {
@@ -151,10 +208,11 @@ const submit = async () => {
   error.value = ''
   try {
     const items = paper.value.map((q) => ({ questionId: q.id, answer: answers.value[q.id] || '' }))
-    await api('/api/practice/submit', { method: 'POST', body: { courseId: courseId.value, items } })
+    const p = await api('/api/practice/submit', { method: 'POST', body: { courseId: courseId.value, items } })
     paper.value = []
     history.value = await api('/api/practice/history')
-    report.value = await api('/api/practice/' + history.value[0].id)
+    refreshTrend()
+    report.value = await api('/api/practice/' + p.id)
   } catch (e) {
     error.value = e.message
   } finally {
@@ -163,12 +221,22 @@ const submit = async () => {
 }
 
 const viewReport = async (id) => {
-  report.value = await api('/api/practice/' + id)
+  error.value = ''
+  try {
+    report.value = await api('/api/practice/' + id)
+  } catch (e) {
+    error.value = e.message
+  }
 }
 
 const again = () => {
   report.value = null
   paper.value = []
   answers.value = {}
+  refreshTrend()
 }
 </script>
+
+<style scoped>
+.trend-chart { width: 100%; height: 260px; margin-top: 6px; }
+</style>
