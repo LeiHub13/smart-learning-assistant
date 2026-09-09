@@ -74,7 +74,9 @@ services:
     volumes:
       - backend-data:/app/data
     ports:
-      - "8080:8080"
+      # 仅绑回环：Swagger/登录接口不暴露公网，前端容器走内网 backend:8080 不受影响；
+      # 如需公网直连调试，临时改回 "8080:8080"
+      - "127.0.0.1:8080:8080"
     networks: [la-net]
     depends_on:
       ai-service:
