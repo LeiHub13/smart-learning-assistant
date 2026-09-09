@@ -63,7 +63,7 @@ app:
     # 中间件开关：配置了真实中间件即切换，未配置/未填则自动使用内存降级实现
     cache-mode: redis      # memory | redis
     vector-mode: memory     # memory | milvus
-    storage-mode: local     # local | minio
+    storage-mode: minio     # local | minio
     mq-mode: rabbit        # memory | rabbit
     milvus:
       host: ${MILVUS_HOST:localhost}
@@ -74,7 +74,7 @@ app:
       minio:
         endpoint: http://localhost:9000
         access-key: minioadmin
-        secret-key: minioadmin
+        secret-key: minioadmin123
   embedding:
     # 向量模型：hash（默认，离线） | dashscope（通义 text-embedding-v3）
     provider: hash

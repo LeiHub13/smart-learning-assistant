@@ -5,6 +5,7 @@ import com.example.learningassistant.security.AuthUser;
 import com.example.learningassistant.security.CurrentUser;
 import com.example.learningassistant.user.entity.User;
 import com.example.learningassistant.user.service.AuthService;
+import com.example.learningassistant.user.service.AvatarService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,7 +27,7 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
-    private final com.example.learningassistant.user.service.AvatarService avatarService;
+    private final AvatarService avatarService;
 
     @PostMapping("/login")
     public ApiResponse<Map<String, String>> login(@RequestBody Map<String, String> body) {
