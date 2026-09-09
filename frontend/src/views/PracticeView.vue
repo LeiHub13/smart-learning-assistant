@@ -25,12 +25,14 @@
         <div style="margin-top:14px">
           <span class="label">最近练习</span>
           <table v-if="history.length">
-            <tr><th>时间</th><th>得分</th><th></th></tr>
-            <tr v-for="p in history" :key="p.id">
-              <td>{{ fmtTime(p.createdAt) }}</td>
-              <td><b>{{ p.score }}</b> / {{ p.totalScore }}</td>
-              <td><a class="link" @click="viewReport(p.id)">查看报告</a></td>
-            </tr>
+            <thead><tr><th>时间</th><th>得分</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="p in history" :key="p.id">
+                <td>{{ fmtTime(p.createdAt) }}</td>
+                <td><b>{{ p.score }}</b> / {{ p.totalScore }}</td>
+                <td><a class="link" @click="viewReport(p.id)">查看报告</a></td>
+              </tr>
+            </tbody>
           </table>
           <div v-else class="empty">暂无练习记录</div>
         </div>
@@ -132,8 +134,6 @@ onMounted(async () => {
   await refreshTrend()
 })
 
-watch(courseId, refreshTrend)
-
 const refreshTrend = async () => {
   if (!courseId.value) return
   try {
@@ -144,6 +144,11 @@ const refreshTrend = async () => {
 
 const renderChart = () => {
   if (!chartRef.value || !trend.value.length) return
+  // 切换到报告页会销毁图表 DOM，返回时需重新绑定
+  if (chart && chart.getDom() !== chartRef.value) {
+    chart.dispose()
+    chart = null
+  }
   if (!chart) chart = echarts.init(chartRef.value)
   chart.setOption({
     tooltip: {
@@ -169,6 +174,8 @@ const renderChart = () => {
     }]
   })
 }
+
+watch(courseId, refreshTrend)
 
 onBeforeUnmount(() => {
   if (chart) { chart.dispose(); chart = null }

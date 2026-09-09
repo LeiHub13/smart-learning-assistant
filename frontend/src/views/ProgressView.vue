@@ -49,14 +49,16 @@
         <h3>错题本</h3>
         <div v-if="!summary.wrongBook.length" class="empty">太棒了，暂无错题</div>
         <table v-else>
-          <tr><th>题目</th><th>知识点</th><th>你的答案</th><th>参考答案</th><th>时间</th></tr>
-          <tr v-for="(w, i) in summary.wrongBook" :key="i">
-            <td>{{ w.stem }}</td>
-            <td><span class="tag bad">{{ w.kpName }}</span></td>
-            <td>{{ w.userAnswer || '未作答' }}</td>
-            <td>{{ w.answer }}</td>
-            <td>{{ fmtTime(w.wrongAt) }}</td>
-          </tr>
+          <thead><tr><th>题目</th><th>知识点</th><th>你的答案</th><th>参考答案</th><th>时间</th></tr></thead>
+          <tbody>
+            <tr v-for="(w, i) in summary.wrongBook" :key="i">
+              <td>{{ w.stem }}</td>
+              <td><span class="tag bad">{{ w.kpName }}</span></td>
+              <td>{{ w.userAnswer || '未作答' }}</td>
+              <td>{{ w.answer }}</td>
+              <td>{{ fmtTime(w.wrongAt) }}</td>
+            </tr>
+          </tbody>
         </table>
       </div>
     </template>
