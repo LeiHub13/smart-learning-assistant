@@ -1,4 +1,5 @@
 <template>
+  <div class="wrap">
   <div class="page">
     <div class="left">
       <div class="left-top">
@@ -72,6 +73,33 @@
       </div>
     </div>
   </div>
+
+  <footer class="site-footer">
+    <div class="ft-inner">
+      <div class="ft-brand">
+        <div class="ft-logo">
+          <div class="logo-mark">智</div>
+          <div class="logo-text">智学助手</div>
+        </div>
+        <p class="ft-meta">Java 业务骨架 · Python langchain</p>
+        <p class="ft-meta">在线大模型（DeepSeek）· RAG 检索</p>
+        <div class="ft-icons">
+          <span class="ft-icon" title="邮箱" aria-label="邮箱">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 7 9-7"/></svg>
+          </span>
+          <a class="ft-icon" href="https://github.com/LeiHub13/smart-learning-assistant" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.26c0 4.52 2.87 8.35 6.84 9.71.5.1.68-.22.68-.49 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.36 1.12 2.94.86.09-.67.35-1.12.63-1.38-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.7 0 0 .84-.27 2.75 1.05A9.3 9.3 0 0 1 12 6.84c.85.01 1.71.12 2.51.34 1.9-1.32 2.74-1.05 2.74-1.05.56 1.4.21 2.44.1 2.7.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.8-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.04 10.04 0 0 0 22 12.26C22 6.58 17.52 2 12 2z"/></svg>
+          </a>
+        </div>
+      </div>
+      <div class="ft-col" v-for="col in footerCols" :key="col.title">
+        <div class="ft-col-title">{{ col.title }}</div>
+        <span v-for="item in col.items" :key="item" class="ft-link">{{ item }}</span>
+      </div>
+    </div>
+    <div class="ft-copy">© {{ year }} 智学助手 版权所有</div>
+  </footer>
+  </div>
 </template>
 
 <script setup>
@@ -96,6 +124,14 @@ const demos = [
   { name: 'xiaoming', tag: '小明' },
   { name: 'xiaohong', tag: '小红' },
   { name: 'xiaoyu', tag: '小宇' },
+]
+
+const year = new Date().getFullYear()
+const footerCols = [
+  { title: '产品', items: ['AI 答疑', '讲义与题目生成', '题库练习', '智能批改', '学情分析'] },
+  { title: '技术', items: ['RAG 检索增强', '会话记忆', '知识库管理', '流式生成'] },
+  { title: '法务 & 安全', items: ['隐私政策', '用户协议', '数据隔离'] },
+  { title: '关于', items: ['使用说明', '反馈建议'] },
 ]
 
 const fillDemo = (name) => {
@@ -133,20 +169,25 @@ const submit = async () => {
 <style scoped>
 :root { --lg-accent: #b8956a; }
 
-.page {
+.wrap {
   position: fixed;
   inset: 0;
   z-index: 200;
+  overflow-y: auto;
+  background: #f5f3ef;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #1a1a1a;
+}
+.page {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr 520px;
   min-height: 100vh;
   background: transparent;
-  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #1a1a1a;
 }
 .page::before {
   content: '';
-  position: fixed;
+  position: absolute;
   inset: 0;
   background-image:
     linear-gradient(rgba(0,0,0,0.015) 1px, transparent 1px),
@@ -293,6 +334,45 @@ const submit = async () => {
 .demo-name { font-size: 14px; font-weight: 500; }
 .demo-tag { font-size: 12px; color: #aaa; font-family: "SF Mono", Consolas, monospace; }
 
+.site-footer {
+  position: relative;
+  background: #f7f6f3;
+  border-top: 1px solid #eceae4;
+  padding: 64px 80px 0;
+}
+.ft-inner {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr;
+  gap: 40px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-bottom: 56px;
+}
+.ft-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+.ft-logo .logo-mark { width: 28px; height: 28px; font-size: 13px; border-radius: 8px; }
+.ft-logo .logo-text { font-size: 18px; font-weight: 700; color: #4a6cf7; letter-spacing: -0.02em; }
+.ft-meta { font-size: 13px; color: #888; line-height: 1.8; }
+.ft-icons { display: flex; gap: 10px; margin-top: 22px; }
+.ft-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: #666; background: #eeeae4; text-decoration: none;
+  transition: background 0.2s, color 0.2s;
+}
+.ft-icon:hover { background: #e0ddd6; color: #1a1a1a; }
+.ft-col { display: flex; flex-direction: column; gap: 18px; }
+.ft-col-title { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px; }
+.ft-link {
+  font-size: 14px; color: #6b6b6b; text-decoration: none;
+  line-height: 1.4; cursor: default;
+}
+.ft-copy {
+  max-width: 1180px; margin: 0 auto;
+  border-top: 1px solid #eceae4;
+  padding: 22px 0 28px;
+  font-size: 13px; color: #888;
+}
+
 @media (max-width: 1100px) {
   .page { grid-template-columns: 1fr; }
   .left { padding: 48px 40px 60px; text-align: center; }
@@ -307,6 +387,8 @@ const submit = async () => {
   .tech-line { display: none; }
   .right { padding: 0 40px 60px; justify-content: center; }
   .login-card { margin-left: 0; max-width: 480px; }
+  .site-footer { padding: 48px 40px 0; }
+  .ft-inner { grid-template-columns: 1fr 1fr; gap: 32px 24px; }
 }
 
 @media (max-width: 480px) {
@@ -318,5 +400,7 @@ const submit = async () => {
   .feature-desc { max-width: 100%; font-size: 12px; }
   .feature-name { font-size: 15px; }
   .tech-line { display: none; }
+  .site-footer { padding: 40px 24px 0; }
+  .ft-inner { grid-template-columns: 1fr 1fr; gap: 28px 16px; padding-bottom: 36px; }
 }
 </style>

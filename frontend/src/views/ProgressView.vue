@@ -64,9 +64,7 @@
             {{ refreshingAdvice ? 'AI 生成中…' : '重新生成' }}
           </button>
         </div>
-        <div style="line-height:1.9;color:#334155">
-          <p v-for="(line, i) in adviceLines" :key="i">{{ line }}</p>
-        </div>
+        <div class="md" v-html="mdToHtml(summary.advice)"></div>
       </div>
 
       <div class="card">
@@ -103,7 +101,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { api, getCourses } from '../api'
-import { fmtTime } from '../utils'
+import { fmtTime, mdToHtml } from '../utils'
 
 defineOptions({ name: 'ProgressView' })
 
@@ -126,11 +124,6 @@ const refreshAdvice = async () => {
     refreshingAdvice.value = false
   }
 }
-
-const adviceLines = computed(() => {
-  if (!summary.value || !summary.value.advice) return []
-  return summary.value.advice.split('\n').filter(Boolean)
-})
 
 const fmtHours = (m) => {
   if (!m) return '0h'
@@ -162,6 +155,10 @@ const load = async () => {
 </script>
 
 <style scoped>
+.md { line-height: 1.9; color: #334155; }
+.md :deep(h2), .md :deep(h3), .md :deep(h4) { margin: 8px 0 4px; font-weight: 800; }
+.md :deep(strong) { color: #1a1a1a; }
+.md :deep(code) { background: #f4f1ea; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
 .heatmap { display: grid; grid-template-rows: repeat(7, 12px); grid-auto-flow: column; gap: 3px; margin: 12px 0 4px; width: fit-content; }
 .hm-cell { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .hm-0 { background: #ece9e2; }
