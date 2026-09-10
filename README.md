@@ -1,49 +1,49 @@
-# 基于大语言模型的智能学习助手系统 · V3（Java 骨架 + Python AI 服务）
+# 智能学习助手（Java + Python AI 双服务架构）
 
-毕设系统架构：**Spring Boot 单模块骨架 + Python langchain AI 服务**。Java 负责业务与数据（用户/课程/知识库 RAG 检索/会话/练习/学情），AI 能力（答疑生成、讲义/题目生成、主观题批改、学情建议）由独立 Python 服务（`ai-service/`，FastAPI + langchain + DeepSeek）承载；Java 通过 `PythonAIChatModel` 适配器调用，SSE 逐块透传，前端无感知。基础设施（缓存/向量/存储/消息队列）全部**可降级**。
+基于大语言模型的个人学习助手：课程管理、知识库 RAG 检索、流式 AI 答疑、AI 内容生成、题库练习、在线考试、学情分析与学习报告。
 
-> 架构设计全文见 `docs/02-系统架构设计.md`；AI 服务接口约定见 `ai-service/README.md`。
+**架构**：Spring Boot 3 单体负责业务与数据，独立 Python 服务（FastAPI + langchain + DeepSeek）负责大模型生成与对话记忆；Java 通过 SSE 逐块透传，基础设施（缓存/向量库/对象存储/消息队列）全部可降级切换。
 
-## 一、运行环境
+## 功能一览
 
-| 依赖 | 版本 |
-|------|------|
-| JDK | 17+ |
-| Maven | 3.8+ |
-| Python | 3.10+（开发环境 3.13） |
-| DeepSeek API Key | 在线大模型 |
+- 💬 **智能答疑**：RAG 向量检索 + 引用标注 + 会话记忆，可升级 ReAct Agent
+- ✨ **AI 内容生成**：流式讲义、自适应出题（按掌握度调难度）
+- 📝 **题库练习**：随机抽题、客观题规则判分、主观题 AI 批改、成绩曲线
+- 📋 **在线考试**：手动/随机组卷、限时作答、统一判分、成绩单
+- 📈 **学情分析**：知识掌握度、错题本、AI 复习建议（缓存化）、学习时长热力图
+- 🗓️ **学习计划**：AI 生成每日任务 + 打卡
+- 📄 **学习报告**：AI 周报 + PDF 导出
+- 👤 **个人中心**：头像（MinIO）、昵称、密码、通知邮箱
+- 🔔 **通知中心**：站内信 + 邮件双渠道，艾宾浩斯间隔重复提醒
 
-数据库默认 MySQL（`localhost:3306/learning_assistant`，root/1234，可用 DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD 环境变量覆盖），首次启动自动建表并写入演示数据。中间件（Redis/Milvus/MinIO/RabbitMQ）**全部可选**，默认内存降级。
+## 快速开始
 
-## 二、启动
+### Docker 一键部署（推荐）
 
 ```bash
-# 1. 启动 Python AI 服务（默认 8000 端口）
+cp .env.example .env        # 填入 AI_API_KEY（DeepSeek）
+./deploy.sh                 # 前端(80) / 后端(8080) / AI服务(8000) / MySQL / Redis / MinIO
+```
+
+### 本地手动启动
+
+```bash
+# 1. Python AI 服务（8000 端口）
 cd ai-service
 pip install -r requirements.txt
-copy .env.example .env   # 填入 AI_API_KEY
+copy .env.example .env      # 填入 AI_API_KEY
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-# 2. 启动 Java 骨架（默认 8080 端口）
+# 2. Java 后端（8080 端口，需本地 MySQL）
 cd backend
 mvn package -DskipTests
 java -jar target/learning-assistant-1.0.0.jar
 ```
 
-访问 **http://localhost:8080**（健康检查：`GET /api/health`，免登录；AI 服务健康检查：`GET http://localhost:8000/ai/health`）。
+**运行环境**：JDK 17+、Maven 3.8+、Python 3.10+、MySQL 8。
+**数据库**：默认 `localhost:3306/learning_assistant`（root/1234），环境变量 `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` 可覆盖；首次启动自动建表并写入演示数据。
 
-### Docker 一键部署（可选）
-
-```bash
-cp .env.example .env      # 填入 AI_API_KEY
-./deploy.sh               # 构建 3 个镜像并启动：前端(80) / 后端(8080) / AI服务(8000)
-```
-
-详细步骤见 `docs/05-Docker部署.md`；传统手动部署见 `docs/04-Ubuntu部署.md`。
-
-## 三、演示账号（密码均为 123456）
-
-系统为个人学习助手，所有用户权限一致（无角色区分），多账号用于演示多用户数据隔离：
+## 演示账号（密码均为 `123456`）
 
 | 账号 | 昵称 |
 |------|------|
@@ -51,125 +51,56 @@ cp .env.example .env      # 填入 AI_API_KEY
 | `xiaohong` | 小红 |
 | `xiaoyu` | 小宇 |
 
-登录：`POST /api/auth/login {"username":"xiaoming","password":"123456"}` → 返回 `accessToken` / `refreshToken`（JWT），后续请求头带 `Authorization: Bearer <accessToken>`。
+所有用户权限一致（无角色区分），资源按 userId 隔离。接口文档：`/swagger-ui.html`（springdoc）。
 
-## 四、已验证接口（全功能阶段）
-
-| 接口 | 说明 |
-|------|------|
-| GET /api/health | 健康检查 + 各中间件当前启用实现（免登录） |
-| POST /api/auth/login、/register | JWT 双 Token 认证 |
-| GET /api/auth/me | 当前用户 |
-| GET /api/courses | 课程列表（含 enrolled / kbCount / questionCount） |
-| POST /api/courses | 创建课程（教师） |
-| POST /api/courses/{id}/enroll | 选课 |
-| GET/POST /api/courses/{courseId}/kb | 知识库列表 / 创建 |
-| GET/POST /api/kb/{kbId}/documents | 文档列表 / 文本文档同步分块索引 |
-| DELETE /api/kb/{kbId}/documents/{docId} | 删除文档（含向量） |
-| GET/POST /api/chat/sessions | 会话列表 / 创建 |
-| GET /api/chat/sessions/{id}/messages | 会话消息 |
-| POST /api/chat/sessions/{id}/stream | SSE 流式答疑（RAG 检索 + 引用 sources + 历史记忆） |
-| POST /api/generate/lecture | 生成讲义（Markdown，入库） |
-| POST /api/generate/questions | AI 出题（解析入库 source=AI） |
-| GET /api/generate/history | 生成历史 |
-| GET /api/practice/paper?courseId&count | 随机抽题 |
-| POST /api/practice/submit | 提交判分（客观规则 + 主观 LLM 批改 + 掌握度更新） |
-| GET /api/practice/history | 练习记录 |
-| GET /api/practice/{id} | 练习报告（明细 + 题目 + AI 点评） |
-| GET /api/progress/summary?courseId | 学情汇总（掌握度 / 平均 / 错题本 / AI 建议） |
-| GET /api/analytics/kp-stats?courseId=1 | 知识点掌握度聚合（**XML Mapper 复杂查询示例**） |
-| GET /api/analytics/practice-overview?courseId=1 | 学生练习联表统计（XML Mapper 示例） |
-| POST /api/chat/sessions/{id}/stream | SSE 流式答疑（RAG + Query 改写 + Rerank + 薄弱知识点注入） |
-| POST /api/generate/lecture/stream | 流式讲义生成（SSE） |
-| POST /api/generate/questions | AI 自适应出题（按掌握度调整难度） |
-| GET/POST /api/plans /{id} /tasks/{id}/checkin | 学习计划生成 / 详情 / 每日打卡 |
-| GET/POST /api/reports /weekly /{id}/pdf | 学习周报 / PDF 导出 |
-| GET /api/notifications /unread-count | 站内通知 / 未读数 |
-
-接口文档：`/swagger-ui.html`（springdoc）。
-
-## 五、配置切换（backend/src/main/resources/application.yml）
+## 配置切换（application.yml）
 
 ```yaml
 app:
   model:
-    provider: python        # python(Python langchain ai-service) | openai-compatible
-    python-base-url: http://localhost:8000
-    api-key: ""             # openai-compatible 时填写
-    agent-enabled: true     # true 时答疑升级为 ReAct Agent（自主调用检索/学情工具）
+    provider: python        # python | openai-compatible（通义/DeepSeek/智谱等 OpenAI 协议）
+    agent-enabled: true     # 答疑升级 ReAct Agent
   embedding:
-    provider: hash          # hash（离线） | dashscope（通义 text-embedding-v3）
-    api-key: ""             # dashscope 时填写
+    provider: hash          # hash（离线） | dashscope（通义向量模型）
   rag:
     rewrite-enabled: true   # 多轮对话查询改写
-    rerank-enabled: true    # LLM 精排重排序
+    rerank-enabled: true    # LLM 精排
   infra:
-    cache-mode: memory      # memory | redis
+    cache-mode: memory      # memory | redis（fail-fast）
     vector-mode: memory     # memory | milvus
     storage-mode: local     # local | minio
     mq-mode: memory         # memory | rabbit
 ```
 
-数据库：默认 MySQL，无需 profile；连接参数用环境变量 `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` 覆盖（H2 已移除，数据迁移见 Git 历史）。
+Docker 环境下以上项均由 `docker-compose.yml` 环境变量注入（Redis/MinIO 编排内置，Milvus 走 `--profile milvus`）。
 
-缓存：默认内存；切 Redis 时启用 profile 并确保 Redis 可达：`java -jar target/learning-assistant-1.0.0.jar --spring.profiles.active=redis`（配置见 `application-redis.yml`）。
-
-Agent 工具回调：ai-service 通过 `JAVA_TOOL_BASE` 回调 Java `/internal/tools/**` 取错题/掌握度/练习/知识库数据；Docker 环境已自动配置为 `http://backend:8080`，本地开发保持默认 `http://localhost:8080` 即可。
-
-## 六、工程结构（backend/ 单模块）
+## 工程结构
 
 ```
-backend/
-└── src/main/java/com/example/learningassistant/
-    ├── common/         通用：统一响应/异常/全局异常处理/租户上下文
-    ├── security/       认证授权：JWT 双 Token、拦截器、CORS
-    ├── infra/          基础设施：缓存/向量库/对象存储/消息队列（可降级）
-    ├── ai/             AI 平台：模型适配器(python/openai-compatible)、场景 Prompt、向量化
-    ├── user/           用户/认证
-    ├── course/         课程
-    ├── kb/             知识库与 RAG（文档登记、异步索引、向量检索）
-    ├── chat/           答疑（流式链路）
-    ├── generate/       AI 内容生成
-    ├── practice/       题库练习与 AI 批改
-    ├── progress/       学情分析
-    ├── plan/           学习计划（生成 + 打卡）
-    ├── report/         学习报告（周报 + PDF 导出）
-    ├── progress/       学情分析 + 间隔重复复习提醒
-    ├── exam/           考试中心（骨架）
-    ├── assignment/     作业中心（骨架）
-    ├── analytics/      统计分析（XML Mapper 复杂查询示例）
-    ├── recommend/      个性化推荐（骨架）
-    ├── notify/         通知中心
-    └── web/            接入层：Controller 聚合、OpenAPI
-（启动类 LearningAssistantApplication 位于根包；配置/建表脚本/演示数据在 src/main/resources）
+backend/     Spring Boot 3 单模块（MyBatis-Plus）
+  ├── ai/        模型适配器(python/openai-compatible)、向量化
+  ├── kb/        知识库与 RAG（分块索引、向量检索）
+  ├── chat/      流式答疑（SSE）
+  ├── generate/  AI 内容生成
+  ├── practice/  题库练习（GradingService 统一判分）
+  ├── exam/      在线考试
+  ├── progress/  学情分析 + 间隔重复提醒
+  ├── study/     学习时长统计
+  ├── plan/report/notify/   计划/报告/通知
+  ├── infra/     缓存/向量库/对象存储/消息队列（可降级）
+  └── security/  JWT 双 Token 认证
+ai-service/  FastAPI + langchain
+  ├── main.py     /ai/health、/ai/complete、/ai/stream(SSE)
+  ├── chains.py   场景链（rag_qa/lecture/questions/review/advice/plan/report…）
+  ├── agent.py    ReAct Agent（回调 Java 内部工具 API）
+  └── memory.py   会话记忆（JSONL 持久化 + 滚动摘要压缩）
+frontend/    Vue3 + Vite（Nginx 托管）
 ```
 
-AI 服务（ai-service/）：
+**分工**：Java 负责向量检索、业务落库、判分与掌握度聚合；Python 负责大模型生成与会话记忆（按 sessionId 持久化，支持多轮）。场景标记（RAG_QA/GEN_LECTURE 等）由 Java 侧 `PythonAIChatModel` 映射为 Python 场景。
 
-```
-ai-service/
-├── requirements.txt         # Python 依赖
-├── .env                     # 模型提供商配置（API Key）
-└── app/
-    ├── main.py              # FastAPI 入口：/ai/health、/ai/complete、/ai/stream(SSE)、/ai/stats
-    ├── config.py            # 环境变量配置
-    ├── memory.py            # 会话记忆（JSONL 持久化 + 滚动摘要压缩）
-    ├── chains.py            # langchain 场景链：rag_qa/free/lecture/questions/review/advice/rewrite/rerank/plan/report
-    ├── agent.py             # ReAct Agent + 回调 Java 内部工具
-    ├── stats.py             # LLM 调用观测统计
-    └── tools.py             #（预留）工具集合
-```
+## 文档
 
-Java 与 Python 的分工：Java 负责向量检索（VectorStore + chunk 表）、会话/消息/题目落库、判分与掌握度聚合；Python 负责大模型生成与对话记忆（按 sessionId 持久化，支持多轮指代）。场景标记（RAG_QA/GEN_LECTURE 等）由 `PythonAIChatModel` 解析后映射为 Python 场景。
-
-## 七、Mapper 策略（重要设计）
-
-- **简单单表 CRUD** → `XxxMapper extends BaseMapper<Entity>` 通用方法（如 `UserMapper`）；
-- **复杂查询（聚合/联表/统计）** → 显式 Mapper 接口 + XML，SQL 落在各模块 `resources/mapper/*.xml`（如 `la-analytics` 的 `AnalyticsMapper.xml`，可审查、可调优）；
-- 加载：`@MapperScan("com.example.learningassistant.*.mapper")` + `mybatis-plus.mapper-locations: classpath*:mapper/**/*.xml`；
-- 返回类型用 DTO（驼峰自动映射），不使用 Map（避免列名大小写不一致）。
-
-## 八、文档索引
-
-- `docs/01-需求分析与方案设计.md`（V1 需求文档）
-- `docs/02-系统架构设计.md`（V2 架构设计：总体架构/模块/数据库/核心链路/部署/演进路线）
+- `docs/02-系统架构设计.md` — 总体架构/模块/数据库/核心链路
+- `docs/05-Docker部署.md` / `docs/04-Ubuntu部署.md` — 部署
+- `docs/07-测试文档.md` — 测试
