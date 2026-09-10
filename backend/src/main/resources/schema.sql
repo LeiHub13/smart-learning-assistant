@@ -163,6 +163,50 @@ CREATE TABLE IF NOT EXISTS t_practice_question (
     kp_name     VARCHAR(50)
 );
 
+-- ========== 新增：考试模块 ==========
+
+CREATE TABLE IF NOT EXISTS t_exam (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    BIGINT DEFAULT 1,
+    user_id      BIGINT,
+    course_id    BIGINT,
+    title        VARCHAR(200) NOT NULL,
+    duration_min INT,
+    total_score  INT DEFAULT 0,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS t_exam_question (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    exam_id     BIGINT NOT NULL,
+    question_id BIGINT NOT NULL,
+    score       INT DEFAULT 10,
+    sort_no     INT DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS t_exam_record (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    BIGINT DEFAULT 1,
+    exam_id      BIGINT NOT NULL,
+    user_id      BIGINT NOT NULL,
+    started_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deadline_at  TIMESTAMP NULL,
+    submitted_at TIMESTAMP NULL,
+    score        INT,
+    total_score  INT
+);
+
+CREATE TABLE IF NOT EXISTS t_exam_answer (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    record_id   BIGINT NOT NULL,
+    question_id BIGINT NOT NULL,
+    user_answer TEXT,
+    score       INT DEFAULT 0,
+    correct     BOOLEAN DEFAULT FALSE,
+    review      TEXT,
+    kp_name     VARCHAR(50)
+);
+
 -- ========== 新增：学习计划 / 打卡 / 通知 / 学习报告 ==========
 
 CREATE TABLE IF NOT EXISTS t_study_plan (

@@ -37,11 +37,9 @@ public class PracticeService {
     private final QuestionMapper questionMapper;
     private final PracticeMapper practiceMapper;
     private final PracticeQuestionMapper pqMapper;
+    private final GradingService gradingService;
+    /** 自适应抽题需要读取掌握度（判分与掌握度更新已委托 GradingService） */
     private final KnowledgeMasteryMapper masteryMapper;
-    private final ChatModelFactory modelFactory;
-    private final ObjectMapper objectMapper;
-
-    private static final int FULL_SCORE_PER_QUESTION = 10;
 
     public List<Map<String, Object>> paper(Long userId, Long courseId, int count) {
         if (count < 1) {
@@ -100,7 +98,7 @@ public class PracticeService {
         p.setUserId(userId);
         p.setCourseId(courseId);
         p.setTitle("练习 " + LocalDateTime.now().toString().substring(0, 16).replace('T', ' '));
-        p.setTotalScore(FULL_SCORE_PER_QUESTION * items.size());
+        p.setTotalScore(GradingService.FULL_SCORE_PER_QUESTION * items.size());
         p.setCreatedAt(LocalDateTime.now());
         practiceMapper.insert(p);
 
@@ -113,14 +111,14 @@ public class PracticeService {
             if (q == null) {
                 continue;
             }
-            Grade g = grade(q, userAnswer);
+            GradingService.Grade g = gradingService.grade(q, userAnswer);
 
             PracticeQuestion pq = new PracticeQuestion();
             pq.setPracticeId(p.getId());
             pq.setQuestionId(qid);
             pq.setUserAnswer(userAnswer);
             pq.setScore(g.score());
-            pq.setCorrect(g.score() >= 6);
+            pq.setCorrect(g.correct());
             pq.setReview(g.review());
             pq.setKpName(q.getKpName());
             pqMapper.insert(pq);
@@ -129,84 +127,15 @@ public class PracticeService {
             if (q.getKpName() != null && !q.getKpName().isBlank()) {
                 int[] s = kpStats.computeIfAbsent(q.getKpName(), k -> new int[2]);
                 s[0]++;
-                if (pq.getCorrect()) {
+                if (g.correct()) {
                     s[1]++;
                 }
             }
         }
         p.setScore(total);
         practiceMapper.updateById(p);
-        updateMastery(userId, courseId, kpStats);
+        gradingService.updateMastery(userId, courseId, kpStats);
         return p;
-    }
-
-    private Grade grade(Question q, String userAnswer) {
-        String type = q.getType();
-        if ("问答".equals(type)) {
-            return reviewByLlm(q.getStem(), q.getAnswer(), userAnswer);
-        }
-        boolean ok;
-        if ("多选".equals(type)) {
-            ok = normMulti(userAnswer).equals(normMulti(q.getAnswer()));
-        } else {
-            ok = userAnswer.trim().equalsIgnoreCase(q.getAnswer() == null ? "" : q.getAnswer().trim());
-        }
-        return new Grade(ok ? FULL_SCORE_PER_QUESTION : 0,
-                ok ? "回答正确。" : "参考答案：" + q.getAnswer() + (q.getAnalysis() == null ? "" : "。" + q.getAnalysis()));
-    }
-
-    private String normMulti(String s) {
-        if (s == null) {
-            return "";
-        }
-        return s.replaceAll("[^a-zA-Z]", "").toUpperCase()
-                .chars().sorted()
-                .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append).toString();
-    }
-
-    private Grade reviewByLlm(String stem, String reference, String userAnswer) {
-        ChatModel model = modelFactory.get();
-        String raw = model.complete(List.of(
-                new AIChatMessage("system",
-                        "REVIEW_SUBJECTIVE\n你是批改老师，依据参考答案给学生答案打分(0-10分整数)，输出 JSON: {\"score\":数字,\"comment\":\"点评\"}"),
-                new AIChatMessage("user", "【题目】" + stem + "\n【参考答案】" + (reference == null ? "" : reference)
-                        + "\n【学生答案】" + userAnswer + "\n【结束】")));
-        try {
-            Map<String, Object> m = objectMapper.readValue(raw, new TypeReference<Map<String, Object>>() {
-            });
-            int score = ((Number) m.getOrDefault("score", 0)).intValue();
-            String comment = String.valueOf(m.getOrDefault("comment", ""));
-            return new Grade(score, comment);
-        } catch (Exception e) {
-            log.warn("LLM 批改解析失败，按 0 分处理: {}", raw);
-            return new Grade(0, "批改解析失败，请人工复核");
-        }
-    }
-
-    private void updateMastery(Long userId, Long courseId, Map<String, int[]> stats) {
-        for (Map.Entry<String, int[]> e : stats.entrySet()) {
-            KnowledgeMastery km = masteryMapper.selectOne(new LambdaQueryWrapper<KnowledgeMastery>()
-                    .eq(KnowledgeMastery::getUserId, userId)
-                    .eq(KnowledgeMastery::getCourseId, courseId)
-                    .eq(KnowledgeMastery::getKpName, e.getKey()));
-            if (km == null) {
-                km = new KnowledgeMastery();
-                km.setUserId(userId);
-                km.setCourseId(courseId);
-                km.setKpName(e.getKey());
-                km.setAttempts(0);
-                km.setCorrectCount(0);
-            }
-        km.setAttempts(km.getAttempts() + e.getValue()[0]);
-        km.setCorrectCount(km.getCorrectCount() + e.getValue()[1]);
-        km.setMastery(km.getAttempts() == 0 ? 0.0 : km.getCorrectCount() * 100.0 / km.getAttempts());
-        km.setLastPracticeAt(LocalDateTime.now());
-            if (km.getId() == null) {
-                masteryMapper.insert(km);
-            } else {
-                masteryMapper.updateById(km);
-            }
-        }
     }
 
     public List<Practice> history(Long userId) {

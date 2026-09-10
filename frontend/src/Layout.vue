@@ -66,12 +66,13 @@ const notifies = ref([])
 const bellOpen = ref(false)
 let notifyTimer = null
 
-const keepAliveViews = ['ChatView', 'GenerateView', 'PracticeView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'ProfileView']
+const keepAliveViews = ['ChatView', 'GenerateView', 'PracticeView', 'ExamView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'ProfileView']
 
 const menus = [
   { key: 'chat', title: '智能答疑', path: '/chat', icon: '💬' },
   { key: 'generate', title: '讲义/练习题 生成', path: '/generate', icon: '✨' },
   { key: 'practice', title: '题库练习', path: '/practice', icon: '📝' },
+  { key: 'exam', title: '在线考试', path: '/exam', icon: '📋' },
   { key: 'progress', title: '学情分析', path: '/progress', icon: '📈' },
   { key: 'manage', title: '课程与知识库', path: '/manage', icon: '📚' },
   { key: 'plan', title: '学习计划', path: '/plans', icon: '🗓️' },
