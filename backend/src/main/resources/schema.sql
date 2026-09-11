@@ -163,6 +163,20 @@ CREATE TABLE IF NOT EXISTS t_practice_question (
     kp_name     VARCHAR(50)
 );
 
+-- ========== 新增：学习笔记 ==========
+
+CREATE TABLE IF NOT EXISTS t_note (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   BIGINT DEFAULT 1,
+    user_id     BIGINT NOT NULL,
+    course_id   BIGINT,
+    kp_name     VARCHAR(100),
+    title       VARCHAR(100) NOT NULL,
+    content     TEXT NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ========== 新增：考试模块 ==========
 
 CREATE TABLE IF NOT EXISTS t_exam (

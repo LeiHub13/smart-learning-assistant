@@ -66,7 +66,7 @@ const notifies = ref([])
 const bellOpen = ref(false)
 let notifyTimer = null
 
-const keepAliveViews = ['ChatView', 'GenerateView', 'PracticeView', 'ExamView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'ProfileView']
+const keepAliveViews = ['ChatView', 'GenerateView', 'PracticeView', 'ExamView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'ProfileView']
 
 const menus = [
   { key: 'chat', title: '智能答疑', path: '/chat', icon: '💬' },
@@ -77,6 +77,7 @@ const menus = [
   { key: 'manage', title: '课程与知识库', path: '/manage', icon: '📚' },
   { key: 'plan', title: '学习计划', path: '/plans', icon: '🗓️' },
   { key: 'report', title: '学习报告', path: '/reports', icon: '📄' },
+  { key: 'notes', title: '学习笔记', path: '/notes', icon: '📒' },
   { key: 'profile', title: '个人中心', path: '/profile', icon: '👤' }
 ]
 
