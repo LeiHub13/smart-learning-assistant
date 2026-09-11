@@ -88,9 +88,10 @@ const tab = ref('system')
 const mailLogs = ref([])
 let notifyTimer = null
 
-const keepAliveViews = ['ChatView', 'GenerateView', 'PracticeView', 'ExamView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'ProfileView']
+const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeView', 'ExamView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'ProfileView']
 
 const menus = [
+  { key: 'home', title: '首页', path: '/home', icon: '🏠' },
   { key: 'chat', title: '智能答疑', path: '/chat', icon: '💬' },
   { key: 'generate', title: '讲义/练习题 生成', path: '/generate', icon: '✨' },
   { key: 'practice', title: '题库练习', path: '/practice', icon: '📝' },

@@ -11,8 +11,9 @@ const routes = [
   {
     path: '/',
     component: () => import('../Layout.vue'),
-    redirect: '/chat',
+    redirect: '/home',
     children: [
+      { path: 'home', name: 'home', component: () => import('../views/DashboardView.vue'), meta: { title: '首页 - 智学助手' } },
       { path: 'chat', name: 'chat', component: () => import('../views/ChatView.vue'), meta: { title: '智能答疑 - 智学助手' } },
       { path: 'generate', name: 'generate', component: () => import('../views/GenerateView.vue'), meta: { title: 'AI 内容生成 - 智学助手' } },
       { path: 'practice', name: 'practice', component: () => import('../views/PracticeView.vue'), meta: { title: '题库练习 - 智学助手' } },
@@ -25,7 +26,7 @@ const routes = [
       { path: 'profile', name: 'profile', component: () => import('../views/ProfileView.vue'), meta: { title: '个人中心 - 智学助手' } }
     ]
   },
-  { path: '/:pathMatch(.*)*', redirect: '/chat' }
+  { path: '/:pathMatch(.*)*', redirect: '/home' }
 ]
 
 const router = createRouter({
