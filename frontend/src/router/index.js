@@ -23,7 +23,8 @@ const routes = [
       { path: 'plans', name: 'plans', component: () => import('../views/PlanView.vue'), meta: { title: '学习计划 - 智学助手' } },
       { path: 'reports', name: 'reports', component: () => import('../views/ReportView.vue'), meta: { title: '学习报告 - 智学助手' } },
       { path: 'notes', name: 'notes', component: () => import('../views/NotesView.vue'), meta: { title: '学习笔记 - 智学助手' } },
-      { path: 'profile', name: 'profile', component: () => import('../views/ProfileView.vue'), meta: { title: '个人中心 - 智学助手' } }
+      { path: 'profile', name: 'profile', component: () => import('../views/ProfileView.vue'), meta: { title: '个人中心 - 智学助手' } },
+      { path: 'search', name: 'search', component: () => import('../views/SearchView.vue'), meta: { title: '搜索 - 智学助手' } }
     ]
   },
   { path: '/:pathMatch(.*)*', redirect: '/home' }

@@ -12,6 +12,8 @@
   <div class="right">
     <header class="topbar">
       <div class="tb-title">{{ pageTitle }}</div>
+      <input class="global-search" v-model="searchQ" placeholder="搜索题目 / 笔记 / 文档 / 考试…"
+             @keyup.enter="doSearch" />
       <div class="tb-right">
         <div class="bell" @click.stop="toggleBell">
           🔔
@@ -88,7 +90,7 @@ const tab = ref('system')
 const mailLogs = ref([])
 let notifyTimer = null
 
-const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeView', 'ExamView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'ProfileView']
+const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeView', 'ExamView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'SearchView', 'ProfileView']
 
 const menus = [
   { key: 'home', title: '首页', path: '/home', icon: '🏠' },
@@ -115,6 +117,15 @@ const isActive = (m) => route.path.startsWith(m.path)
 
 const switchTo = (path) => {
   if (route.path !== path) router.push(path)
+}
+
+const go = (path) => router.push(path)
+
+const searchQ = ref('')
+const doSearch = () => {
+  const q = searchQ.value.trim()
+  if (!q) return
+  router.push({ path: '/search', query: { q } })
 }
 
 const logout = () => {
@@ -218,6 +229,12 @@ watch(
 
 <style scoped>
 img.avatar { object-fit: cover; padding: 0; }
+.global-search {
+  flex: 0 1 260px; min-width: 120px; height: 34px; margin-left: 18px;
+  border: 1px solid var(--border); border-radius: 10px; padding: 0 12px;
+  font-size: 13px; background: var(--soft); outline: none;
+}
+.global-search:focus { border-color: var(--accent); background: #fff; }
 .tab-bar { display: flex; border-bottom: 1px solid #f0ece6; }
 .tab-bar span { flex: 1; text-align: center; padding: 10px 0 9px; font-size: 13px; font-weight: 700; color: #999; cursor: pointer; }
 .tab-bar span.on { color: #1a1a1a; box-shadow: inset 0 -2px 0 #c98f4e; }
