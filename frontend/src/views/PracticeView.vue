@@ -19,7 +19,7 @@
             <input v-model="count" type="number" min="1" max="10" />
           </div>
           <div class="btns">
-            <button class="btn" :disabled="loading" @click="start">开始练习</button>
+            <button class="btn" :disabled="loading" @click="start()">开始练习</button>
           </div>
         </div>
         <div style="margin-top:14px">

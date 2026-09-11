@@ -1,6 +1,5 @@
 package com.example.learningassistant.recommend.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.learningassistant.ai.EmbeddingService;
 import com.example.learningassistant.infra.vector.VectorStore;
 import com.example.learningassistant.kb.entity.Chunk;
