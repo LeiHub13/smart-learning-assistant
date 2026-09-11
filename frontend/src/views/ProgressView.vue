@@ -19,6 +19,18 @@
 
     <template v-else>
       <div class="card">
+        <h3>今日推荐</h3>
+        <div v-if="!recommend.length" class="empty">暂无推荐，做一组练习后生成</div>
+        <div v-for="(r, i) in recommend" :key="i" class="rc-item">
+          <span class="rc-icon">{{ rcIcon(r.type) }}</span>
+          <div class="rc-body">
+            <div class="rc-title">{{ r.title }}</div>
+            <div class="rc-reason">{{ r.reason }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
         <h3>总体指标</h3>
         <div class="row">
           <div class="stat" style="flex:1"><div class="num">{{ Math.round(summary.averageMastery) }}%</div><div class="lab">平均掌握度</div></div>
@@ -109,7 +121,10 @@ const courses = ref([])
 const courseId = ref(null)
 const summary = ref(null)
 const study = ref(null)
+const recommend = ref([])
 const refreshingAdvice = ref(false)
+
+const rcIcon = (t) => ({ startup: '🚀', review_kp: '⏰', practice_kp: '📝', document: '📄' }[t] || '💡')
 
 const refreshAdvice = async () => {
   if (!courseId.value) return
@@ -145,16 +160,25 @@ onMounted(async () => {
     await load()
   }
   api('/api/study/summary').then((s) => { study.value = s }).catch(() => { /* 统计失败不阻塞 */ })
+  if (courseId.value) {
+    api('/api/recommend?courseId=' + courseId.value).then((r) => { recommend.value = r }).catch(() => { recommend.value = [] })
+  }
 })
 
 const load = async () => {
   if (!courseId.value) return
   summary.value = null
   summary.value = await api('/api/progress/summary?courseId=' + courseId.value)
+  api('/api/recommend?courseId=' + courseId.value).then((r) => { recommend.value = r }).catch(() => {})
 }
 </script>
 
 <style scoped>
+.rc-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.rc-item:last-child { border-bottom: none; }
+.rc-icon { font-size: 20px; line-height: 1.4; }
+.rc-title { font-weight: 700; font-size: 14px; }
+.rc-reason { font-size: 13px; color: var(--muted); margin-top: 2px; line-height: 1.6; }
 .md { line-height: 1.9; color: #334155; }
 .md :deep(h2), .md :deep(h3), .md :deep(h4) { margin: 8px 0 4px; font-weight: 800; }
 .md :deep(strong) { color: #1a1a1a; }
