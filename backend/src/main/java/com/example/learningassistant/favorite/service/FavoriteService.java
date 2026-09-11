@@ -47,7 +47,7 @@ public class FavoriteService {
         return true;
     }
 
-    /** 用户在某课程下的收藏题目 id 列表。 */
+    /** 用户在某课程下的收藏题目 id 列表（courseId 为空 = 全部课程）。 */
     public List<Long> favoriteQuestionIds(Long userId, Long courseId) {
         List<Favorite> favs = favoriteMapper.selectList(new LambdaQueryWrapper<Favorite>()
                 .eq(Favorite::getUserId, userId));
@@ -55,15 +55,21 @@ public class FavoriteService {
             return List.of();
         }
         List<Long> ids = favs.stream().map(Favorite::getQuestionId).distinct().toList();
-        // 过滤出属于该课程的收藏题
-        return questionMapper.selectList(new LambdaQueryWrapper<Question>()
-                .in(Question::getId, ids)
-                .eq(Question::getCourseId, courseId)).stream().map(Question::getId).toList();
+        LambdaQueryWrapper<Question> wrapper = new LambdaQueryWrapper<Question>()
+                .in(Question::getId, ids);
+        if (courseId != null) {
+            wrapper.eq(Question::getCourseId, courseId);
+        }
+        return questionMapper.selectList(wrapper).stream().map(Question::getId).toList();
     }
 
-    /** 收藏数量（提示角标）。 */
-    public long count(Long userId, Long courseId) {
-        return favoriteQuestionIds(userId, courseId).size();
+    /** 收藏数量（提示角标）：count=当前课程收藏数，total=全部课程收藏数。 */
+    public Map<String, Long> counts(Long userId, Long courseId) {
+        long total = favoriteQuestionIds(userId, null).size();
+        Map<String, Long> m = new LinkedHashMap<>();
+        m.put("total", total);
+        m.put("count", courseId == null ? total : favoriteQuestionIds(userId, courseId).size());
+        return m;
     }
 
     /** 收藏夹概览（题目信息，不含答案；courseId 可选过滤）。 */

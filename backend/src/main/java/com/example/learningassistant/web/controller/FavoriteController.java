@@ -43,11 +43,12 @@ public class FavoriteController {
         return ApiResponse.ok(favoriteService.list(u.id(), courseId));
     }
 
-    /** 收藏数量（courseId 可选）。 */
+    /** 收藏数量：count=当前课程收藏数，total=全部课程收藏数。 */
     @GetMapping("/count")
     public ApiResponse<Map<String, Object>> count(HttpServletRequest request,
                                                   @RequestParam(required = false) Long courseId) {
         AuthUser u = CurrentUser.get(request);
-        return ApiResponse.ok(Map.of("count", favoriteService.count(u.id(), courseId)));
+        Map<String, Long> c = favoriteService.counts(u.id(), courseId);
+        return ApiResponse.ok(new java.util.LinkedHashMap<>(c));
     }
 }

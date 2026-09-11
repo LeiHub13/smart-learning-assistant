@@ -55,8 +55,9 @@ public class PracticeService {
             List<Question> favs = questionMapper.selectList(new LambdaQueryWrapper<Question>()
                     .in(Question::getId, favIds)
                     .eq(Question::getCourseId, courseId));
-            java.util.Collections.shuffle(new ArrayList<>(favs));
-            return favs.stream().map(q -> toPaperItem(q, false)).toList();
+            List<Question> shuffled = new ArrayList<>(favs);
+            java.util.Collections.shuffle(shuffled);
+            return shuffled.stream().map(q -> toPaperItem(q, false)).toList();
         }
         List<Question> qs = questionMapper.selectList(new LambdaQueryWrapper<Question>()
                 .eq(Question::getCourseId, courseId)

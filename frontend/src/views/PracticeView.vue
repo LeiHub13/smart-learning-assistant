@@ -39,8 +39,9 @@
         <div style="margin-top:14px" class="fav-bar">
           <span class="label">收藏夹（好题反复练）</span>
           <button class="btn small" :disabled="favCount === 0" @click="startFav">
-            {{ favCount ? '重练收藏题（' + favCount + '）' : '收藏夹为空' }}
+            {{ favCount ? '重练收藏题（' + favCount + '）' : '本课程暂无收藏' }}
           </button>
+          <span v-if="favTotal > favCount" class="muted small">全部 {{ favTotal }} 道，其余在别的课程</span>
         </div>
         <div style="margin-top:14px">
           <span class="label">成绩曲线（正确率 %，最近 50 次）</span>
@@ -127,6 +128,7 @@ const error = ref('')
 const answers = ref({})
 const chartRef = ref(null)
 const favCount = ref(0)
+const favTotal = ref(0)
 let chart = null
 
 const courseName = computed(() => {
@@ -150,7 +152,9 @@ onMounted(async () => {
 const refreshFavCount = async () => {
   if (!courseId.value) return
   try {
-    favCount.value = (await api('/api/favorites/count?courseId=' + courseId.value)).count || 0
+    const c = await api('/api/favorites/count?courseId=' + courseId.value)
+    favCount.value = c.count || 0
+    favTotal.value = c.total || 0
   } catch (e) { /* 忽略 */ }
 }
 
@@ -195,7 +199,10 @@ const renderChart = () => {
   })
 }
 
-watch(courseId, refreshTrend)
+watch(courseId, () => {
+  refreshTrend()
+  refreshFavCount()
+})
 
 onBeforeUnmount(() => {
   if (chart) { chart.dispose(); chart = null }
@@ -237,7 +244,7 @@ const toggleFav = async (q) => {
   try {
     const r = await api('/api/favorites/toggle', { method: 'POST', body: { questionId: q.id } })
     q.favorited = r.favorited
-    favCount.value = await api('/api/favorites/count?courseId=' + courseId.value).then((c) => c.count)
+    refreshFavCount()
   } catch (e) { /* 静默失败 */ }
 }
 
@@ -273,6 +280,7 @@ const again = () => {
   paper.value = []
   answers.value = {}
   refreshTrend()
+  refreshFavCount()
 }
 </script>
 
