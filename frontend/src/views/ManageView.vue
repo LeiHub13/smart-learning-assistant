@@ -53,7 +53,24 @@
             <div v-for="d in kb.docs" :key="d.id" class="ans" style="margin:4px 0">
               <div class="row" style="justify-content:space-between">
                 <span>📄 {{ d.fileName }} · {{ d.chunkCount }} 个片段</span>
-                <button class="btn danger small" @click="deleteDoc(kb.id, d.id)">删除</button>
+                <span class="row" style="gap:8px">
+                  <button class="btn ghost small" @click="togglePreview(kb.id, d.id)">
+                    {{ previewDocId === d.id ? '收起预览' : '预览' }}
+                  </button>
+                  <button class="btn danger small" @click="deleteDoc(kb.id, d.id)">删除</button>
+                </span>
+              </div>
+              <div v-if="previewDocId === d.id" class="doc-preview">
+                <div v-if="previewLoading" class="loading"><i></i>加载中…</div>
+                <template v-else-if="preview">
+                  <div class="muted small" style="margin-bottom:6px">
+                    {{ preview.fileName }} · {{ preview.fileType }} · {{ preview.chunkCount }} 个片段 · {{ preview.parseStatus }}
+                  </div>
+                  <div class="pv-text">{{ preview.text || '（无文本内容：索引未完成或文档为空）' }}</div>
+                  <div v-if="preview.fileUrl" style="margin-top:8px">
+                    <a :href="preview.fileUrl" target="_blank" class="link">下载原始文件</a>
+                  </div>
+                </template>
               </div>
             </div>
             <div v-if="uploadingKb === kb.id" style="margin-top:8px">
@@ -100,6 +117,27 @@ defineOptions({ name: 'ManageView' })
 const courses = ref([])
 const expanded = ref(null)
 const uploadingKb = ref(null)
+const previewDocId = ref(null)
+const preview = ref(null)
+const previewLoading = ref(false)
+
+const togglePreview = async (kbId, docId) => {
+  if (previewDocId.value === docId) {
+    previewDocId.value = null
+    preview.value = null
+    return
+  }
+  previewDocId.value = docId
+  preview.value = null
+  previewLoading.value = true
+  try {
+    preview.value = await api('/api/kb/' + kbId + '/documents/' + docId + '/preview')
+  } catch (e) {
+    previewDocId.value = null
+  } finally {
+    previewLoading.value = false
+  }
+}
 const newName = ref('')
 const newDesc = ref('')
 const newKbName = ref('')
@@ -217,3 +255,16 @@ const doDeleteKb = async () => {
   }
 }
 </script>
+
+<style scoped>
+.doc-preview {
+  margin-top: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--soft);
+}
+.pv-text {
+  white-space: pre-wrap; line-height: 1.8; color: #334155;
+  max-height: 320px; overflow: auto;
+  font-family: Consolas, "Microsoft YaHei", monospace; font-size: 13px;
+  background: #faf9f7; border-radius: 8px; padding: 10px 12px;
+}
+</style>

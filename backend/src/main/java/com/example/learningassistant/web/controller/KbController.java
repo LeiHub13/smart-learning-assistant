@@ -54,6 +54,12 @@ public class KbController {
         return ApiResponse.ok(kbService.documents(kbId));
     }
 
+    /** 文档预览：按 chunk 还原全文 + 原始文件下载地址（若有）。 */
+    @GetMapping("/api/kb/{kbId}/documents/{docId}/preview")
+    public ApiResponse<Map<String, Object>> preview(@PathVariable Long kbId, @PathVariable Long docId) {
+        return ApiResponse.ok(kbService.previewDocument(kbId, docId));
+    }
+
     @PostMapping("/api/kb/{kbId}/documents")
     public ApiResponse<Map<String, Object>> addDocument(@PathVariable Long kbId, @RequestBody Map<String, String> body) {
         String fileName = body.get("fileName");

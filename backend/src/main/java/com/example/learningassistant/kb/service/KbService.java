@@ -18,7 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 知识库服务：知识库管理 + 文档登记 + 文本分块索引（同步）。
@@ -151,6 +153,35 @@ public class KbService {
         return documentMapper.selectList(new LambdaQueryWrapper<Document>()
                 .eq(Document::getKbId, kbId)
                 .orderByDesc(Document::getCreatedAt));
+    }
+
+    /**
+     * 文档预览：按 chunk 顺序还原全文（所有文档统一以 chunk 落库，文本型/上传型通吃）。
+     */
+    public Map<String, Object> previewDocument(Long kbId, Long docId) {
+        Document doc = documentMapper.selectById(docId);
+        if (doc == null || !doc.getKbId().equals(kbId)) {
+            throw new BizException("文档不存在");
+        }
+        List<Chunk> chunks = chunkMapper.selectList(new LambdaQueryWrapper<Chunk>()
+                .eq(Chunk::getDocId, docId)
+                .orderByAsc(Chunk::getIdx));
+        StringBuilder sb = new StringBuilder();
+        for (Chunk c : chunks) {
+            sb.append(c.getContent()).append('\n');
+        }
+        String text = sb.length() > 100_000 ? sb.substring(0, 100_000) + "…（预览截断）" : sb.toString().trim();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("docId", doc.getId());
+        result.put("fileName", doc.getFileName());
+        result.put("fileType", doc.getFileType());
+        result.put("chunkCount", doc.getChunkCount());
+        result.put("parseStatus", doc.getParseStatus());
+        result.put("text", text);
+        // 上传型文档若走了原始文件存储，附原文下载地址（当前上传链路均为解析后文本，fileUrl 可能为空）
+        result.put("fileUrl", doc.getFileUrl());
+        return result;
     }
 
     /**
