@@ -104,7 +104,12 @@
       <div v-for="(it, i) in report.items" :key="i" class="q" :class="it.answer.correct ? 'pass' : 'fail'">
         <div class="head">
           <span class="type">{{ i + 1 }}. 【{{ it.question.type }}】{{ it.question.stem }}</span>
-          <span class="tag" :class="it.answer.correct ? 'ok' : 'bad'">{{ it.answer.correct ? '正确 +' + it.answer.score : '错误' }}</span>
+          <span class="row" style="gap:10px">
+            <a class="link" style="cursor:pointer" @click="toggleFav(it.question)">
+              {{ it.question.favorited ? '★ 已收藏' : '☆ 收藏' }}
+            </a>
+            <span class="tag" :class="it.answer.correct ? 'ok' : 'bad'">{{ it.answer.correct ? '正确 +' + it.answer.score : '错误' }}</span>
+          </span>
         </div>
         <div class="ans"><b>你的答案：</b>{{ it.answer.userAnswer || '（未作答）' }}<br />
           <b>参考答案：</b>{{ it.question.answer }}<br /><b>解析：</b>{{ it.question.analysis }}</div>
@@ -256,6 +261,13 @@ const submit = async () => {
 const back = () => {
   report.value = null
   paper.value = null
+}
+
+const toggleFav = async (q) => {
+  try {
+    const r = await api('/api/favorites/toggle', { method: 'POST', body: { questionId: q.id } })
+    q.favorited = r.favorited
+  } catch (e) { /* 静默失败 */ }
 }
 
 onMounted(async () => {

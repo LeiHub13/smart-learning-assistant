@@ -43,6 +43,7 @@ public class ExamService {
     private final QuestionMapper questionMapper;
     private final CourseMapper courseMapper;
     private final GradingService gradingService;
+    private final com.example.learningassistant.favorite.service.FavoriteService favoriteService;
 
     /**
      * 手动组卷：明确指定题目清单。
@@ -303,6 +304,15 @@ public class ExamService {
             }
             return m;
         }).toList();
+        // 每题收藏状态（报告页一键收藏/取消）
+        java.util.Set<Long> favorited = favoriteService.favoritedIds(userId,
+                answers.stream().map(ExamAnswer::getQuestionId).toList());
+        for (Map<String, Object> item : items) {
+            var question = (Map<String, Object>) item.get("question");
+            if (question != null) {
+                question.put("favorited", favorited.contains(Long.valueOf(String.valueOf(question.get("id")))));
+            }
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("exam", Map.of(

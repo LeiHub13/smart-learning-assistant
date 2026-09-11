@@ -163,6 +163,17 @@ CREATE TABLE IF NOT EXISTS t_practice_question (
     kp_name     VARCHAR(50)
 );
 
+-- ========== 新增：题目收藏 ==========
+
+CREATE TABLE IF NOT EXISTS t_favorite (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   BIGINT DEFAULT 1,
+    user_id     BIGINT NOT NULL,
+    question_id BIGINT NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_favorite (user_id, question_id)
+);
+
 -- ========== 新增：学习笔记 ==========
 
 CREATE TABLE IF NOT EXISTS t_note (

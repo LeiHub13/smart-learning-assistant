@@ -36,6 +36,12 @@
           </table>
           <div v-else class="empty">暂无练习记录</div>
         </div>
+        <div style="margin-top:14px" class="fav-bar">
+          <span class="label">收藏夹（好题反复练）</span>
+          <button class="btn small" :disabled="favCount === 0" @click="startFav">
+            {{ favCount ? '重练收藏题（' + favCount + '）' : '收藏夹为空' }}
+          </button>
+        </div>
         <div style="margin-top:14px">
           <span class="label">成绩曲线（正确率 %，最近 50 次）</span>
           <div ref="chartRef" class="trend-chart"></div>
@@ -80,7 +86,12 @@
       <div v-for="(it, i) in report.items" :key="it.pq.id" class="q" :class="it.pq.correct ? 'pass' : 'fail'">
         <div class="head">
           <span class="type">{{ i + 1 }}. 【{{ it.q.type }}】{{ it.q.stem }}</span>
-          <span class="tag" :class="it.pq.correct ? 'ok' : 'bad'">{{ it.pq.correct ? '正确 +' + it.pq.score : '错误' }}</span>
+          <span class="row" style="gap:10px">
+            <a class="link" @click="toggleFav(it.q)" style="cursor:pointer">
+              {{ it.q.favorited ? '★ 已收藏' : '☆ 收藏' }}
+            </a>
+            <span class="tag" :class="it.pq.correct ? 'ok' : 'bad'">{{ it.pq.correct ? '正确 +' + it.pq.score : '错误' }}</span>
+          </span>
         </div>
         <div class="ans"><b>你的答案：</b>{{ it.pq.userAnswer || '（未作答）' }}<br />
           <b>参考答案：</b>{{ it.q.answer }}<br /><b>解析：</b>{{ it.q.analysis }}</div>
@@ -115,6 +126,7 @@ const submitting = ref(false)
 const error = ref('')
 const answers = ref({})
 const chartRef = ref(null)
+const favCount = ref(0)
 let chart = null
 
 const courseName = computed(() => {
@@ -132,7 +144,15 @@ onMounted(async () => {
   if (courses.value.length) courseId.value = courses.value[0].id
   history.value = await api('/api/practice/history')
   await refreshTrend()
+  refreshFavCount()
 })
+
+const refreshFavCount = async () => {
+  if (!courseId.value) return
+  try {
+    favCount.value = (await api('/api/favorites/count?courseId=' + courseId.value)).count || 0
+  } catch (e) { /* 忽略 */ }
+}
 
 const refreshTrend = async () => {
   if (!courseId.value) return
@@ -197,17 +217,28 @@ const toggle = (q, k, type) => {
   }
 }
 
-const start = async () => {
+const start = async (favMode = false) => {
   loading.value = true
   error.value = ''
   answers.value = {}
   try {
-    paper.value = await api('/api/practice/paper?courseId=' + courseId.value + '&count=' + count.value)
+    const url = '/api/practice/paper?courseId=' + courseId.value + '&count=' + count.value + '&favorite=' + favMode
+    paper.value = await api(url)
   } catch (e) {
     error.value = e.message
   } finally {
     loading.value = false
   }
+}
+
+const startFav = () => start(true)
+
+const toggleFav = async (q) => {
+  try {
+    const r = await api('/api/favorites/toggle', { method: 'POST', body: { questionId: q.id } })
+    q.favorited = r.favorited
+    favCount.value = await api('/api/favorites/count?courseId=' + courseId.value).then((c) => c.count)
+  } catch (e) { /* 静默失败 */ }
 }
 
 const submit = async () => {
@@ -219,6 +250,7 @@ const submit = async () => {
     paper.value = []
     history.value = await api('/api/practice/history')
     refreshTrend()
+    refreshFavCount()
     report.value = await api('/api/practice/' + p.id)
   } catch (e) {
     error.value = e.message

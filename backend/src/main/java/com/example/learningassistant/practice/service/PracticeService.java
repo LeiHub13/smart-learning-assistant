@@ -40,10 +40,23 @@ public class PracticeService {
     private final GradingService gradingService;
     /** 自适应抽题需要读取掌握度（判分与掌握度更新已委托 GradingService） */
     private final KnowledgeMasteryMapper masteryMapper;
+    private final com.example.learningassistant.favorite.service.FavoriteService favoriteService;
 
-    public List<Map<String, Object>> paper(Long userId, Long courseId, int count) {
+    public List<Map<String, Object>> paper(Long userId, Long courseId, int count, boolean favorite) {
         if (count < 1) {
             count = 5;
+        }
+        if (favorite) {
+            // 收藏题重练：直接以收藏夹为题源（不含答案），忽略 count 之外的抽题规则
+            List<Long> favIds = favoriteService.favoriteQuestionIds(userId, courseId);
+            if (favIds.isEmpty()) {
+                throw new BizException("收藏夹为空，先在报告页收藏几道好题");
+            }
+            List<Question> favs = questionMapper.selectList(new LambdaQueryWrapper<Question>()
+                    .in(Question::getId, favIds)
+                    .eq(Question::getCourseId, courseId));
+            java.util.Collections.shuffle(new ArrayList<>(favs));
+            return favs.stream().map(q -> toPaperItem(q, false)).toList();
         }
         List<Question> qs = questionMapper.selectList(new LambdaQueryWrapper<Question>()
                 .eq(Question::getCourseId, courseId)
@@ -183,6 +196,13 @@ public class PracticeService {
             m.put("q", toPaperItem(q, true));
             return m;
         }).toList();
+        // 每题收藏状态（报告页一键收藏/取消）
+        java.util.Set<Long> favorited = favoriteService.favoritedIds(userId,
+                pqs.stream().map(pq -> pq.getQuestionId()).toList());
+        for (Map<String, Object> item : items) {
+            var q = (Map<String, Object>) item.get("q");
+            q.put("favorited", favorited.contains(Long.valueOf(String.valueOf(q.get("id")))));
+        }
 
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("id", p.getId());
