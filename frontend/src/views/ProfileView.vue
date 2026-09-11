@@ -41,6 +41,18 @@
     </div>
 
     <div class="card">
+      <h3>我的数据导出</h3>
+      <div class="row" style="gap:12px">
+        <button class="btn small" :disabled="exporting" @click="exportData('/api/export/practice.xlsx', '练习记录.xlsx')">
+          {{ exporting === 'practice' ? '导出中…' : '导出练习记录 (Excel)' }}
+        </button>
+        <button class="btn small" :disabled="exporting" @click="exportData('/api/export/exams.xlsx', '考试成绩.xlsx')">
+          {{ exporting === 'exams' ? '导出中…' : '导出考试成绩 (Excel)' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
       <h3>修改密码</h3>
       <div class="row" style="align-items:center">
         <div><span class="label">原密码</span><input v-model="oldPwd" type="password" /></div>
@@ -54,7 +66,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { api, getToken } from '../api'
+import { api, getToken, downloadFile } from '../api'
 
 defineOptions({ name: 'ProfileView' })
 
@@ -71,6 +83,19 @@ const uploading = ref(false)
 const savingNick = ref(false)
 const savingEmail = ref(false)
 const savingPwd = ref(false)
+const exporting = ref('')
+
+const exportData = async (path, filename) => {
+  exporting.value = path.includes('exams') ? 'exams' : 'practice'
+  try {
+    await downloadFile(path, filename)
+    flash('已导出 ' + filename)
+  } catch (e) {
+    err.value = e.message
+  } finally {
+    exporting.value = ''
+  }
+}
 
 const loadMe = async () => {
   me.value = await api('/api/auth/me')

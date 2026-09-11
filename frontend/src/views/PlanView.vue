@@ -4,6 +4,26 @@
     <div class="page-sub">AI 根据你的目标与掌握度生成逐日计划，每日打卡跟踪进度</div>
 
     <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h3 style="margin:0">打卡日历 · {{ calMonth }}</h3>
+        <div class="row" style="gap:8px">
+          <button class="btn ghost small" @click="shiftMonth(-1)">‹</button>
+          <button class="btn ghost small" @click="shiftMonth(1)">›</button>
+        </div>
+      </div>
+      <div class="cal-grid">
+        <span class="cal-h" v-for="d in ['一','二','三','四','五','六','日']" :key="d">{{ d }}</span>
+        <span v-for="blank in calFirstOffset" :key="'b' + blank" class="cal-cell blank"></span>
+        <span v-for="d in calDays" :key="d.date" class="cal-cell"
+              :class="calLevel(d)" :title="d.date + '：完成 ' + d.done + '/' + d.total">
+          <b>{{ Number(d.date.slice(-2)) }}</b>
+          <i v-if="d.total">{{ d.done }}/{{ d.total }}</i>
+        </span>
+      </div>
+      <div class="muted small" style="margin-top:8px">绿=全部完成 · 橙=部分完成 · 灰=无任务</div>
+    </div>
+
+    <div class="card">
       <h3>创建新计划</h3>
       <div class="row" style="gap:12px;flex-wrap:wrap">
         <input v-model="form.goal" type="text" placeholder="输入学习目标，如：掌握 Java 集合框架" style="flex:1;min-width:220px" />
@@ -52,6 +72,35 @@ import { getCourses, listPlans, createPlan as createPlanApi, getPlan, checkInTas
 
 const courses = ref([])
 const plans = ref([])
+
+// ===== 打卡日历 =====
+const calMonth = ref(new Date().toISOString().slice(0, 7))
+const calDays = ref([])
+const calFirstOffset = ref(0)
+
+const calLevel = (d) => {
+  if (!d.total) return 'c0'
+  if (d.done >= d.total) return 'c2'
+  if (d.done > 0) return 'c1'
+  return 'c0'
+}
+
+const shiftMonth = (delta) => {
+  const [y, m] = calMonth.value.split('-').map(Number)
+  const dt = new Date(y, m - 1 + delta, 1)
+  calMonth.value = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0')
+  loadCalendar()
+}
+
+const loadCalendar = async () => {
+  try {
+    const days = await api('/api/plans/calendar?month=' + calMonth.value)
+    calDays.value = days
+    const first = calMonth.value + '-01'
+    const dow = new Date(first).getDay() // 0=周日
+    calFirstOffset.value = (dow + 6) % 7 // 周一开头
+  } catch (e) { /* 忽略 */ }
+}
 const details = reactive({})
 const open = reactive({})
 const loading = ref(false)
@@ -102,7 +151,10 @@ const del = async (id) => {
   await load()
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadCalendar()
+})
 </script>
 
 <style scoped>
@@ -117,4 +169,16 @@ onMounted(load)
 .cb { font-size: 18px; }
 .small { font-size: 12px; }
 .muted { color: #888; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 12px; }
+.cal-h { text-align: center; font-size: 12px; color: var(--muted); }
+.cal-cell {
+  min-height: 56px; border: 1px solid var(--border); border-radius: 8px;
+  padding: 4px 6px; display: flex; flex-direction: column; gap: 2px;
+}
+.cal-cell.blank { border: none; }
+.cal-cell b { font-size: 12px; }
+.cal-cell i { font-style: normal; font-size: 11px; }
+.cal-cell.c0 { background: var(--soft); }
+.cal-cell.c1 { background: #fdf3e4; border-color: #e8c98f; }
+.cal-cell.c2 { background: #eef7ee; border-color: #b5d8b5; }
 </style>

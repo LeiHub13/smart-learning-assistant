@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -41,6 +42,14 @@ public class PlanController {
     public ApiResponse<List<StudyPlan>> list(HttpServletRequest request) {
         AuthUser u = CurrentUser.get(request);
         return ApiResponse.ok(planService.list(u.id()));
+    }
+
+    /** 打卡日历：month=yyyy-MM，按天聚合任务/完成数。 */
+    @GetMapping("/calendar")
+    public ApiResponse<List<Map<String, Object>>> calendar(HttpServletRequest request,
+                                                           @RequestParam String month) {
+        AuthUser u = CurrentUser.get(request);
+        return ApiResponse.ok(planService.calendar(u.id(), month));
     }
 
     @GetMapping("/{id}")

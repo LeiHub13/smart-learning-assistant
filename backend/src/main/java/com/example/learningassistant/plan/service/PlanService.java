@@ -111,6 +111,54 @@ public class PlanService {
                 .orderByDesc(StudyPlan::getCreatedAt));
     }
 
+    /**
+     * 打卡日历：某月内按天聚合任务数与完成数（跨该用户全部计划，缺数据的日期补 0）。
+     *
+     * @param month "yyyy-MM"
+     */
+    public List<Map<String, Object>> calendar(Long userId, String month) {
+        java.time.LocalDate first;
+        try {
+            first = java.time.LocalDate.parse(month + "-01");
+        } catch (Exception e) {
+            throw new BizException("月份格式应为 yyyy-MM");
+        }
+        java.time.LocalDate last = first.plusMonths(1).minusDays(1);
+
+        List<Long> planIds = planMapper.selectList(new LambdaQueryWrapper<StudyPlan>()
+                .eq(StudyPlan::getUserId, userId)).stream().map(StudyPlan::getId).toList();
+
+        Map<java.time.LocalDate, int[]> byDate = new java.util.HashMap<>();
+        if (!planIds.isEmpty()) {
+            List<com.example.learningassistant.plan.entity.PlanTask> tasks = taskMapper.selectList(
+                    new LambdaQueryWrapper<com.example.learningassistant.plan.entity.PlanTask>()
+                            .in(com.example.learningassistant.plan.entity.PlanTask::getPlanId, planIds)
+                            .ge(com.example.learningassistant.plan.entity.PlanTask::getTaskDate, first)
+                            .le(com.example.learningassistant.plan.entity.PlanTask::getTaskDate, last));
+            for (com.example.learningassistant.plan.entity.PlanTask t : tasks) {
+                if (t.getTaskDate() == null) {
+                    continue;
+                }
+                int[] s = byDate.computeIfAbsent(t.getTaskDate(), k -> new int[2]);
+                s[0]++;
+                if (t.getDone() != null && t.getDone()) {
+                    s[1]++;
+                }
+            }
+        }
+
+        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        for (java.time.LocalDate d = first; !d.isAfter(last); d = d.plusDays(1)) {
+            int[] s = byDate.getOrDefault(d, new int[0]);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("date", d.toString());
+            m.put("total", s.length > 0 ? s[0] : 0);
+            m.put("done", s.length > 0 ? s[1] : 0);
+            result.add(m);
+        }
+        return result;
+    }
+
     public Map<String, Object> detail(Long userId, Long planId) {
         StudyPlan plan = planMapper.selectById(planId);
         if (plan == null || !plan.getUserId().equals(userId)) {
