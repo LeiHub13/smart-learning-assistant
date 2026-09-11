@@ -163,6 +163,20 @@ CREATE TABLE IF NOT EXISTS t_practice_question (
     kp_name     VARCHAR(50)
 );
 
+-- ========== 新增：邮件发送日志 ==========
+
+CREATE TABLE IF NOT EXISTS t_mail_log (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   BIGINT DEFAULT 1,
+    user_id     BIGINT,
+    email       VARCHAR(100),
+    subject     VARCHAR(200),
+    content     TEXT,
+    status      VARCHAR(20),
+    error       VARCHAR(500),
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ========== 新增：题目收藏 ==========
 
 CREATE TABLE IF NOT EXISTS t_favorite (

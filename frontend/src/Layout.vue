@@ -17,15 +17,35 @@
           🔔
           <span v-if="unread" class="badge">{{ unread > 99 ? '99+' : unread }}</span>
           <div v-if="bellOpen" class="notify-pop" @click.stop>
-            <div class="notify-head">
-              <b>通知</b>
-              <a @click="readAll">全部已读</a>
+            <div class="tab-bar">
+              <span :class="{ on: tab === 'system' }" @click="tab = 'system'">系统通知</span>
+              <span :class="{ on: tab === 'mail' }" @click="switchMail">邮箱通知</span>
             </div>
-            <div v-if="!notifies.length" class="notify-empty">暂无通知</div>
-            <div v-for="n in notifies" :key="n.id" :class="['notify-item', { unread: !n.readFlag }]" @click="readOne(n)">
-              <div class="notify-title">{{ n.title }}</div>
-              <div class="notify-content">{{ n.content }}</div>
-            </div>
+            <template v-if="tab === 'system'">
+              <div class="notify-head">
+                <b>通知</b>
+                <a @click="readAll">全部已读</a>
+              </div>
+              <div v-if="!notifies.length" class="notify-empty">暂无通知</div>
+              <div v-for="n in notifies" :key="n.id" :class="['notify-item', { unread: !n.readFlag }]" @click="readOne(n)">
+                <div class="notify-title">{{ n.title }}</div>
+                <div class="notify-content">{{ n.content }}</div>
+              </div>
+            </template>
+            <template v-else>
+              <div class="notify-head"><b>邮件发送记录</b></div>
+              <div v-if="!mailLogs.length" class="notify-empty">
+                {{ mailEnabled ? '暂无邮件记录' : '邮件通知未启用（个人中心绑定邮箱，服务器 .env 开启 MAIL_ENABLED）' }}
+              </div>
+              <div v-for="m in mailLogs" :key="m.id" class="notify-item">
+                <div class="notify-title">
+                  {{ m.subject }}
+                  <span class="mail-tag" :class="m.status === 'SENT' ? 'ok' : 'bad'">{{ m.status === 'SENT' ? '成功' : '失败' }}</span>
+                </div>
+                <div class="notify-content">{{ m.content }}</div>
+                <div class="notify-content muted">{{ m.email }} · {{ fmtShort(m.createdAt) }}</div>
+              </div>
+            </template>
           </div>
         </div>
         <div class="tb-user" title="进入个人中心" @click="switchTo('/profile')">
@@ -64,6 +84,8 @@ const me = ref(null)
 const unread = ref(0)
 const notifies = ref([])
 const bellOpen = ref(false)
+const tab = ref('system')
+const mailLogs = ref([])
 let notifyTimer = null
 
 const keepAliveViews = ['ChatView', 'GenerateView', 'PracticeView', 'ExamView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'ProfileView']
@@ -121,7 +143,28 @@ const loadNotify = async () => {
 
 const toggleBell = async () => {
   bellOpen.value = !bellOpen.value
-  if (bellOpen.value) await loadNotify()
+  if (bellOpen.value) {
+    await loadNotify()
+    loadMailLogs()
+  }
+}
+
+const switchMail = () => {
+  tab.value = 'mail'
+  loadMailLogs()
+}
+
+const loadMailLogs = async () => {
+  try {
+    mailLogs.value = await api('/api/notifications/mails')
+  } catch (e) { mailLogs.value = [] }
+}
+
+const fmtShort = (t) => {
+  if (!t) return ''
+  const d = new Date(t)
+  const p = (x) => String(x).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 const readOne = async (n) => {
@@ -174,6 +217,13 @@ watch(
 
 <style scoped>
 img.avatar { object-fit: cover; padding: 0; }
+.tab-bar { display: flex; border-bottom: 1px solid #f0ece6; }
+.tab-bar span { flex: 1; text-align: center; padding: 10px 0 9px; font-size: 13px; font-weight: 700; color: #999; cursor: pointer; }
+.tab-bar span.on { color: #1a1a1a; box-shadow: inset 0 -2px 0 #c98f4e; }
+.mail-tag { font-size: 10px; border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
+.mail-tag.ok { background: #eef7ee; color: #2e7d32; }
+.mail-tag.bad { background: #fdeeee; color: #c62828; }
+.muted { color: #aaa; }
 .tb-user { cursor: pointer; border-radius: 10px; padding: 4px 6px; transition: background .2s ease; }
 .tb-user:hover { background: rgba(26,26,26,.05); }
 .bell {

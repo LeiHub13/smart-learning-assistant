@@ -45,7 +45,7 @@ public class NotifyService {
         }
         User user = userMapper.selectById(userId);
         if (user != null && user.getEmail() != null && !user.getEmail().isBlank()) {
-            mail.send(user.getEmail(), "【智学助手】" + title, content);
+            mail.send(userId, user.getEmail(), "【智学助手】" + title, content);
         }
     }
 
