@@ -293,14 +293,16 @@ public class ExamService {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("answer", ea);
             if (q != null) {
-                m.put("question", Map.of(
-                        "id", q.getId(),
-                        "type", q.getType(),
-                        "stem", q.getStem(),
-                        "options", q.getOptions() == null ? "" : q.getOptions(),
-                        "answer", q.getAnswer() == null ? "" : q.getAnswer(),
-                        "analysis", q.getAnalysis() == null ? "" : q.getAnalysis(),
-                        "kpName", q.getKpName() == null ? "" : q.getKpName()));
+                // 可变 map：报告循环还要补写 favorited，不能用 Map.of 不可变集合
+                Map<String, Object> question = new LinkedHashMap<>();
+                question.put("id", q.getId());
+                question.put("type", q.getType());
+                question.put("stem", q.getStem());
+                question.put("options", q.getOptions() == null ? "" : q.getOptions());
+                question.put("answer", q.getAnswer() == null ? "" : q.getAnswer());
+                question.put("analysis", q.getAnalysis() == null ? "" : q.getAnalysis());
+                question.put("kpName", q.getKpName() == null ? "" : q.getKpName());
+                m.put("question", question);
             }
             return m;
         }).toList();
