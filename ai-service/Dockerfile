@@ -4,8 +4,11 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
 # nodejs：MCP stdio 服务（如联网搜索 tavily-mcp）通过 npx 拉起时需要；不启用 MCP 可删
-RUN apt-get update \
+# apt 换阿里云源：deb.debian.org 国内 ECS 上慢且不稳；npm 换 npmmirror 供运行时 npx 加速
+RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends nodejs npm \
+    && npm config set registry https://registry.npmmirror.com \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
