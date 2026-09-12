@@ -134,6 +134,16 @@ public class ChatService {
         ChatSession session = requireOwnedSession(sessionId, userId);
         LocalDateTime now = LocalDateTime.now();
 
+        // 首次对话自动命名：标题仍为默认"新对话"时，取第一条提问截断为会话名（用户手动改过的不覆盖）
+        if ("新对话".equals(session.getTitle()) && question != null && !question.isBlank()) {
+            String derived = question.replaceAll("\\s+", " ").trim();
+            if (derived.length() > 20) {
+                derived = derived.substring(0, 20) + "…";
+            }
+            session.setTitle(derived);
+            sessionMapper.updateById(session);
+        }
+
         ChatMessage userMsg = new ChatMessage();
         userMsg.setSessionId(sessionId);
         userMsg.setRole("user");
