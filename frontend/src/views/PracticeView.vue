@@ -35,6 +35,11 @@
             </tbody>
           </table>
           <div v-else class="empty">暂无练习记录</div>
+          <div v-if="historyTotal" class="pager">
+            <button class="btn ghost small" :disabled="historyPage <= 1" @click="loadHistory(historyPage - 1)">上一页</button>
+            <span class="muted small">第 {{ historyPage }} / {{ historyPages }} 页 · 共 {{ historyTotal }} 条</span>
+            <button class="btn ghost small" :disabled="historyPage >= historyPages" @click="loadHistory(historyPage + 1)">下一页</button>
+          </div>
         </div>
         <div style="margin-top:14px" class="fav-bar">
           <span class="label">收藏夹（好题反复练）</span>
@@ -121,6 +126,9 @@ const count = ref(5)
 const paper = ref([])
 const report = ref(null)
 const history = ref([])
+const historyPage = ref(1)
+const historyTotal = ref(0)
+const PAGE_SIZE = 5
 const trend = ref([])
 const loading = ref(false)
 const submitting = ref(false)
@@ -136,6 +144,7 @@ const courseName = computed(() => {
   return c ? c.name : ''
 })
 const okCount = computed(() => (report.value ? report.value.items.filter((i) => i.pq.correct).length : 0))
+const historyPages = computed(() => Math.max(1, Math.ceil(historyTotal.value / PAGE_SIZE)))
 const rate = computed(() => {
   if (!report.value || !report.value.items.length) return 0
   return Math.round((okCount.value / report.value.items.length) * 100)
@@ -144,10 +153,17 @@ const rate = computed(() => {
 onMounted(async () => {
   courses.value = await getCourses()
   if (courses.value.length) courseId.value = courses.value[0].id
-  history.value = await api('/api/practice/history')
+  await loadHistory(1)
   await refreshTrend()
   refreshFavCount()
 })
+
+const loadHistory = async (page = 1) => {
+  const d = await api('/api/practice/history?page=' + page + '&size=' + PAGE_SIZE)
+  history.value = d.records || []
+  historyTotal.value = d.total || 0
+  historyPage.value = page
+}
 
 const refreshFavCount = async () => {
   if (!courseId.value) return
@@ -255,7 +271,7 @@ const submit = async () => {
     const items = paper.value.map((q) => ({ questionId: q.id, answer: answers.value[q.id] || '' }))
     const p = await api('/api/practice/submit', { method: 'POST', body: { courseId: courseId.value, items } })
     paper.value = []
-    history.value = await api('/api/practice/history')
+    loadHistory(1)
     refreshTrend()
     refreshFavCount()
     report.value = await api('/api/practice/' + p.id)
@@ -286,4 +302,5 @@ const again = () => {
 
 <style scoped>
 .trend-chart { width: 100%; height: 260px; margin-top: 6px; }
+.pager { margin-top: 8px; display: flex; align-items: center; gap: 10px; }
 </style>

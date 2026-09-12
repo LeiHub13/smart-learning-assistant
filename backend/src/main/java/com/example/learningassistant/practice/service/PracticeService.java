@@ -152,10 +152,20 @@ public class PracticeService {
         return p;
     }
 
-    public List<Practice> history(Long userId) {
-        return practiceMapper.selectList(new LambdaQueryWrapper<Practice>()
+    /** 最近练习分页（时间倒序）：records + total，page 从 1 起。 */
+    public Map<String, Object> history(Long userId, int page, int size) {
+        int p = Math.max(page, 1);
+        int s = Math.min(Math.max(size, 1), 50);
+        long total = practiceMapper.selectCount(new LambdaQueryWrapper<Practice>()
+                .eq(Practice::getUserId, userId));
+        List<Practice> records = practiceMapper.selectList(new LambdaQueryWrapper<Practice>()
                 .eq(Practice::getUserId, userId)
-                .orderByDesc(Practice::getCreatedAt));
+                .orderByDesc(Practice::getCreatedAt)
+                .last("LIMIT " + s + " OFFSET " + (long) (p - 1) * s));
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("records", records);
+        m.put("total", total);
+        return m;
     }
 
     /**

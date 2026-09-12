@@ -115,7 +115,7 @@ onMounted(async () => {
 
   api('/api/study/summary').then((s) => { study.value = s }).catch(() => {})
   unreadCount().then((c) => { unread.value = c.count || 0 }).catch(() => {})
-  api('/api/practice/history').then((h) => { practiceCount.value = h.length }).catch(() => {})
+  api('/api/practice/history?size=1').then((h) => { practiceCount.value = h.total || 0 }).catch(() => {})
   if (courseId) {
     api('/api/recommend?courseId=' + courseId).then((r) => { recommend.value = r }).catch(() => {})
     api('/api/practice/trend?courseId=' + courseId).then((t) => {

@@ -47,9 +47,11 @@ public class PracticeController {
     }
 
     @GetMapping("/history")
-    public ApiResponse<List<Practice>> history(HttpServletRequest request) {
+    public ApiResponse<Map<String, Object>> history(HttpServletRequest request,
+                                                    @RequestParam(defaultValue = "1") int page,
+                                                    @RequestParam(defaultValue = "5") int size) {
         AuthUser u = CurrentUser.get(request);
-        return ApiResponse.ok(practiceService.history(u.id()));
+        return ApiResponse.ok(practiceService.history(u.id(), page, size));
     }
 
     @GetMapping("/trend")
