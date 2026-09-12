@@ -1,7 +1,7 @@
 """web-search MCP server（stdio）：给 Agent 提供联网搜索工具。
 
 接入方式（ai-service 的 AI_MCP_CONFIG，已随本文件提供默认启用配置）：
-  {"web-search": {"command": "<python>", "args": ["-m", "mcp_servers.web_search"], "cwd": "<ai-service根目录>"}}
+  {"web-search": {"command": "<python>", "args": ["-m", "mcp_servers.web_search_server"], "cwd": "<ai-service根目录>"}}
 
 工具：web_search(query, count=5)
 搜索源策略：
