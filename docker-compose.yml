@@ -127,9 +127,8 @@ services:
       AI_MODEL: ${AI_MODEL:-deepseek-chat}
       AI_HOST: 0.0.0.0
       AI_PORT: 8000
-      # MCP 外部工具接入（JSON，格式同 Claude/Cursor mcpServers；留空则不启用）
-      # 自带联网搜索：{"web-search":{"command":"python","args":["-m","mcp_servers.web_search_server"]}}
-      # 也可接社区 server，如 tavily-mcp（需 API key）
+      # MCP 外部工具接入（JSON，格式同 Claude/Cursor mcpServers）
+      # 留空默认启用自带 web-search（Bing 中文免key）；.env 设 AI_MCP_CONFIG=none 关闭，或传 JSON 换 tavily-mcp 等
       AI_MCP_CONFIG: ${AI_MCP_CONFIG:-}
       # Agent 工具回调 Java 内部 API（容器间访问）
       JAVA_TOOL_BASE: http://backend:8080
