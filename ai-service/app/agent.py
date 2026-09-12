@@ -7,11 +7,17 @@
 - query_mastery           查当前用户各知识点掌握度明细（回调 Java）
 - query_recent_practices  查当前用户最近练习记录（回调 Java）
 - query_kb_documents      查课程知识库文档清单（回调 Java）
+- MCP 外部工具            通过 AI_MCP_CONFIG 接入（如联网搜索 tavily-mcp），
+                          与内置工具平权合并进 Agent，加载失败自动降级为仅内置工具
 
 chunks/userId 由 Java 端随请求传入，工具用闭包绑定本次请求上下文。
 Java 回调走内部 API（/internal/tools/**，带内部 token，不暴露给前端）。
 """
+import asyncio
 import json
+import logging
+import threading
+import time
 import urllib.request
 
 from langchain.agents import create_agent
@@ -19,6 +25,8 @@ from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, Sys
 from langchain_core.tools import tool
 
 from app import config, memory
+
+logger = logging.getLogger("ai-service.agent")
 
 SYSTEM_PROMPT = (
     "你是智能学习助手的答疑 Agent。收到学生问题后先思考需要哪些信息，再决定调用工具：\n"
@@ -29,7 +37,131 @@ SYSTEM_PROMPT = (
     "回答保持简洁、准确、有针对性。"
 )
 
+# MCP 外部工具接入后追加的提示（仅在有 MCP 工具时拼接）
+MCP_PROMPT_SUFFIX = (
+    "\n此外你还接入了外部 MCP 工具（如联网搜索）。当问题涉及最新资讯、实时数据、"
+    "或你不确定的事实性内容时，优先调用相应外部工具查证后再回答，并注明信息来源；"
+    "工具不可用时如实说明，不要编造。"
+)
+
 RECURSION_LIMIT = 20
+
+# ===== MCP 工具懒加载（全局缓存 + 失败冷却） =====
+_MCP_LOCK = threading.Lock()
+_MCP_TOOLS = None       # None=尚未加载；[]=[]=加载失败/未配置
+_MCP_RETRY_AT = 0.0     # 失败后多久内不再重试（unix 时间戳）
+
+
+def _normalize_servers(raw: dict) -> dict:
+    """补齐 transport 缺省值（与 Claude Desktop 的 mcpServers 格式兼容）。"""
+    servers = {}
+    for name, cfg in (raw or {}).items():
+        c = dict(cfg or {})
+        c.setdefault("transport", "stdio")
+        servers[name] = c
+    return servers
+
+
+def _run_async(coro):
+    """在同步线程里执行协程；若当前线程已有事件循环（不该发生），退化为独立线程执行。"""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        return ex.submit(asyncio.run, coro).result()
+
+
+def _wrap_sync(t):
+    """adapter 返回的 MCP 工具是 async-only（StructuredTool 不支持同步调用），
+    而本项目 Agent 走同步 invoke/stream 链路——包一层同步入口，协程在调用线程新开事件循环执行。"""
+    from langchain_core.tools import StructuredTool
+
+    async def _acall(**kwargs):
+        return await t.ainvoke(kwargs)
+
+    def _scall(**kwargs):
+        return _run_async(_acall(**kwargs))
+
+    return StructuredTool(
+        name=t.name,
+        description=t.description or "",
+        args_schema=t.args_schema,
+        func=_scall,
+        coroutine=_acall,
+    )
+
+
+async def _load_mcp_tools_async() -> list:
+    from langchain_mcp_adapters.client import MultiServerMCPClient
+
+    servers = _normalize_servers(config.MCP_SERVERS)
+    if not servers:
+        return []
+    client = MultiServerMCPClient(servers)
+    return [_wrap_sync(t) for t in await client.get_tools()]
+
+
+async def init_mcp_tools() -> None:
+    """服务启动时预热 MCP 工具（FastAPI lifespan 调用）；失败只记日志不阻塞启动。"""
+    global _MCP_TOOLS, _MCP_RETRY_AT
+    if not config.MCP_SERVERS:
+        return
+    try:
+        tools = await _load_mcp_tools_async()
+        _MCP_TOOLS = tools
+        _MCP_RETRY_AT = 0.0
+        logger.info("MCP 工具加载成功: servers=%s tools=%s",
+                    list(config.MCP_SERVERS.keys()), [t.name for t in tools])
+    except Exception as e:  # noqa: BLE001
+        _MCP_TOOLS = []
+        _MCP_RETRY_AT = time.time() + config.MCP_RETRY_COOLDOWN
+        logger.warning("MCP 工具加载失败（%s 秒后重试）: %s", config.MCP_RETRY_COOLDOWN, e)
+
+
+def get_mcp_tools() -> list:
+    """获取 MCP 工具：成功结果缓存复用；失败进入冷却期直接返回 []，冷却到期才重试。"""
+    global _MCP_TOOLS, _MCP_RETRY_AT
+    if not config.MCP_SERVERS:
+        return []
+
+    def _retry_due(snapshot):
+        # 仅"失败缓存([]) 且冷却已到期"时需要重新加载
+        return snapshot == [] and time.time() >= _MCP_RETRY_AT
+
+    cached = _MCP_TOOLS
+    if cached is not None and not _retry_due(cached):
+        return cached  # 快速路径：成功缓存 或 冷却期内
+    with _MCP_LOCK:
+        cached = _MCP_TOOLS
+        if cached is not None and not _retry_due(cached):
+            return cached
+        try:
+            # 本函数可能在事件循环线程被调（如同步端点误用），此时不能 asyncio.run
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                _MCP_TOOLS = asyncio.run(_load_mcp_tools_async())
+                _MCP_RETRY_AT = 0.0
+                logger.info("MCP 工具懒加载成功: %s", [t.name for t in _MCP_TOOLS])
+            else:
+                logger.warning("MCP 工具加载被跳过：当前线程存在运行中的事件循环")
+                return _MCP_TOOLS or []
+        except Exception as e:  # noqa: BLE001
+            _MCP_TOOLS = []
+            _MCP_RETRY_AT = time.time() + config.MCP_RETRY_COOLDOWN
+            logger.warning("MCP 工具懒加载失败（%s 秒后重试）: %s", config.MCP_RETRY_COOLDOWN, e)
+    return _MCP_TOOLS
+
+
+def mcp_status() -> dict:
+    """供 /ai/health 展示的 MCP 接入状态。"""
+    return {
+        "enabled": bool(config.MCP_SERVERS),
+        "servers": list(config.MCP_SERVERS.keys()),
+        "tools": [t.name for t in (_MCP_TOOLS or [])],
+    }
 
 
 def _call_java_tool(path: str) -> str:
@@ -136,7 +268,10 @@ def _remember(session_id: str, question: str, answer: str) -> None:
 
 def complete_agent(model, question: str, chunks=None, session_id: str = None, user_id=None) -> str:
     """非流式：跑完整 ReAct 循环后返回最终回答。"""
-    agent = create_agent(model, _make_tools(chunks, user_id), system_prompt=SYSTEM_PROMPT)
+    mcp_tools = get_mcp_tools()
+    tools = _make_tools(chunks, user_id) + mcp_tools
+    prompt = SYSTEM_PROMPT + (MCP_PROMPT_SUFFIX if mcp_tools else "")
+    agent = create_agent(model, tools, system_prompt=prompt)
     result = agent.invoke(
         {"messages": _build_messages(question, session_id)},
         config={"recursion_limit": RECURSION_LIMIT},
@@ -148,7 +283,10 @@ def complete_agent(model, question: str, chunks=None, session_id: str = None, us
 
 def stream_agent(model, question: str, chunks=None, session_id: str = None, user_id=None):
     """流式：逐块 yield 最终回答的 token。"""
-    agent = create_agent(model, _make_tools(chunks, user_id), system_prompt=SYSTEM_PROMPT)
+    mcp_tools = get_mcp_tools()
+    tools = _make_tools(chunks, user_id) + mcp_tools
+    prompt = SYSTEM_PROMPT + (MCP_PROMPT_SUFFIX if mcp_tools else "")
+    agent = create_agent(model, tools, system_prompt=prompt)
     full = ""
     try:
         for item in agent.stream(

@@ -9,6 +9,7 @@
 import json
 import logging
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 if __package__ in (None, ""):
@@ -23,7 +24,17 @@ from app import chains, config
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("ai-service")
 
-app = FastAPI(title="AI Service (langchain)", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # 启动时预热 MCP 外部工具（未配置/失败均不影响启动）
+    if config.MCP_SERVERS:
+        from app import agent
+        await agent.init_mcp_tools()
+    yield
+
+
+app = FastAPI(title="AI Service (langchain)", version="1.0.0", lifespan=lifespan)
 
 SCENES = {"rag_qa", "free", "agent", "lecture", "questions", "review", "advice",
           "rewrite", "rerank", "plan", "report"}
@@ -43,12 +54,14 @@ class StreamRequest(CompleteRequest):
 
 @app.get("/ai/health")
 def health():
+    from app import agent
     return {
         "status": "ok",
         "provider": config.PROVIDER,
         "model": config.MODEL,
         "baseUrl": config.BASE_URL,
         "agentScene": True,
+        "mcp": agent.mcp_status(),
     }
 
 
