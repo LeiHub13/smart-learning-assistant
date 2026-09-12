@@ -178,8 +178,10 @@ public class PracticeService {
         if (courseId != null) {
             wrapper.eq(Practice::getCourseId, courseId);
         }
-        wrapper.orderByAsc(Practice::getCreatedAt).last("LIMIT 50");
-        return practiceMapper.selectList(wrapper).stream().map(p -> {
+        wrapper.orderByDesc(Practice::getCreatedAt).last("LIMIT 50");
+        List<Practice> records = practiceMapper.selectList(wrapper);
+        java.util.Collections.reverse(records);
+        return records.stream().map(p -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("date", p.getCreatedAt() == null ? "" : p.getCreatedAt().toLocalDate().toString());
             m.put("title", p.getTitle());
