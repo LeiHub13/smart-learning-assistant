@@ -58,7 +58,10 @@
 
     <template v-else-if="paper.length">
       <div class="card">
-        <h3>{{ courseName }} · 本次 {{ paper.length }} 题 <span class="tag">作答后提交</span></h3>
+        <div class="row" style="justify-content:space-between">
+          <h3 style="margin:0">{{ courseName }} · 本次 {{ paper.length }} 题 <span class="tag">作答后提交</span></h3>
+          <button class="btn ghost small" @click="confirmExit = true">退出练习</button>
+        </div>
         <div v-for="(q, i) in paper" :key="q.id" class="q">
           <div class="head">
             <span class="type">{{ i + 1 }}. 【{{ q.type }}】{{ q.stem }}</span>
@@ -104,6 +107,17 @@
         <div v-if="it.pq.review" class="ans ai" style="margin-top:6px"><b>AI 点评：</b>{{ it.pq.review }}</div>
       </div>
     </template>
+
+    <div v-if="confirmExit" class="modal-mask" @click.self="confirmExit = false">
+      <div class="modal-box">
+        <h3>退出练习</h3>
+        <p>退出后本次作答不会保存，也不生成练习记录。确定退出吗？</p>
+        <div class="modal-ops">
+          <button class="btn ghost small" @click="confirmExit = false">继续作答</button>
+          <button class="btn danger small" @click="doExit">确定退出</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -255,6 +269,15 @@ const start = async (favMode = false) => {
 }
 
 const startFav = () => start(true)
+
+const confirmExit = ref(false)
+
+const doExit = () => {
+  confirmExit.value = false
+  paper.value = []
+  answers.value = {}
+  error.value = ''
+}
 
 const toggleFav = async (q) => {
   try {
