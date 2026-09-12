@@ -1,5 +1,5 @@
 <template>
-  <div class="wrap">
+  <div class="wrap" ref="wrapEl">
   <div class="page">
     <div class="left">
       <div class="left-top">
@@ -30,6 +30,11 @@
         <div class="tech-line">Java 业务骨架 · Python langchain AI 服务 · 在线大模型（DeepSeek）</div>
       </div>
     </div>
+
+    <button class="scroll-down" @click="scrollDown" aria-label="向下滚动查看更多">
+      <span class="sd-text">下滑了解更多</span>
+      <svg class="sd-arrow" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
 
     <div class="right">
       <div class="login-card">
@@ -108,6 +113,7 @@ import { useRouter } from 'vue-router'
 import { api, setToken } from '../api'
 
 const router = useRouter()
+const wrapEl = ref(null)
 const mode = ref('login')
 const loading = ref(false)
 const error = ref('')
@@ -140,6 +146,11 @@ const fillDemo = (name) => {
   error.value = ''
 }
 
+const scrollDown = () => {
+  const el = wrapEl.value
+  if (el) el.scrollTo({ top: el.clientHeight, behavior: 'smooth' })
+}
+
 const switchMode = (m) => {
   mode.value = m
   error.value = ''
@@ -156,7 +167,7 @@ const submit = async () => {
     const path = mode.value === 'login' ? '/api/auth/login' : '/api/auth/register'
     const data = await api(path, { method: 'POST', body: form })
     setToken(data.accessToken || data.token)
-    const target = router.currentRoute.value.query.redirect || '/chat'
+    const target = router.currentRoute.value.query.redirect || '/home'
     router.replace(target)
   } catch (e) {
     error.value = e.message
@@ -235,6 +246,32 @@ const submit = async () => {
 .feature-name { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
 .feature-desc { font-size: 13px; color: #888; line-height: 1.6; max-width: 180px; }
 .tech-line { font-size: 13px; color: #aaa; font-family: "SF Mono", Consolas, monospace; letter-spacing: 0.02em; }
+
+.scroll-down {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #999;
+  font-family: inherit;
+  transition: color 0.2s ease;
+}
+.scroll-down:hover { color: #1a1a1a; }
+.sd-text { font-size: 11px; letter-spacing: 0.2em; white-space: nowrap; }
+.sd-arrow { animation: sd-bounce 1.8s ease-in-out infinite; }
+@keyframes sd-bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.55; }
+  50% { transform: translateY(5px); opacity: 1; }
+}
 
 .right {
   padding: 80px 80px 80px 0;
