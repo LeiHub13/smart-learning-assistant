@@ -46,4 +46,12 @@ public class CourseController {
         courseService.enroll(u.id(), id);
         return ApiResponse.ok(null);
     }
+
+    /** 删除课程（仅创建者可删，级联清理依赖数据）。 */
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(HttpServletRequest request, @PathVariable Long id) {
+        AuthUser u = CurrentUser.get(request);
+        courseService.delete(u.id(), id);
+        return ApiResponse.ok(null);
+    }
 }

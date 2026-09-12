@@ -33,6 +33,7 @@
           <div style="margin-top:6px;font-size:12px;color:var(--muted)">知识库 {{ c.kbCount }} 个 · 题库 {{ c.questionCount }} 题</div>
         </div>
         <button v-if="!c.enrolled" class="btn small" @click="enroll(c)">加入</button>
+        <button v-if="c.ownerId === meId" class="btn danger small" style="margin-left:8px" @click="askDeleteCourse(c)">删除课程</button>
       </div>
 
       <template v-if="expanded === c.id">
@@ -105,6 +106,17 @@
         </div>
       </div>
     </div>
+
+    <div v-if="confirmCourse" class="modal-mask" @click.self="confirmCourse = null">
+      <div class="modal-box">
+        <h3>删除课程</h3>
+        <p>确定删除课程「{{ confirmCourse.name }}」吗？该课程的知识库/文档/题目/练习/考试/掌握度/笔记/报告/计划与课程绑定会话将<b>一并删除</b>，且无法恢复。</p>
+        <div class="modal-ops">
+          <button class="btn ghost small" @click="confirmCourse = null">取消</button>
+          <button class="btn danger small" @click="doDeleteCourse">确认删除</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -116,6 +128,8 @@ defineOptions({ name: 'ManageView' })
 
 const courses = ref([])
 const expanded = ref(null)
+const meId = ref(null)
+const confirmCourse = ref(null)
 const uploadingKb = ref(null)
 const previewDocId = ref(null)
 const preview = ref(null)
@@ -155,7 +169,28 @@ const showHint = (msg) => {
 
 onMounted(async () => {
   courses.value = await getCourses()
+  try {
+    meId.value = Number((await api('/api/auth/me')).id)
+  } catch (e) { /* 忽略 */ }
 })
+
+const askDeleteCourse = (c) => {
+  confirmCourse.value = c
+}
+
+const doDeleteCourse = async () => {
+  const c = confirmCourse.value
+  if (!c) return
+  try {
+    await api('/api/courses/' + c.id, { method: 'DELETE' })
+    confirmCourse.value = null
+    showHint('课程「' + c.name + '」已删除')
+    courses.value = await getCourses(true)
+  } catch (e) {
+    confirmCourse.value = null
+    showHint(e.message)
+  }
+}
 
 const enroll = async (c) => {
   await api('/api/courses/' + c.id + '/enroll', { method: 'POST', body: {} })
