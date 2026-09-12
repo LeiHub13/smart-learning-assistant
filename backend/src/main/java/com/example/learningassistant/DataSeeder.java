@@ -40,12 +40,12 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        Long xiaomingId = seedUser("xiaoming", "小明");
+        Long pg13Id = seedUser("pg13", "小明");
         seedUser("xiaohong", "小红");
         seedUser("xiaoyu", "小宇");
-        List<Course> courses = seedCourses(xiaomingId);
+        List<Course> courses = seedCourses(pg13Id);
         Long courseId = courses.get(0).getId();
-        seedMasteryAndPractices(xiaomingId, courseId);
+        seedMasteryAndPractices(pg13Id, courseId);
         seedQuestions(courseId);
         seedKbs(courses);
         kbService.reindexFromChunks();

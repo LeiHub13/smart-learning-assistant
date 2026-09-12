@@ -14,7 +14,7 @@
 
 - Java ↔ Python 协议：`POST /ai/complete`、`POST /ai/stream`（SSE）、`GET /ai/health`；场景标记见 `PythonAIChatModel`
 - LLM provider 仅支持 `python` / `openai-compatible`，无 mock 降级
-- 系统无用户角色概念：所有用户权限一致，资源按 userId 隔离；演示账号 xiaoming/xiaohong/xiaoyu（密码 123456）
+- 系统无用户角色概念：所有用户权限一致，资源按 userId 隔离；演示账号 pg13/xiaohong/xiaoyu（密码 123456）
 - RAG 链路与向量检索在 Java 侧（内存向量库），Python 只做生成与记忆
 - 一键部署：根目录 `docker-compose.yml` + `deploy.sh`（三镜像编排，详见 `docs/05-Docker部署.md`）
 - push到远程仓库的时候要询问我！！！！

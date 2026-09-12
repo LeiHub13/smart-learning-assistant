@@ -45,7 +45,7 @@ done
 
 echo ""
 echo "部署完成："
-echo "  前端    http://<服务器IP>      (xiaoming/123456)"
+echo "  前端    http://<服务器IP>      (pg13/123456)"
 echo "  后端    http://127.0.0.1:8080  (仅宿主机可访问)"
 echo "  AI 服务 容器内网 ai-service:8000（不对外）"
 echo "查看日志: docker compose logs -f"

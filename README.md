@@ -34,7 +34,7 @@ java -jar target/learning-assistant-1.0.0.jar
 
 ## 演示账号（密码均 `123456`）
 
-`xiaoming` · `xiaohong` · `xiaoyu`（权限一致、资源按 userId 隔离；接口文档 `/swagger-ui.html`）
+`pg13` · `xiaohong` · `xiaoyu`（权限一致、资源按 userId 隔离；接口文档 `/swagger-ui.html`）
 
 ## 配置切换（application.yml）
 
