@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,6 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +43,10 @@ public class GenerateController {
         SseEmitter emitter = new SseEmitter(300_000L);
         generatorService.streamLecture(u.id(), courseId, topic, kp,
                 delta -> safeSend(emitter, Map.of("delta", delta)),
-                emitter::complete,
+                g -> {
+                    safeSend(emitter, Map.of("saved", g.getId()));
+                    emitter.complete();
+                },
                 e -> {
                     log.warn("讲义流式生成失败: {}", e.getMessage());
                     emitter.completeWithError(e);
@@ -76,5 +82,19 @@ public class GenerateController {
     public ApiResponse<List<GeneratedContent>> history(HttpServletRequest request) {
         AuthUser u = CurrentUser.get(request);
         return ApiResponse.ok(generatorService.history(u.id()));
+    }
+
+    /** 讲义 Markdown 下载（归属校验，文件名取讲义标题）。 */
+    @GetMapping("/content/{id}/download")
+    public void download(HttpServletRequest request, @PathVariable Long id,
+                         jakarta.servlet.http.HttpServletResponse response) throws IOException {
+        AuthUser u = CurrentUser.get(request);
+        GeneratedContent g = generatorService.contentDetail(u.id(), id);
+        String safeTitle = (g.getTitle() == null ? "讲义" : g.getTitle())
+                .replaceAll("[\\\\/:*?\"<>|\\r\\n]", "-");
+        String name = URLEncoder.encode("讲义-" + safeTitle + ".md", StandardCharsets.UTF_8);
+        response.setContentType("text/markdown;charset=UTF-8");
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + name);
+        response.getOutputStream().write(g.getContent().getBytes(StandardCharsets.UTF_8));
     }
 }

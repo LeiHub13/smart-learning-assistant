@@ -71,6 +71,7 @@ export async function sseStream(path, body, onDelta, onDone) {
         const d = JSON.parse(line.slice(5).trim())
         if (d.delta !== undefined) onDelta(d.delta)
         if (d.sources !== undefined) onDone(d.sources || '')
+        if (d.saved !== undefined) onDone(d.saved)
         if (d.done) onDone('')
       } catch (e) { /* ignore */ }
     }

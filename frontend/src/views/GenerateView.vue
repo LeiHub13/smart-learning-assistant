@@ -32,8 +32,11 @@
     </div>
 
     <div v-if="lecture" class="card">
-      <h3>讲义预览 <span class="tag">已保存</span></h3>
-      <div class="gen">{{ lecture }}</div>
+      <div class="row" style="justify-content:space-between">
+        <h3 style="margin:0">讲义预览 <span class="tag">已保存</span></h3>
+        <button v-if="lectureId" class="btn ghost small" @click="downloadLecture">下载 .md</button>
+      </div>
+      <div class="md" v-html="mdToHtml(lecture)"></div>
     </div>
 
     <div v-if="questions.length" class="card">
@@ -55,8 +58,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { api, getCourses, streamLecture } from '../api'
-import { parseOptions } from '../utils'
+import { api, getCourses, streamLecture, downloadFile } from '../api'
+import { parseOptions, mdToHtml } from '../utils'
 
 defineOptions({ name: 'GenerateView' })
 
@@ -66,6 +69,7 @@ const kp = ref('')
 const topic = ref('')
 const busy = ref(false)
 const lecture = ref('')
+const lectureId = ref(null)
 const questions = ref([])
 const error = ref('')
 
@@ -83,15 +87,27 @@ const genLecture = async () => {
   error.value = ''
   questions.value = []
   lecture.value = ''
+  lectureId.value = null
   try {
     await streamLecture(
       { courseId: courseId.value, topic: topic.value.trim(), kp: kp.value.trim() },
       (delta) => { lecture.value += delta },
-      () => { busy.value = false }
+      (savedId) => { lectureId.value = savedId || null }
     )
   } catch (e) {
     error.value = e.message
+  } finally {
     busy.value = false
+  }
+}
+
+const downloadLecture = async () => {
+  if (!lectureId.value) return
+  try {
+    const name = (topic.value.trim() || '未命名').replace(/[\\/:*?"<>|]/g, '-')
+    await downloadFile(`/api/generate/content/${lectureId.value}/download`, `讲义-${name}.md`)
+  } catch (e) {
+    error.value = e.message
   }
 }
 
@@ -103,6 +119,7 @@ const genQuestions = async () => {
   busy.value = true
   error.value = ''
   lecture.value = ''
+  lectureId.value = null
   try {
     questions.value = await api('/api/generate/questions', {
       method: 'POST',
@@ -115,3 +132,13 @@ const genQuestions = async () => {
   }
 }
 </script>
+
+<style scoped>
+.md { line-height: 1.8; color: #334155; }
+.md :deep(h1), .md :deep(h2), .md :deep(h3), .md :deep(h4) { margin: 14px 0 6px; font-weight: 800; color: #1a1a1a; }
+.md :deep(strong) { color: #1a1a1a; }
+.md :deep(code) { background: #f4f1ea; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+.md :deep(pre) { background: #f4f1ea; border-radius: 8px; padding: 12px 14px; overflow-x: auto; white-space: pre-wrap; margin: 8px 0; }
+.md :deep(pre code) { background: none; padding: 0; }
+.md :deep(blockquote) { margin: 8px 0; padding: 4px 12px; border-left: 3px solid #d6d0c2; color: #64748b; }
+</style>

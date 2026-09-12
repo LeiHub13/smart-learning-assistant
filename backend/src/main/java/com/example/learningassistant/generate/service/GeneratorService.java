@@ -1,7 +1,6 @@
 package com.example.learningassistant.generate.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.learningassistant.ai.AIChatMessage;
 import com.example.learningassistant.ai.ChatModel;
 import com.example.learningassistant.ai.ChatModelFactory;
@@ -108,11 +107,20 @@ public class GeneratorService {
                 .orderByDesc(GeneratedContent::getCreatedAt));
     }
 
+    /** 生成内容详情（归属校验，供下载等用途）。 */
+    public GeneratedContent contentDetail(Long userId, Long id) {
+        GeneratedContent g = contentMapper.selectById(id);
+        if (g == null || userId == null || !g.getUserId().equals(userId)) {
+            throw new com.example.learningassistant.common.BizException("内容不存在或无权访问");
+        }
+        return g;
+    }
+
     /**
      * 流式生成讲义：逐字返回并保存。
      */
     public void streamLecture(Long userId, Long courseId, String topic, String kp,
-                              java.util.function.Consumer<String> onDelta, Runnable onDone, java.util.function.Consumer<Throwable> onError) {
+                              java.util.function.Consumer<String> onDelta, java.util.function.Consumer<GeneratedContent> onDone, java.util.function.Consumer<Throwable> onError) {
         ChatModel model = modelFactory.get();
         StringBuilder acc = new StringBuilder();
         model.stream(List.of(
@@ -131,7 +139,7 @@ public class GeneratorService {
                     g.setContent(acc.toString());
                     g.setCreatedAt(LocalDateTime.now());
                     contentMapper.insert(g);
-                    onDone.run();
+                    onDone.accept(g);
                 },
                 onError);
     }
