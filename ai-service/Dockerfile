@@ -9,7 +9,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# 国内镜像加速（阿里云 PyPI，与 backend mvn / frontend npm 同思路）
+RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 
 COPY app ./app
 # 自研 MCP server（联网搜索等，AI_MCP_CONFIG 引用）
