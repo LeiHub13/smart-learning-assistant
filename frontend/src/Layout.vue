@@ -2,10 +2,28 @@
   <aside class="sidebar">
     <div class="logo"><i></i>智学助手</div>
     <nav>
-      <button v-for="m in menus" :key="m.key" :class="{ on: isActive(m) }" @click="switchTo(m.path)">
-        <span class="m-ico"><AppIcon :name="m.icon" :size="15" /></span>
-        <span class="m-txt">{{ m.title }}</span>
-      </button>
+      <template v-for="m in menus" :key="m.key">
+        <!-- 分组：点击展开/收起，子项缩进 -->
+        <template v-if="m.children">
+          <button class="grp" :class="{ on: isGroupActive(m) }" @click="toggleGroup(m.key)">
+            <span class="m-ico"><AppIcon :name="m.icon" :size="15" /></span>
+            <span class="m-txt">{{ m.title }}</span>
+            <AppIcon name="chev" class="grp-arrow" :class="{ open: openKey === m.key }" :size="13" />
+          </button>
+          <div class="sub" :class="{ open: openKey === m.key }">
+            <div class="sub-in">
+              <button v-for="c in m.children" :key="c.key" class="sub-item" :class="{ on: isActive(c) }" @click="switchTo(c.path)">
+                <span class="sub-ico"><AppIcon :name="c.icon" :size="13" /></span>
+                <span class="m-txt">{{ c.title }}</span>
+              </button>
+            </div>
+          </div>
+        </template>
+        <button v-else :class="{ on: isActive(m) }" @click="switchTo(m.path)">
+          <span class="m-ico"><AppIcon :name="m.icon" :size="15" /></span>
+          <span class="m-txt">{{ m.title }}</span>
+        </button>
+      </template>
     </nav>
   </aside>
 
@@ -95,23 +113,50 @@ const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeVi
 
 const menus = [
   { key: 'home', title: '首页', path: '/home', icon: 'home' },
-  { key: 'chat', title: '智能答疑', path: '/chat', icon: 'chat' },
-  { key: 'generate', title: '讲义/练习题 生成', path: '/generate', icon: 'sparkles' },
-  { key: 'practice', title: '题库练习', path: '/practice', icon: 'practice' },
-  { key: 'exam', title: '在线考试', path: '/exam', icon: 'exam' },
-  { key: 'bank', title: '题库管理', path: '/bank', icon: 'bank' },
-  { key: 'progress', title: '学情分析', path: '/progress', icon: 'progress' },
-  { key: 'manage', title: '课程与知识库', path: '/manage', icon: 'manage' },
-  { key: 'plan', title: '学习计划', path: '/plans', icon: 'plan' },
-  { key: 'report', title: '学习报告', path: '/reports', icon: 'report' },
-  { key: 'notes', title: '学习笔记', path: '/notes', icon: 'notes' },
+  {
+    key: 'course', title: '课程学习', icon: 'manage',
+    children: [
+      { key: 'manage', title: '课程与知识库', path: '/manage', icon: 'manage' },
+      { key: 'chat', title: '智能答疑', path: '/chat', icon: 'chat' },
+      { key: 'notes', title: '学习笔记', path: '/notes', icon: 'notes' }
+    ]
+  },
+  {
+    key: 'quiz', title: '练习与测验', icon: 'exam',
+    children: [
+      { key: 'practice', title: '题库练习', path: '/practice', icon: 'practice' },
+      { key: 'bank', title: '题库管理', path: '/bank', icon: 'bank' },
+      { key: 'exam', title: '在线考试', path: '/exam', icon: 'exam' }
+    ]
+  },
+  { key: 'generate', title: 'AI 生成', path: '/generate', icon: 'sparkles' },
+  {
+    key: 'stats', title: '学情与规划', icon: 'progress',
+    children: [
+      { key: 'progress', title: '学情分析', path: '/progress', icon: 'progress' },
+      { key: 'report', title: '学习报告', path: '/reports', icon: 'report' },
+      { key: 'plan', title: '学习计划', path: '/plans', icon: 'plan' }
+    ]
+  },
   { key: 'profile', title: '个人中心', path: '/profile', icon: 'profile' }
 ]
 
+const flatMenus = menus.flatMap((m) => m.children || [m])
+
 const pageTitle = computed(() => {
-  const m = menus.find((x) => route.path.startsWith(x.path))
+  const m = flatMenus.find((x) => x.path && route.path.startsWith(x.path))
   return m ? m.title : ''
 })
+
+const openKey = ref(null)
+const isGroupActive = (m) => (m.children || []).some((c) => route.path.startsWith(c.path))
+const toggleGroup = (key) => { openKey.value = openKey.value === key ? null : key }
+
+// 进入某分组下的页面时自动展开该分组
+watch(() => route.path, () => {
+  const g = menus.find((m) => m.children && m.children.some((c) => route.path.startsWith(c.path)))
+  if (g) openKey.value = g.key
+}, { immediate: true })
 
 const avatarChar = computed(() => (me.value?.nickname || '?').trim().slice(0, 1).toUpperCase())
 
@@ -271,4 +316,42 @@ img.avatar { object-fit: cover; padding: 0; }
 .notify-item:hover { background: #f5f2ec; }
 .notify-title { font-weight: 600; font-size: 13px; }
 .notify-content { font-size: 12px; color: #666; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== 多级侧边栏 ===== */
+.grp-arrow { margin-left: auto; opacity: .55; transition: transform .2s ease; }
+.grp-arrow.open { transform: rotate(180deg); opacity: .9; }
+.grp.on .m-txt { color: #f5f5f4; }
+.sub { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .22s ease; }
+.sub.open { grid-template-rows: 1fr; }
+.sub-in { overflow: hidden; display: flex; flex-direction: column; gap: 2px; padding: 2px 6px 4px; }
+.sub-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  padding: 7px 8px 7px 14px; border: none; border-radius: 8px;
+  background: transparent; color: #a8a29e; font-size: 13px; cursor: pointer;
+  position: relative; transition: .2s ease;
+}
+.sub-item:hover { background: rgba(255,255,255,.07); color: #f5f5f4; }
+.sub-item.on { background: rgba(184,149,106,.16); color: #f2eadf; font-weight: 600; }
+.sub-item.on::before {
+  content: ''; position: absolute; left: 5px; top: 50%; transform: translateY(-50%);
+  width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
+}
+.sub-ico { display: inline-flex; opacity: .8; }
+
+@media (max-width: 768px) {
+  /* 顶栏导航模式下拍平：隐藏分组头，子项直接平铺进横条 */
+  .grp { display: none; }
+  .sub, .sub-in { display: contents; }
+  .sub-item {
+    flex-direction: column; gap: 4px; text-align: center;
+    padding: 8px 10px; font-size: 11px;
+  }
+  .sub-item.on::before { display: none; }
+  .sub-item.on { background: rgba(255,255,255,.1); }
+  .sub-ico {
+    width: 22px; height: 22px; border-radius: 6px;
+    align-items: center; justify-content: center;
+    background: rgba(255,255,255,.06);
+  }
+}
 </style>

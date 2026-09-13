@@ -37,7 +37,8 @@ const ICONS = {
   bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
   zap: '<path d="M13 2 3 14h9l-1 8 10-12h-9z"/>',
   alarm: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 2"/><path d="M5 3 2 6"/><path d="m19 3 3 3"/>',
-  lightbulb: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4.9 12c.7.6 1.2 1.3 1.5 2l.4 1h6l.4-1c.3-.7.8-1.4 1.5-2A7 7 0 0 0 12 2z"/>'
+  lightbulb: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4.9 12c.7.6 1.2 1.3 1.5 2l.4 1h6l.4-1c.3-.7.8-1.4 1.5-2A7 7 0 0 0 12 2z"/>',
+  chev: '<path d="m6 9 6 6 6-6"/>'
 }
 </script>
 
