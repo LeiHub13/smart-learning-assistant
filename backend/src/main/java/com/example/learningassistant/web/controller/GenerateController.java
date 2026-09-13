@@ -97,4 +97,11 @@ public class GenerateController {
         response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + name);
         response.getOutputStream().write(g.getContent().getBytes(StandardCharsets.UTF_8));
     }
+
+    /** 讲义一键存入课程知识库（分块 + 向量化，之后答疑 RAG 可引用）。 */
+    @PostMapping("/content/{id}/to-kb")
+    public ApiResponse<Map<String, Object>> toKnowledgeBase(HttpServletRequest request, @PathVariable Long id) {
+        AuthUser u = CurrentUser.get(request);
+        return ApiResponse.ok(generatorService.toKnowledgeBase(u.id(), id));
+    }
 }

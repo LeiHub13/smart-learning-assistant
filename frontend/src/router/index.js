@@ -17,6 +17,7 @@ const routes = [
       { path: 'chat', name: 'chat', component: () => import('../views/ChatView.vue'), meta: { title: '智能答疑 - 智学助手' } },
       { path: 'generate', name: 'generate', component: () => import('../views/GenerateView.vue'), meta: { title: 'AI 内容生成 - 智学助手' } },
       { path: 'practice', name: 'practice', component: () => import('../views/PracticeView.vue'), meta: { title: '题库练习 - 智学助手' } },
+      { path: 'mistakes', name: 'mistakes', component: () => import('../views/MistakeBookView.vue'), meta: { title: '错题本 - 智学助手' } },
       { path: 'exam', name: 'exam', component: () => import('../views/ExamView.vue'), meta: { title: '在线考试 - 智学助手' } },
       { path: 'bank', name: 'bank', component: () => import('../views/QuestionBankView.vue'), meta: { title: '题库管理 - 智学助手' } },
       { path: 'progress', name: 'progress', component: () => import('../views/ProgressView.vue'), meta: { title: '学情分析 - 智学助手' } },

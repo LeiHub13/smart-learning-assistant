@@ -34,8 +34,14 @@
     <div v-if="lecture" class="card">
       <div class="row" style="justify-content:space-between">
         <h3 style="margin:0">讲义预览 <span class="tag">已保存</span></h3>
-        <button v-if="lectureId" class="btn ghost small" @click="downloadLecture">下载 .md</button>
+        <div class="btns" v-if="lectureId">
+          <button class="btn ghost small" :disabled="kbSaving" @click="saveToKb">
+            {{ kbSaved ? '✓ 已入知识库' : kbSaving ? '入库中…' : '存入知识库' }}
+          </button>
+          <button class="btn ghost small" @click="downloadLecture">下载 .md</button>
+        </div>
       </div>
+      <div v-if="kbSaved && kbName" class="muted small" style="margin:6px 0 0">已存入「{{ kbName }}」，智能答疑可直接引用该讲义内容</div>
       <div class="md" v-html="mdToHtml(lecture)"></div>
     </div>
 
@@ -70,6 +76,9 @@ const topic = ref('')
 const busy = ref(false)
 const lecture = ref('')
 const lectureId = ref(null)
+const kbSaved = ref(false)
+const kbName = ref('')
+const kbSaving = ref(false)
 const questions = ref([])
 const error = ref('')
 
@@ -88,6 +97,8 @@ const genLecture = async () => {
   questions.value = []
   lecture.value = ''
   lectureId.value = null
+  kbSaved.value = false
+  kbName.value = ''
   try {
     await streamLecture(
       { courseId: courseId.value, topic: topic.value.trim(), kp: kp.value.trim() },
@@ -108,6 +119,21 @@ const downloadLecture = async () => {
     await downloadFile(`/api/generate/content/${lectureId.value}/download`, `讲义-${name}.md`)
   } catch (e) {
     error.value = e.message
+  }
+}
+
+const saveToKb = async () => {
+  if (!lectureId.value || kbSaved.value) return
+  kbSaving.value = true
+  error.value = ''
+  try {
+    const r = await api(`/api/generate/content/${lectureId.value}/to-kb`, { method: 'POST' })
+    kbSaved.value = true
+    kbName.value = r.kbName || '课程知识库'
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    kbSaving.value = false
   }
 }
 

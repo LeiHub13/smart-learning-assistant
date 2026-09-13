@@ -32,9 +32,10 @@ public class PracticeController {
     public ApiResponse<List<Map<String, Object>>> paper(HttpServletRequest request,
                                                         @RequestParam Long courseId,
                                                         @RequestParam(defaultValue = "5") int count,
-                                                        @RequestParam(defaultValue = "false") boolean favorite) {
+                                                        @RequestParam(defaultValue = "false") boolean favorite,
+                                                        @RequestParam(defaultValue = "false") boolean mistake) {
         AuthUser u = CurrentUser.get(request);
-        return ApiResponse.ok(practiceService.paper(u.id(), courseId, count, favorite));
+        return ApiResponse.ok(practiceService.paper(u.id(), courseId, count, favorite, mistake));
     }
 
     @PostMapping("/submit")

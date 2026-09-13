@@ -59,7 +59,9 @@
     <template v-else-if="paper.length">
       <div class="card">
         <div class="row" style="justify-content:space-between">
-          <h3 style="margin:0">{{ courseName }} · 本次 {{ paper.length }} 题 <span class="tag">作答后提交</span></h3>
+          <h3 style="margin:0">{{ courseName }} · 本次 {{ paper.length }} 题
+            <span class="tag">{{ mistake ? '错题重练' : '作答后提交' }}</span>
+          </h3>
           <button class="btn ghost small" @click="confirmExit = true">退出练习</button>
         </div>
         <div v-for="(q, i) in paper" :key="q.id" class="q">
@@ -123,6 +125,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import * as echarts from 'echarts/core'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent } from 'echarts/components'
@@ -134,6 +137,7 @@ echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
 defineOptions({ name: 'PracticeView' })
 
+const route = useRoute()
 const courses = ref([])
 const courseId = ref(null)
 const count = ref(5)
@@ -143,6 +147,7 @@ const history = ref([])
 const historyPage = ref(1)
 const historyTotal = ref(0)
 const PAGE_SIZE = 5
+const mistake = ref(false)
 const trend = ref([])
 const loading = ref(false)
 const submitting = ref(false)
@@ -166,10 +171,18 @@ const rate = computed(() => {
 
 onMounted(async () => {
   courses.value = await getCourses()
-  if (courses.value.length) courseId.value = courses.value[0].id
+  if (route.query.courseId && courses.value.some((c) => c.id === Number(route.query.courseId))) {
+    courseId.value = Number(route.query.courseId)
+  }
+  if (courses.value.length && !courseId.value) courseId.value = courses.value[0].id
   await loadHistory(1)
   await refreshTrend()
   refreshFavCount()
+  // 从错题本跳转：自动开始错题重练
+  if (route.query.mistake) {
+    mistake.value = true
+    start()
+  }
 })
 
 const loadHistory = async (page = 1) => {
@@ -259,7 +272,8 @@ const start = async (favMode = false) => {
   error.value = ''
   answers.value = {}
   try {
-    const url = '/api/practice/paper?courseId=' + courseId.value + '&count=' + count.value + '&favorite=' + favMode
+    const url = '/api/practice/paper?courseId=' + courseId.value + '&count=' + count.value
+      + '&favorite=' + favMode + '&mistake=' + mistake.value
     paper.value = await api(url)
   } catch (e) {
     error.value = e.message
@@ -276,6 +290,7 @@ const doExit = () => {
   confirmExit.value = false
   paper.value = []
   answers.value = {}
+  mistake.value = false
   error.value = ''
 }
 
@@ -318,6 +333,7 @@ const again = () => {
   report.value = null
   paper.value = []
   answers.value = {}
+  mistake.value = false
   refreshTrend()
   refreshFavCount()
 }

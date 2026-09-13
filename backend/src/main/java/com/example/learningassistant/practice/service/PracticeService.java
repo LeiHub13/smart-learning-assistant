@@ -41,10 +41,25 @@ public class PracticeService {
     /** 自适应抽题需要读取掌握度（判分与掌握度更新已委托 GradingService） */
     private final KnowledgeMasteryMapper masteryMapper;
     private final com.example.learningassistant.favorite.service.FavoriteService favoriteService;
+    private final MistakeService mistakeService;
 
-    public List<Map<String, Object>> paper(Long userId, Long courseId, int count, boolean favorite) {
+    public List<Map<String, Object>> paper(Long userId, Long courseId, int count, boolean favorite, boolean mistake) {
         if (count < 1) {
             count = 5;
+        }
+        if (mistake) {
+            // 错题重练：以错题本为题源，重练答对后自动出本
+            List<Long> mIds = mistakeService.mistakeIds(userId, courseId);
+            if (mIds.isEmpty()) {
+                throw new BizException("错题本是空的，先去练习几组吧");
+            }
+            List<Question> qs = questionMapper.selectList(new LambdaQueryWrapper<Question>()
+                    .in(Question::getId, mIds)
+                    .eq(Question::getCourseId, courseId));
+            List<Question> shuffled = new ArrayList<>(qs);
+            java.util.Collections.shuffle(shuffled);
+            return shuffled.stream().limit(Math.min(count, shuffled.size()))
+                    .map(q -> toPaperItem(q, false)).toList();
         }
         if (favorite) {
             // 收藏题重练：直接以收藏夹为题源（不含答案），忽略 count 之外的抽题规则

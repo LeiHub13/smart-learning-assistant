@@ -33,6 +33,40 @@ public class GeneratorService {
     private final QuestionMapper questionMapper;
     private final KnowledgeMasteryMapper masteryMapper;
     private final ObjectMapper objectMapper;
+    private final com.example.learningassistant.course.mapper.CourseMapper courseMapper;
+    private final com.example.learningassistant.kb.service.KbService kbService;
+
+    /**
+     * 讲义存入课程知识库：无知识库时自动创建，走文本索引链路（分块 + 向量化）。
+     */
+    public Map<String, Object> toKnowledgeBase(Long userId, Long contentId) {
+        GeneratedContent g = contentDetail(userId, contentId);
+        if (!"lecture".equals(g.getType())) {
+            throw new com.example.learningassistant.common.BizException("仅讲义可存入知识库");
+        }
+        if (g.getCourseId() == null) {
+            throw new com.example.learningassistant.common.BizException("该讲义未关联课程");
+        }
+        com.example.learningassistant.course.entity.Course course = courseMapper.selectById(g.getCourseId());
+        if (course == null) {
+            throw new com.example.learningassistant.common.BizException("课程不存在");
+        }
+        com.example.learningassistant.kb.entity.KnowledgeBase kb;
+        java.util.List<com.example.learningassistant.kb.entity.KnowledgeBase> kbs = kbService.kbList(g.getCourseId());
+        if (kbs.isEmpty()) {
+            kb = kbService.createKb(g.getCourseId(), course.getName() + " · AI 讲义");
+        } else {
+            kb = kbs.get(0);
+        }
+        String title = g.getTitle() == null || g.getTitle().isBlank() ? "未命名讲义" : g.getTitle();
+        com.example.learningassistant.kb.entity.Document doc =
+                kbService.indexTextDocument(kb.getId(), "讲义-" + title + ".md", g.getContent());
+        Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("kbId", kb.getId());
+        m.put("kbName", kb.getName());
+        m.put("docId", doc.getId());
+        return m;
+    }
 
     /**
      * 生成讲义（Markdown）并入库。
