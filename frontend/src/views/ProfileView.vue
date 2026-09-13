@@ -23,21 +23,21 @@
 
     <div class="card">
       <h3>基本资料</h3>
-      <div class="row" style="align-items:center">
-        <div>
+      <div class="field-row">
+        <div class="field">
           <span class="label">昵称</span>
-          <input v-model="nickname" maxlength="20" />
+          <input v-model="nickname" type="text" maxlength="20" placeholder="展示在页面上的名字" />
         </div>
         <button class="btn small" :disabled="savingNick" @click="saveNickname">保存昵称</button>
       </div>
-      <div class="row" style="align-items:center;margin-top:12px">
-        <div>
+      <div class="field-row">
+        <div class="field">
           <span class="label">通知邮箱</span>
-          <input v-model="email" placeholder="接收复习提醒邮件" />
+          <input v-model="email" type="email" placeholder="用于接收复习提醒，如 name@qq.com" />
         </div>
         <button class="btn small" :disabled="savingEmail" @click="saveEmail">保存邮箱</button>
       </div>
-      <div class="hint" style="margin-top:8px">用户名：{{ me?.username }}（不可修改）</div>
+      <div class="hint" style="margin-top:10px">用户名：{{ me?.username }}（不可修改）</div>
     </div>
 
     <div class="card">
@@ -110,10 +110,16 @@ const flash = (t) => {
 }
 
 const saveNickname = async () => {
+  const v = nickname.value.trim()
+  if (!v) {
+    err.value = '昵称不能为空'
+    return
+  }
+  nickname.value = v
   savingNick.value = true
   err.value = ''
   try {
-    await api('/api/auth/me/profile', { method: 'PUT', body: { nickname: nickname.value } })
+    await api('/api/auth/me/profile', { method: 'PUT', body: { nickname: v } })
     await loadMe()
     flash('昵称已保存')
   } catch (e) {
@@ -124,10 +130,16 @@ const saveNickname = async () => {
 }
 
 const saveEmail = async () => {
+  const v = email.value.trim()
+  if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+    err.value = '邮箱格式不正确'
+    return
+  }
+  email.value = v
   savingEmail.value = true
   err.value = ''
   try {
-    await api('/api/auth/me/email', { method: 'PUT', body: { email: email.value } })
+    await api('/api/auth/me/email', { method: 'PUT', body: { email: v } })
     await loadMe()
     flash('邮箱已保存')
   } catch (e) {
@@ -198,4 +210,7 @@ onMounted(loadMe)
   font-size: 30px; font-weight: 800; color: var(--primary);
 }
 .hint { font-size: 12px; color: var(--muted); }
+.field-row { display: flex; align-items: flex-end; gap: 12px; }
+.field-row + .field-row { margin-top: 14px; }
+.field { flex: 1; max-width: 320px; }
 </style>
