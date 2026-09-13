@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="page-title">你好，{{ me?.nickname || '同学' }} 👋</div>
+    <div class="page-title">你好，{{ me?.nickname || me?.username || '同学' }} 👋</div>
     <div class="page-sub">今天也保持学习节奏 —— 概览、推荐与快捷入口</div>
 
     <!-- 数据概览 -->
@@ -106,7 +106,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onActivated, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts/core'
 import { LineChart } from 'echarts/charts'
@@ -120,6 +120,7 @@ echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 defineOptions({ name: 'DashboardView' })
 
 const router = useRouter()
+const me = ref(null)
 const study = ref(null)
 const recommend = ref([])
 const seriesList = ref([])
@@ -225,6 +226,11 @@ const toggleSeries = (id) => {
 }
 
 const onResize = () => { if (chart) chart.resize() }
+
+// KeepAlive 下每次回到首页都会触发，昵称改完回来即刷新
+onActivated(() => {
+  api('/api/auth/me').then((m) => { me.value = m }).catch(() => {})
+})
 
 onMounted(async () => {
   window.addEventListener('resize', onResize)
