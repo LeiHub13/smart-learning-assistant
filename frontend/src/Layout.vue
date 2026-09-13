@@ -91,7 +91,7 @@ const tab = ref('system')
 const mailLogs = ref([])
 let notifyTimer = null
 
-const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeView', 'ExamView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'SearchView', 'ProfileView']
+const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeView', 'ExamView', 'QuestionBankView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'SearchView', 'ProfileView']
 
 const menus = [
   { key: 'home', title: '首页', path: '/home', icon: 'home' },
@@ -99,6 +99,7 @@ const menus = [
   { key: 'generate', title: '讲义/练习题 生成', path: '/generate', icon: 'sparkles' },
   { key: 'practice', title: '题库练习', path: '/practice', icon: 'practice' },
   { key: 'exam', title: '在线考试', path: '/exam', icon: 'exam' },
+  { key: 'bank', title: '题库管理', path: '/bank', icon: 'bank' },
   { key: 'progress', title: '学情分析', path: '/progress', icon: 'progress' },
   { key: 'manage', title: '课程与知识库', path: '/manage', icon: 'manage' },
   { key: 'plan', title: '学习计划', path: '/plans', icon: 'plan' },

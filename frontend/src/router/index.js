@@ -18,6 +18,7 @@ const routes = [
       { path: 'generate', name: 'generate', component: () => import('../views/GenerateView.vue'), meta: { title: 'AI 内容生成 - 智学助手' } },
       { path: 'practice', name: 'practice', component: () => import('../views/PracticeView.vue'), meta: { title: '题库练习 - 智学助手' } },
       { path: 'exam', name: 'exam', component: () => import('../views/ExamView.vue'), meta: { title: '在线考试 - 智学助手' } },
+      { path: 'bank', name: 'bank', component: () => import('../views/QuestionBankView.vue'), meta: { title: '题库管理 - 智学助手' } },
       { path: 'progress', name: 'progress', component: () => import('../views/ProgressView.vue'), meta: { title: '学情分析 - 智学助手' } },
       { path: 'manage', name: 'manage', component: () => import('../views/ManageView.vue'), meta: { title: '课程与知识库 - 智学助手' } },
       { path: 'plans', name: 'plans', component: () => import('../views/PlanView.vue'), meta: { title: '学习计划 - 智学助手' } },
