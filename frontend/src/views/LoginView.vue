@@ -322,7 +322,8 @@ const submit = async () => {
 }
 
 .btn-login {
-  width: 100%; height: 46px; border: none; border-radius: 12px;
+  height: 46px; padding: 0 56px; width: fit-content; margin: 6px auto 0;
+  border: none; border-radius: 12px;
   background: linear-gradient(180deg, #2e2b27, #191816);
   color: #fff; font-size: 15px; font-weight: 600; letter-spacing: .04em; font-family: inherit;
   cursor: pointer;
