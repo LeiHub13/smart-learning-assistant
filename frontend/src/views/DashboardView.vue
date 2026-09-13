@@ -191,15 +191,27 @@ const renderChart = () => {
     chart = null
   }
   if (!chart) chart = echarts.init(chartRef.value)
+  // 刻度对齐数据：把轴刻度固定在所有数据日期（含今天）上，点下方即日期
+  const dateSet = new Set()
+  seriesList.value.forEach((s) => s.points.forEach((p) => dateSet.add(Array.isArray(p) ? p[0] : p.value[0])))
+  let tickDates = [...dateSet].sort()
+  if (tickDates.length > 12) {
+    const step = Math.ceil(tickDates.length / 12)
+    tickDates = tickDates.filter((d, i) => i % step === 0 || i === tickDates.length - 1)
+  }
+  const ticks = tickDates.map((d) => new Date(d + 'T00:00:00'))
   chart.setOption({
     tooltip: { trigger: 'axis' },
     grid: { left: 40, right: 16, top: 20, bottom: 24 },
     xAxis: {
       type: 'time',
       max: new Date(),
+      axisTick: { customValues: ticks },
       axisLabel: {
-        showMinLabel: true,
-        showMaxLabel: true,
+        customValues: ticks,
+        rotate: 90,
+        fontSize: 10,
+        margin: 11,
         formatter: (v) => { const d = new Date(v); return (d.getMonth() + 1) + '-' + d.getDate() }
       }
     },
