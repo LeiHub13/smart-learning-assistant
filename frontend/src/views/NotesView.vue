@@ -27,17 +27,20 @@
 
     <div v-if="!notes.length && !editing" class="card"><div class="empty">暂无笔记</div></div>
 
-    <div v-for="n in notes" :key="n.id" class="card note-card">
-      <div class="row" style="justify-content:space-between">
-        <h3 style="margin:0">{{ n.title }}
+    <div v-for="n in notes" :key="n.id" class="card note-card" :class="{ open: expanded[n.id] }">
+      <div class="row note-head" @click="toggle(n.id)">
+        <h3 style="margin:0;display:flex;align-items:center;gap:6px">
+          <AppIcon name="chev" :size="14" class="chev" />
+          {{ n.title }}
           <span v-if="n.kpName" class="tag">{{ n.kpName }}</span>
         </h3>
-        <div class="btns">
+        <div class="btns" @click.stop>
           <button class="btn ghost small" @click="toggleEditor(n)">编辑</button>
           <button class="btn ghost small" @click="del(n)">删除</button>
         </div>
       </div>
-      <div class="note-content">{{ n.content }}</div>
+      <div v-if="expanded[n.id]" class="note-content">{{ n.content }}</div>
+      <div v-else-if="preview(n.content)" class="note-preview">{{ preview(n.content) }}</div>
       <div class="muted small">更新于 {{ fmtTime(n.updatedAt) }}</div>
     </div>
   </div>
@@ -47,12 +50,14 @@
 import { ref, onMounted } from 'vue'
 import { api, getCourses } from '../api'
 import { fmtTime } from '../utils'
+import AppIcon from '../components/AppIcon.vue'
 
 defineOptions({ name: 'NotesView' })
 
 const courses = ref([])
 const courseId = ref(null)
 const notes = ref([])
+const expanded = ref({})
 const editing = ref(false)
 const form = ref({ title: '', kpName: '', content: '' })
 const editId = ref(null)
@@ -61,6 +66,18 @@ const error = ref('')
 
 const load = async () => {
   notes.value = await api('/api/notes' + (courseId.value ? '?courseId=' + courseId.value : ''))
+  expanded.value = {}
+}
+
+/** 折叠时的内容摘要：取第一行非空文字，超 60 字截断 */
+const preview = (s) => {
+  if (!s) return ''
+  const first = s.split('\n').find((l) => l.trim()) || ''
+  return first.length > 60 ? first.slice(0, 60) + '…' : first
+}
+
+const toggle = (id) => {
+  expanded.value[id] = !expanded.value[id]
 }
 
 const toggleEditor = (n) => {
@@ -111,6 +128,11 @@ onMounted(async () => {
 <style scoped>
 .editor { margin-top: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
 .note-content { white-space: pre-wrap; line-height: 1.8; color: #334155; margin: 10px 0; }
+.note-preview { color: #94a3b8; margin: 8px 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-card { transition: box-shadow .2s ease; }
 .note-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+.note-head { justify-content: space-between; cursor: pointer; user-select: none; }
+.chev { transition: transform .2s ease; color: var(--muted, #94a3b8); flex: none; }
+.note-card.open .chev { transform: rotate(0deg); }
+.note-card:not(.open) .chev { transform: rotate(-90deg); }
 </style>
