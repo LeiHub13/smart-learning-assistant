@@ -99,8 +99,11 @@ export async function downloadFile(path, filename) {
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  a.remove()
+  // 延迟回收：同步 revoke 在部分浏览器（如 Firefox）会中断刚开始的下载
+  setTimeout(() => URL.revokeObjectURL(url), 3000)
 }
 
 /** 通知 */
