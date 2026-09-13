@@ -63,9 +63,42 @@
     </div>
     <!-- 学习热力图 -->
     <div class="card">
-      <h3>学习热力图（近 12 周）</h3>
-      <div v-if="study?.calendar?.length" class="heatmap">
-        <span v-for="c in study.calendar" :key="c.date" class="hm-cell" :class="hmLevel(c.minutes)" :title="c.date + '：' + c.minutes + ' 分钟'"></span>
+      <div class="hm-top">
+        <h3>学习热力图（近 12 周）</h3>
+        <div v-if="heat" class="hm-stats">
+          <span>累计 <b>{{ fmtHeat(heat.total) }}</b></span>
+          <span>活跃 <b>{{ heat.activeDays }}</b> 天</span>
+          <span>最长连续 <b>{{ heat.best }}</b> 天</span>
+        </div>
+      </div>
+      <div v-if="heat" class="hm-wrap">
+        <div class="hm-months">
+          <span v-for="col in heat.columns" :key="col.i" :style="{ gridColumn: col.i + 1 }">{{ col.label }}</span>
+        </div>
+        <div class="hm-main">
+          <div class="hm-dow">
+            <span style="grid-row: 1">一</span>
+            <span style="grid-row: 3">三</span>
+            <span style="grid-row: 5">五</span>
+          </div>
+          <div class="heatmap">
+            <template v-for="(w, wi) in heat.weeks" :key="wi">
+              <span
+                v-for="(c, ci) in w"
+                :key="ci"
+                class="hm-cell"
+                :class="c ? hmLevel(c.minutes) : 'pad'"
+                :title="c ? c.label : ''"
+              ></span>
+            </template>
+          </div>
+        </div>
+        <div class="hm-legend">
+          <span>少</span>
+          <i class="hm-cell hm-0"></i><i class="hm-cell hm-1"></i><i class="hm-cell hm-2"></i><i class="hm-cell hm-3"></i><i class="hm-cell hm-4"></i>
+          <span>多</span>
+          <span class="hm-unit">（按当日学习分钟数分档）</span>
+        </div>
       </div>
       <div v-else class="empty">暂无数据（使用系统期间每分钟自动记录）</div>
     </div>
@@ -105,6 +138,48 @@ const fmtHours = (m) => {
 }
 const rcIcon = (t) => ({ startup: 'zap', review_kp: 'alarm', practice_kp: 'practice', document: 'report' }[t] || 'lightbulb')
 const hmLevel = (m) => (m >= 120 ? 'hm-4' : m >= 60 ? 'hm-3' : m >= 30 ? 'hm-2' : m >= 10 ? 'hm-1' : 'hm-0')
+const DOW = ['一', '二', '三', '四', '五', '六', '日']
+
+/** 把 84 天日历整理成周对齐热力图：列=周、行=星期，附月份标注与统计 */
+const heat = computed(() => {
+  const cal = study.value?.calendar || []
+  if (!cal.length) return null
+  const cells = cal.map((c) => {
+    const dow = (new Date(c.date + 'T00:00:00').getDay() + 6) % 7
+    return {
+      ...c,
+      dow,
+      label: `${Number(c.date.slice(5, 7))}月${Number(c.date.slice(8, 10))}日 周${DOW[dow]} · ${c.minutes} 分钟`,
+    }
+  })
+  const weeks = []
+  let week = Array(cells[0].dow).fill(null)
+  for (const c of cells) {
+    week.push(c)
+    if (week.length === 7) { weeks.push(week); week = [] }
+  }
+  if (week.length) weeks.push(week.concat(Array(7 - week.length).fill(null)))
+  // 月份标注：每周列首日跨月时标记一次
+  const columns = []
+  let lastM = null
+  weeks.forEach((w, i) => {
+    const first = w.find(Boolean)
+    if (!first) return
+    const m = Number(first.date.slice(5, 7))
+    if (m !== lastM) { columns.push({ i, label: m + '月' }); lastM = m }
+  })
+  const total = cal.reduce((s, c) => s + (c.minutes || 0), 0)
+  const activeDays = cal.filter((c) => c.minutes > 0).length
+  let run = 0
+  let best = 0
+  for (const c of cal) {
+    run = c.minutes > 0 ? run + 1 : 0
+    if (run > best) best = run
+  }
+  return { weeks, columns, total, activeDays, best }
+})
+
+const fmtHeat = (m) => (m >= 60 ? Math.round(m / 6) / 10 + ' 小时' : m + ' 分钟')
 
 const go = (path) => router.push(path)
 
@@ -214,8 +289,25 @@ onBeforeUnmount(() => {
 .rc-icon { color: var(--accent, #b8956a); display: inline-flex; align-items: center; }
 .rc-title { font-weight: 700; font-size: 13px; }
 .rc-reason { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.6; }
-.heatmap { display: grid; grid-template-rows: repeat(7, 12px); grid-auto-flow: column; gap: 3px; width: fit-content; }
-.hm-cell { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.heatmap { display: grid; grid-template-rows: repeat(7, 13px); grid-auto-flow: column; grid-auto-columns: 13px; gap: 3px; }
+.hm-cell { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
+.hm-cell.pad { visibility: hidden; }
+.hm-top { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.hm-top h3 { margin-bottom: 0; }
+.hm-stats { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+.hm-stats b { color: var(--text); font-weight: 700; }
+.hm-wrap { margin-top: 8px; }
+.hm-months {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 13px; gap: 3px;
+  margin: 0 0 4px 22px; font-size: 11px; color: var(--muted);
+}
+.hm-months span { white-space: nowrap; }
+.hm-main { display: flex; gap: 6px; }
+.hm-dow { display: grid; grid-template-rows: repeat(7, 13px); gap: 3px; width: 16px; font-size: 10px; color: var(--muted); }
+.hm-dow span { line-height: 13px; }
+.hm-legend { display: flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 11px; color: var(--muted); }
+.hm-legend .hm-cell { width: 11px; height: 11px; }
+.hm-unit { margin-left: 4px; }
 .hm-0 { background: #ece9e2; }
 .hm-1 { background: #ecd9be; }
 .hm-2 { background: #dcbc8a; }
