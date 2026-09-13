@@ -197,6 +197,8 @@ const renderChart = () => {
     xAxis: {
       type: 'time',
       axisLabel: {
+        showMinLabel: true,
+        showMaxLabel: true,
         formatter: (v) => { const d = new Date(v); return (d.getMonth() + 1) + '-' + d.getDate() }
       }
     },
