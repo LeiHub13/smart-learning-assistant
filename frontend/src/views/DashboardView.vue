@@ -7,6 +7,7 @@
     <div class="card">
       <div class="row">
         <div class="stat" style="flex:1"><div class="num">{{ fmtHours(study?.totalMinutes) }}</div><div class="lab">学习时长</div></div>
+        <div class="stat" style="flex:1"><div class="num">{{ streak }} 天</div><div class="lab">连续学习</div></div>
         <div class="stat" style="flex:1"><div class="num">{{ study?.activeDays ?? 0 }}</div><div class="lab">活跃天数</div></div>
         <div class="stat" style="flex:1"><div class="num">{{ practiceCount }}</div><div class="lab">练习次数</div></div>
         <div class="stat" style="flex:1"><div class="num">{{ favCount }}</div><div class="lab">收藏题目</div></div>
@@ -18,8 +19,9 @@
     <div class="card">
       <div class="row quick-row">
         <button class="btn" @click="go('/practice')"><AppIcon name="practice" :size="14" /> 开始练习</button>
+        <button class="btn" @click="go('/mistakes')"><AppIcon name="target" :size="14" /> 错题本{{ mistakeTotal ? '（' + mistakeTotal + '）' : '' }}</button>
         <button class="btn ghost" @click="go('/exam')"><AppIcon name="exam" :size="14" /> 进入考试</button>
-        <button class="btn ghost" @click="go('/chat')"><AppIcon name="chat" :size="14" /> 提问答疑</button>
+        <button class="btn ghost" @click="go('/chat')"><AppIcon name="chat" :size="14" /> 智能答疑</button>
         <button class="btn ghost" @click="go('/progress')"><AppIcon name="progress" :size="14" /> 查看学情</button>
       </div>
     </div>
@@ -128,6 +130,7 @@ const activeId = ref(null)
 const practiceCount = ref(0)
 const favCount = ref(0)
 const unread = ref(0)
+const mistakeTotal = ref(0)
 const chartRef = ref(null)
 let chart = null
 
@@ -137,6 +140,21 @@ const fmtHours = (m) => {
   if (!m) return '0h'
   return m >= 60 ? Math.round(m / 6) / 10 + 'h' : m + 'min'
 }
+
+/** 连续学习天数：从今天往回数有学习记录的天数（今天还没学不打断，从昨天起算） */
+const streak = computed(() => {
+  const map = new Map((study.value?.calendar || []).map((c) => [c.date, c.minutes || 0]))
+  const fmt = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+  const cur = new Date()
+  if (!(map.get(fmt(cur)) > 0)) cur.setDate(cur.getDate() - 1)
+  let n = 0
+  while (map.get(fmt(cur)) > 0) {
+    n++
+    cur.setDate(cur.getDate() - 1)
+  }
+  return n
+})
+
 const rcIcon = (t) => ({ startup: 'zap', review_kp: 'alarm', practice_kp: 'practice', document: 'report' }[t] || 'lightbulb')
 const hmLevel = (m) => (m >= 120 ? 'hm-4' : m >= 60 ? 'hm-3' : m >= 30 ? 'hm-2' : m >= 10 ? 'hm-1' : 'hm-0')
 const DOW = ['一', '二', '三', '四', '五', '六', '日']
@@ -245,6 +263,8 @@ const onResize = () => { if (chart) chart.resize() }
 // KeepAlive 下每次回到首页都会触发，昵称改完回来即刷新
 onActivated(() => {
   api('/api/auth/me').then((m) => { me.value = m }).catch(() => {})
+  // KeepAlive 回到首页时刷新错题数（错题重练答对会出本）
+  api('/api/mistakes?size=1').then((m) => { mistakeTotal.value = m.total || 0 }).catch(() => {})
 })
 
 onMounted(async () => {
@@ -257,6 +277,7 @@ onMounted(async () => {
   unreadCount().then((c) => { unread.value = c.count || 0 }).catch(() => {})
   api('/api/practice/history?size=1').then((h) => { practiceCount.value = h.total || 0 }).catch(() => {})
   api('/api/favorites/count').then((c) => { favCount.value = c.total || 0 }).catch(() => {})
+  api('/api/mistakes?size=1').then((m) => { mistakeTotal.value = m.total || 0 }).catch(() => {})
   if (courseId) {
     api('/api/recommend?courseId=' + courseId).then((r) => { recommend.value = r }).catch(() => {})
     // 每门课程一条成绩曲线（无数据的课程不画）；当日无练习时补空心点延伸到今天
