@@ -129,7 +129,7 @@ const menus = [
       { key: 'exam', title: '在线考试', path: '/exam', icon: 'exam' }
     ]
   },
-  { key: 'generate', title: 'AI 生成', path: '/generate', icon: 'sparkles' },
+  { key: 'generate', title: 'AI生成讲义/练习题', path: '/generate', icon: 'sparkles' },
   {
     key: 'stats', title: '学情与规划', icon: 'progress',
     children: [
