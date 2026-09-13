@@ -247,12 +247,24 @@ onMounted(async () => {
   api('/api/favorites/count').then((c) => { favCount.value = c.total || 0 }).catch(() => {})
   if (courseId) {
     api('/api/recommend?courseId=' + courseId).then((r) => { recommend.value = r }).catch(() => {})
-    // 每门课程一条成绩曲线（无数据的课程不画）
+    // 每门课程一条成绩曲线（无数据的课程不画）；当日无练习时补空心点延伸到今天
     Promise.all(courses.map(async (c, i) => {
       try {
         const t = await api('/api/practice/trend?courseId=' + c.id)
         if (!t.length) return null
-        return { id: c.id, name: c.name, color: PALETTE[i % PALETTE.length], points: t.map((x) => [x.date, x.rate]) }
+        const d = new Date()
+        const p = (x) => String(x).padStart(2, '0')
+        const todayStr = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+        const points = t.map((x) => [x.date, x.rate])
+        const last = points[points.length - 1]
+        if (last[0] !== todayStr) {
+          points.push({
+            value: [todayStr, last[1]],
+            symbol: 'circle',
+            itemStyle: { color: '#fff', borderColor: PALETTE[i % PALETTE.length], borderWidth: 2 }
+          })
+        }
+        return { id: c.id, name: c.name, color: PALETTE[i % PALETTE.length], points }
       } catch { return null }
     })).then((list) => {
       seriesList.value = list.filter(Boolean)
