@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="page-title">AI 内容生成</div>
+    <div class="page-title">讲义/练习题生成</div>
     <div class="page-sub">AI 一键生成讲义与练习题，题目自动进入题库供学生练习</div>
 
     <div v-if="error" class="err">{{ error }}</div>
