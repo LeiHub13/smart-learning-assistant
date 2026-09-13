@@ -43,10 +43,11 @@
     <div class="card">
       <h3>我的数据导出</h3>
       <div class="row" style="gap:12px">
-        <button class="btn small" :disabled="exporting" @click="exportData('/api/export/practice.xlsx', '练习记录.xlsx')">
+        <!-- !! 转布尔：绑定空字符串到 disabled 会被 Vue 当作布尔属性存在，按钮永久禁用 -->
+        <button class="btn small" :disabled="!!exporting" @click="exportData('/api/export/practice.xlsx', '练习记录.xlsx')">
           {{ exporting === 'practice' ? '导出中…' : '导出练习记录 (Excel)' }}
         </button>
-        <button class="btn small" :disabled="exporting" @click="exportData('/api/export/exams.xlsx', '考试成绩.xlsx')">
+        <button class="btn small" :disabled="!!exporting" @click="exportData('/api/export/exams.xlsx', '考试成绩.xlsx')">
           {{ exporting === 'exams' ? '导出中…' : '导出考试成绩 (Excel)' }}
         </button>
       </div>
