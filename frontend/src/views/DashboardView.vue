@@ -196,6 +196,7 @@ const renderChart = () => {
     grid: { left: 40, right: 16, top: 20, bottom: 24 },
     xAxis: {
       type: 'time',
+      max: new Date(),
       axisLabel: {
         showMinLabel: true,
         showMaxLabel: true,
