@@ -322,13 +322,17 @@ const submit = async () => {
 }
 
 .btn-login {
-  width: 100%; height: 46px; background: #1a1a1a; border: none; border-radius: 12px;
-  color: #fff; font-size: 15px; font-weight: 600; font-family: inherit;
-  cursor: pointer; transition: all 0.25s ease; margin-top: 6px;
-  letter-spacing: 0.02em;
+  width: 100%; height: 46px; border: none; border-radius: 12px;
+  background: linear-gradient(180deg, #2e2b27, #191816);
+  color: #fff; font-size: 15px; font-weight: 600; letter-spacing: .04em; font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(26,26,26,.16), inset 0 1px 0 rgba(255,255,255,.09);
   display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background .18s ease, box-shadow .18s ease, transform .1s ease;
 }
-.btn-login:hover { background: #333; transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.15); }
+.btn-login:hover { background: linear-gradient(180deg, #262320, #121110); box-shadow: 0 2px 4px rgba(26,26,26,.16), 0 8px 20px rgba(26,26,26,.14), inset 0 1px 0 rgba(255,255,255,.08); }
+.btn-login:active { transform: translateY(1px); box-shadow: 0 1px 2px rgba(26,26,26,.2); }
+.btn-login:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
 .btn-login .spinner {
   width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3);
   border-top-color: #fff; border-radius: 50%;
