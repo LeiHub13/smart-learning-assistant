@@ -127,7 +127,7 @@ const feats = [
 ]
 
 const demos = [
-  { name: 'pg13', tag: '小明' },
+  { name: 'pg13', tag: '泡椒' },
   { name: 'xiaohong', tag: '小红' },
   { name: 'xiaoyu', tag: '小宇' },
 ]
