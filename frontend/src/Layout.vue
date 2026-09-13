@@ -5,7 +5,7 @@
       <template v-for="m in menus" :key="m.key">
         <!-- 分组：点击展开/收起，子项缩进 -->
         <template v-if="m.children">
-          <button class="grp" :class="{ on: isGroupActive(m) }" @click="toggleGroup(m.key)">
+          <button class="grp" :class="{ active: isGroupActive(m) }" @click="toggleGroup(m.key)">
             <span class="m-ico"><AppIcon :name="m.icon" :size="15" /></span>
             <span class="m-txt">{{ m.title }}</span>
             <AppIcon name="chev" class="grp-arrow" :class="{ open: openKey === m.key }" :size="13" />
@@ -320,7 +320,10 @@ img.avatar { object-fit: cover; padding: 0; }
 /* ===== 多级侧边栏 ===== */
 .grp-arrow { margin-left: auto; opacity: .55; transition: transform .2s ease; }
 .grp-arrow.open { transform: rotate(180deg); opacity: .9; }
-.grp.on .m-txt { color: #f5f5f4; }
+/* 分组头的激活态：只用轻提示，不套白底卡片（button.on 是叶子菜单的样式，套上会看不清字） */
+.grp.active { background: rgba(255,255,255,.05); }
+.grp.active .m-txt { color: #f5f5f4; }
+.grp.active .m-ico { background: rgba(255,255,255,.14); opacity: 1; }
 .sub { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .22s ease; }
 .sub.open { grid-template-rows: 1fr; }
 .sub-in { overflow: hidden; display: flex; flex-direction: column; gap: 2px; padding: 2px 6px 4px; }
