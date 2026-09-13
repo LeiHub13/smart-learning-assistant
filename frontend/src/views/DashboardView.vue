@@ -17,10 +17,10 @@
     <!-- 快捷入口 -->
     <div class="card">
       <div class="row quick-row">
-        <button class="btn" @click="go('/practice')">📝 开始练习</button>
-        <button class="btn ghost" @click="go('/exam')">📋 进入考试</button>
-        <button class="btn ghost" @click="go('/chat')">💬 提问答疑</button>
-        <button class="btn ghost" @click="go('/progress')">📈 查看学情</button>
+        <button class="btn" @click="go('/practice')"><AppIcon name="practice" :size="14" /> 开始练习</button>
+        <button class="btn ghost" @click="go('/exam')"><AppIcon name="exam" :size="14" /> 进入考试</button>
+        <button class="btn ghost" @click="go('/chat')"><AppIcon name="chat" :size="14" /> 提问答疑</button>
+        <button class="btn ghost" @click="go('/progress')"><AppIcon name="progress" :size="14" /> 查看学情</button>
       </div>
     </div>
 
@@ -53,7 +53,7 @@
         <h3>今日推荐</h3>
         <div v-if="!recommend.length" class="empty">暂无推荐，做一组练习后生成</div>
         <div v-for="(r, i) in recommend" :key="i" class="rc-item">
-          <span class="rc-icon">{{ rcIcon(r.type) }}</span>
+            <span class="rc-icon"><AppIcon :name="rcIcon(r.type)" :size="16" /></span>
           <div class="rc-body">
             <div class="rc-title">{{ r.title }}</div>
             <div class="rc-reason">{{ r.reason }}</div>
@@ -80,6 +80,7 @@ import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { api, unreadCount } from '../api'
+import AppIcon from '../components/AppIcon.vue'
 
 echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
@@ -102,7 +103,7 @@ const fmtHours = (m) => {
   if (!m) return '0h'
   return m >= 60 ? Math.round(m / 6) / 10 + 'h' : m + 'min'
 }
-const rcIcon = (t) => ({ startup: '🚀', review_kp: '⏰', practice_kp: '📝', document: '📄' }[t] || '💡')
+const rcIcon = (t) => ({ startup: 'zap', review_kp: 'alarm', practice_kp: 'practice', document: 'report' }[t] || 'lightbulb')
 const hmLevel = (m) => (m >= 120 ? 'hm-4' : m >= 60 ? 'hm-3' : m >= 30 ? 'hm-2' : m >= 10 ? 'hm-1' : 'hm-0')
 
 const go = (path) => router.push(path)
@@ -210,7 +211,7 @@ onBeforeUnmount(() => {
 .quick-row { gap: 12px; flex-wrap: wrap; }
 .rc-item { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
 .rc-item:last-child { border-bottom: none; }
-.rc-icon { font-size: 18px; line-height: 1.4; }
+.rc-icon { color: var(--accent, #b8956a); display: inline-flex; align-items: center; }
 .rc-title { font-weight: 700; font-size: 13px; }
 .rc-reason { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.6; }
 .heatmap { display: grid; grid-template-rows: repeat(7, 12px); grid-auto-flow: column; gap: 3px; width: fit-content; }
