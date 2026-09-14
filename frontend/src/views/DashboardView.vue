@@ -209,9 +209,12 @@ const renderChart = () => {
     chart = null
   }
   if (!chart) chart = echarts.init(chartRef.value)
-  // 刻度对齐数据：把轴刻度固定在所有数据日期（含今天）上，点下方即日期
+  // 刻度对齐数据日期，且始终包含今天（当日没做题只显示日期、不画点）
   const dateSet = new Set()
   seriesList.value.forEach((s) => s.points.forEach((p) => dateSet.add(Array.isArray(p) ? p[0] : p.value[0])))
+  const now = new Date()
+  const pad = (x) => String(x).padStart(2, '0')
+  dateSet.add(now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()))
   let tickDates = [...dateSet].sort()
   if (tickDates.length > 12) {
     const step = Math.ceil(tickDates.length / 12)
@@ -280,24 +283,12 @@ onMounted(async () => {
   api('/api/mistakes?size=1').then((m) => { mistakeTotal.value = m.total || 0 }).catch(() => {})
   if (courseId) {
     api('/api/recommend?courseId=' + courseId).then((r) => { recommend.value = r }).catch(() => {})
-    // 每门课程一条成绩曲线（无数据的课程不画）；当日无练习时补空心点延伸到今天
+    // 每门课程一条成绩曲线（无数据的课程不画）；当日没做题就没有点，只保留轴上的今天刻度
     Promise.all(courses.map(async (c, i) => {
       try {
         const t = await api('/api/practice/trend?courseId=' + c.id)
         if (!t.length) return null
-        const d = new Date()
-        const p = (x) => String(x).padStart(2, '0')
-        const todayStr = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
-        const points = t.map((x) => [x.date, x.rate])
-        const last = points[points.length - 1]
-        if (last[0] !== todayStr) {
-          points.push({
-            value: [todayStr, last[1]],
-            symbol: 'circle',
-            itemStyle: { color: '#fff', borderColor: PALETTE[i % PALETTE.length], borderWidth: 2 }
-          })
-        }
-        return { id: c.id, name: c.name, color: PALETTE[i % PALETTE.length], points }
+        return { id: c.id, name: c.name, color: PALETTE[i % PALETTE.length], points: t.map((x) => [x.date, x.rate]) }
       } catch { return null }
     })).then((list) => {
       seriesList.value = list.filter(Boolean)
