@@ -88,6 +88,7 @@ public class DataSeeder implements CommandLineRunner {
             course.setDescription(c[1]);
             course.setOwnerId(ownerId);
             course.setOwnerName("小明");
+            course.setInHub(1);
             course.setCreatedAt(LocalDateTime.now());
             courseMapper.insert(course);
         }

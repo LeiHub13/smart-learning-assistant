@@ -22,5 +22,7 @@ public class Course {
     private String description;
     private Long ownerId;
     private String ownerName;
+    /** 是否入驻课程 Hub（1=公开可见，0=仅自己与已加入者） */
+    private Integer inHub;
     private LocalDateTime createdAt;
 }

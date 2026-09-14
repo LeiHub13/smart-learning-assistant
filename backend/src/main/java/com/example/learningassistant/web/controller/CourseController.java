@@ -33,11 +33,30 @@ public class CourseController {
         return ApiResponse.ok(courseService.listFor(u.id()));
     }
 
-    @PostMapping
-    public ApiResponse<Course> create(HttpServletRequest request, @RequestBody Map<String, String> body) {
+    /** 课程 Hub：所有入驻 Hub 的公开课程（含加入人数/选课状态）。 */
+    @GetMapping("/hub")
+    public ApiResponse<List<Map<String, Object>>> hub(HttpServletRequest request) {
         AuthUser u = CurrentUser.get(request);
+        return ApiResponse.ok(courseService.listHub(u.id()));
+    }
+
+    @PostMapping
+    public ApiResponse<Course> create(HttpServletRequest request, @RequestBody Map<String, Object> body) {
+        AuthUser u = CurrentUser.get(request);
+        boolean inHub = Boolean.parseBoolean(String.valueOf(body.getOrDefault("inHub", "false")));
         return ApiResponse.ok(courseService.create(
-                body.get("name"), body.get("description"), u.id(), u.nickname()));
+                String.valueOf(body.get("name")),
+                body.get("description") == null ? null : String.valueOf(body.get("description")),
+                u.id(), u.nickname(), inHub));
+    }
+
+    /** 创建者把课程加入/移出课程 Hub。 */
+    @PostMapping("/{id}/hub")
+    public ApiResponse<Void> setHub(HttpServletRequest request, @PathVariable Long id,
+                                    @RequestBody Map<String, Object> body) {
+        AuthUser u = CurrentUser.get(request);
+        courseService.setHub(u.id(), id, Boolean.parseBoolean(String.valueOf(body.get("inHub"))));
+        return ApiResponse.ok(null);
     }
 
     @PostMapping("/{id}/enroll")

@@ -48,33 +48,73 @@ public class CourseService {
     private final com.example.learningassistant.chat.mapper.ChatSessionMapper chatSessionMapper;
     private final com.example.learningassistant.chat.mapper.ChatMessageMapper chatMessageMapper;
 
+    /**
+     * 我的课程：自己创建 + 已加入的课程（不再全量返回，公开课程走 Hub）。
+     */
     public List<Map<String, Object>> listFor(Long userId) {
         List<Course> courses = courseMapper.selectList(new LambdaQueryWrapper<Course>().orderByDesc(Course::getCreatedAt));
-        List<Long> enrolledCourseIds = courseUserMapper.selectList(new LambdaQueryWrapper<CourseUser>()
+        java.util.Set<Long> enrolledIds = courseUserMapper.selectList(new LambdaQueryWrapper<CourseUser>()
                         .eq(CourseUser::getUserId, userId)).stream()
-                .map(CourseUser::getCourseId).toList();
+                .map(CourseUser::getCourseId).collect(java.util.stream.Collectors.toSet());
+        return courses.stream()
+                .filter(c -> (c.getOwnerId() != null && c.getOwnerId().equals(userId)) || enrolledIds.contains(c.getId()))
+                .map(c -> toMap(c, enrolledIds.contains(c.getId()),
+                        c.getOwnerId() != null && c.getOwnerId().equals(userId) ? "creator" : "joined"))
+                .toList();
+    }
+
+    /**
+     * 课程 Hub：所有入驻 Hub 的公开课程（含加入人数与当前用户选课状态）。
+     */
+    public List<Map<String, Object>> listHub(Long userId) {
+        List<Course> courses = courseMapper.selectList(new LambdaQueryWrapper<Course>()
+                .eq(Course::getInHub, 1).orderByDesc(Course::getCreatedAt));
+        java.util.Set<Long> enrolledIds = courseUserMapper.selectList(new LambdaQueryWrapper<CourseUser>()
+                        .eq(CourseUser::getUserId, userId)).stream()
+                .map(CourseUser::getCourseId).collect(java.util.stream.Collectors.toSet());
         return courses.stream().map(c -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", c.getId());
-            m.put("name", c.getName());
-            m.put("description", c.getDescription());
-            m.put("ownerName", c.getOwnerName());
-            m.put("ownerId", c.getOwnerId());
-            m.put("enrolled", enrolledCourseIds.contains(c.getId()));
-            m.put("kbCount", kbMapper.selectCount(new LambdaQueryWrapper<KnowledgeBase>()
-                    .eq(KnowledgeBase::getCourseId, c.getId())).intValue());
-            m.put("questionCount", questionMapper.selectCount(new LambdaQueryWrapper<Question>()
-                    .eq(Question::getCourseId, c.getId())).intValue());
+            Map<String, Object> m = toMap(c, enrolledIds.contains(c.getId()),
+                    c.getOwnerId() != null && c.getOwnerId().equals(userId) ? "creator" : "joined");
+            m.put("memberCount", courseUserMapper.selectCount(new LambdaQueryWrapper<CourseUser>()
+                    .eq(CourseUser::getCourseId, c.getId())).intValue());
             return m;
         }).toList();
     }
 
-    public Course create(String name, String description, Long ownerId, String ownerName) {
+    /** 仅创建者可把课程加入/移出课程 Hub。 */
+    public void setHub(Long userId, Long courseId, boolean inHub) {
+        Course c = require(courseId);
+        if (c.getOwnerId() == null || !c.getOwnerId().equals(userId)) {
+            throw new BizException("仅课程创建者可设置是否加入课程 Hub");
+        }
+        c.setInHub(inHub ? 1 : 0);
+        courseMapper.updateById(c);
+    }
+
+    private Map<String, Object> toMap(Course c, boolean enrolled, String role) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", c.getId());
+        m.put("name", c.getName());
+        m.put("description", c.getDescription());
+        m.put("ownerName", c.getOwnerName());
+        m.put("ownerId", c.getOwnerId());
+        m.put("inHub", c.getInHub() != null && c.getInHub() == 1);
+        m.put("enrolled", enrolled);
+        m.put("role", role);
+        m.put("kbCount", kbMapper.selectCount(new LambdaQueryWrapper<KnowledgeBase>()
+                .eq(KnowledgeBase::getCourseId, c.getId())).intValue());
+        m.put("questionCount", questionMapper.selectCount(new LambdaQueryWrapper<Question>()
+                .eq(Question::getCourseId, c.getId())).intValue());
+        return m;
+    }
+
+    public Course create(String name, String description, Long ownerId, String ownerName, boolean inHub) {
         Course c = new Course();
         c.setName(name);
         c.setDescription(description);
         c.setOwnerId(ownerId);
         c.setOwnerName(ownerName);
+        c.setInHub(inHub ? 1 : 0);
         c.setCreatedAt(LocalDateTime.now());
         courseMapper.insert(c);
         enroll(ownerId, c.getId());

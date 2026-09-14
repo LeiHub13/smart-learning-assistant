@@ -109,14 +109,15 @@ const tab = ref('system')
 const mailLogs = ref([])
 let notifyTimer = null
 
-const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeView', 'MistakeBookView', 'ExamView', 'QuestionBankView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'SearchView', 'ProfileView']
+const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeView', 'MistakeBookView', 'FavoritesView', 'ExamView', 'QuestionBankView', 'CourseHubView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'SearchView', 'ProfileView']
 
 const menus = [
   { key: 'home', title: '首页', path: '/home', icon: 'home' },
   {
     key: 'course', title: '课程学习', icon: 'manage',
     children: [
-      { key: 'manage', title: '课程与知识库', path: '/manage', icon: 'manage' },
+      { key: 'manage', title: '我的课程', path: '/manage', icon: 'manage' },
+      { key: 'hub', title: '课程 Hub', path: '/hub', icon: 'hub' },
       { key: 'chat', title: '智能答疑', path: '/chat', icon: 'chat' },
       { key: 'notes', title: '学习笔记', path: '/notes', icon: 'notes' }
     ]
@@ -126,6 +127,7 @@ const menus = [
     children: [
       { key: 'practice', title: '题库练习', path: '/practice', icon: 'practice' },
   { key: 'mistakes', title: '错题本', path: '/mistakes', icon: 'target' },
+      { key: 'favorites', title: '收藏夹', path: '/favorites', icon: 'star' },
       { key: 'bank', title: '题库管理', path: '/bank', icon: 'bank' },
       { key: 'exam', title: '在线考试', path: '/exam', icon: 'exam' }
     ]

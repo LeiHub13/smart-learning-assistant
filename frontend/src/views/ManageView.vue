@@ -16,6 +16,10 @@
           <span class="label">课程简介</span>
           <input v-model="newDesc" type="text" />
         </div>
+        <label class="row" style="gap:6px;align-items:center;flex:none;padding-top:20px">
+          <input v-model="newInHub" type="checkbox" style="width:auto" />
+          <span class="label" style="margin:0">入驻课程 Hub</span>
+        </label>
         <div class="btns">
           <button class="btn" @click="createCourse">创建</button>
         </div>
@@ -26,13 +30,16 @@
       <div class="row" style="justify-content:space-between">
         <div style="flex:1">
           <h3 style="margin-bottom:4px">{{ c.name }}
-            <span v-if="c.enrolled" class="tag ok">已加入</span>
-            <span class="tag">创建者：{{ c.ownerName }}</span>
+            <span v-if="c.role === 'creator'" class="tag ok">我创建的</span>
+            <span v-else class="tag">我加入的</span>
+            <span v-if="c.inHub" class="tag">已入驻 Hub</span>
           </h3>
           <div style="color:var(--muted)">{{ c.description }}</div>
           <div style="margin-top:6px;font-size:12px;color:var(--muted)">知识库 {{ c.kbCount }} 个 · 题库 {{ c.questionCount }} 题</div>
         </div>
-        <button v-if="!c.enrolled" class="btn small" @click="enroll(c)">加入</button>
+        <button v-if="c.ownerId === meId" class="btn ghost small" style="margin-left:8px" @click="toggleHub(c)">
+          {{ c.inHub ? '移出课程 Hub' : '加入课程 Hub' }}
+        </button>
         <button v-if="c.ownerId === meId" class="btn danger small" style="margin-left:8px" @click="askDeleteCourse(c)">删除课程</button>
       </div>
 
@@ -154,6 +161,7 @@ const togglePreview = async (kbId, docId) => {
 }
 const newName = ref('')
 const newDesc = ref('')
+const newInHub = ref(false)
 const newKbName = ref('')
 const docName = ref('')
 const docContent = ref('')
@@ -192,20 +200,26 @@ const doDeleteCourse = async () => {
   }
 }
 
-const enroll = async (c) => {
-  await api('/api/courses/' + c.id + '/enroll', { method: 'POST', body: {} })
-  courses.value = await getCourses(true)
-}
-
 const createCourse = async () => {
   if (!newName.value.trim()) {
     error.value = '请输入课程名称'
     return
   }
-  await api('/api/courses', { method: 'POST', body: { name: newName.value.trim(), description: newDesc.value } })
+  await api('/api/courses', { method: 'POST', body: { name: newName.value.trim(), description: newDesc.value, inHub: newInHub.value } })
   newName.value = ''
   newDesc.value = ''
+  newInHub.value = false
   courses.value = await getCourses(true)
+}
+
+const toggleHub = async (c) => {
+  error.value = ''
+  try {
+    await api('/api/courses/' + c.id + '/hub', { method: 'POST', body: { inHub: !c.inHub } })
+    c.inHub = !c.inHub
+  } catch (e) {
+    error.value = e.message
+  }
 }
 
 const toggleExpand = async (c) => {

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS t_course (
     description  VARCHAR(500),
     owner_id     BIGINT,
     owner_name   VARCHAR(50),
+    in_hub       TINYINT DEFAULT 0,
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
