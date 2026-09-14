@@ -41,13 +41,6 @@
             <button class="btn ghost small" :disabled="historyPage >= historyPages" @click="loadHistory(historyPage + 1)">下一页</button>
           </div>
         </div>
-        <div style="margin-top:14px" class="fav-bar">
-          <span class="label">收藏夹（好题反复练）</span>
-          <button class="btn small" :disabled="favCount === 0" @click="startFav">
-            {{ favCount ? '重练收藏题（' + favCount + '）' : '本课程暂无收藏' }}
-          </button>
-          <span v-if="favTotal > favCount" class="muted small">全部 {{ favTotal }} 道，其余在别的课程</span>
-        </div>
         <div style="margin-top:14px">
           <span class="label">成绩曲线（正确率 %，最近 50 次）</span>
           <div ref="chartRef" class="trend-chart"></div>
@@ -154,8 +147,6 @@ const submitting = ref(false)
 const error = ref('')
 const answers = ref({})
 const chartRef = ref(null)
-const favCount = ref(0)
-const favTotal = ref(0)
 let chart = null
 
 const courseName = computed(() => {
@@ -177,11 +168,15 @@ onMounted(async () => {
   if (courses.value.length && !courseId.value) courseId.value = courses.value[0].id
   await loadHistory(1)
   await refreshTrend()
-  refreshFavCount()
   // 从错题本跳转：自动开始错题重练
   if (route.query.mistake) {
     mistake.value = true
     start()
+    return
+  }
+  // 从收藏夹跳转：自动开始收藏题重练
+  if (route.query.favorite) {
+    start(true)
   }
 })
 
@@ -190,15 +185,6 @@ const loadHistory = async (page = 1) => {
   history.value = d.records || []
   historyTotal.value = d.total || 0
   historyPage.value = page
-}
-
-const refreshFavCount = async () => {
-  if (!courseId.value) return
-  try {
-    const c = await api('/api/favorites/count?courseId=' + courseId.value)
-    favCount.value = c.count || 0
-    favTotal.value = c.total || 0
-  } catch (e) { /* 忽略 */ }
 }
 
 const refreshTrend = async () => {
@@ -244,7 +230,6 @@ const renderChart = () => {
 
 watch(courseId, () => {
   refreshTrend()
-  refreshFavCount()
 })
 
 onBeforeUnmount(() => {
@@ -282,8 +267,6 @@ const start = async (favMode = false) => {
   }
 }
 
-const startFav = () => start(true)
-
 const confirmExit = ref(false)
 
 const doExit = () => {
@@ -298,7 +281,6 @@ const toggleFav = async (q) => {
   try {
     const r = await api('/api/favorites/toggle', { method: 'POST', body: { questionId: q.id } })
     q.favorited = r.favorited
-    refreshFavCount()
   } catch (e) { /* 静默失败 */ }
 }
 
@@ -311,7 +293,6 @@ const submit = async () => {
     paper.value = []
     loadHistory(1)
     refreshTrend()
-    refreshFavCount()
     report.value = await api('/api/practice/' + p.id)
   } catch (e) {
     error.value = e.message
@@ -335,7 +316,6 @@ const again = () => {
   answers.value = {}
   mistake.value = false
   refreshTrend()
-  refreshFavCount()
 }
 </script>
 

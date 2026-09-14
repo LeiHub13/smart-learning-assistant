@@ -99,6 +99,10 @@ public class FavoriteService {
             m.put("type", q.getType());
             m.put("stem", q.getStem());
             m.put("kpName", q.getKpName());
+            m.put("difficulty", q.getDifficulty());
+            m.put("options", q.getOptions());
+            m.put("answer", q.getAnswer());
+            m.put("analysis", q.getAnalysis());
             return m;
         }).toList();
     }
