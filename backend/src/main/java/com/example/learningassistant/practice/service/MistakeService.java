@@ -39,12 +39,12 @@ public class MistakeService {
     private final com.example.learningassistant.exam.mapper.ExamMapper examMapper;
 
     /**
-     * 错题分页：records（question + lastWrongAt + wrongCount）+ total，按最近答错时间倒序。
+     * 错题分页：records（question + lastWrongAt + lastWrongAnswer + wrongCount）+ total，按最近答错时间倒序。
      */
     public Map<String, Object> page(Long userId, Long courseId, int page, int size) {
         int p = Math.max(page, 1);
         int s = Math.min(Math.max(size, 1), 50);
-        Map<Long, LocalDateTime> wrongs = latestWrong(userId, courseId);
+        Map<Long, WrongInfo> wrongs = latestWrong(userId, courseId);
         Map<Long, Integer> counts = wrongCounts(userId, courseId);
 
         List<Long> ids = new ArrayList<>(wrongs.keySet());
@@ -64,7 +64,8 @@ public class MistakeService {
                 }
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("question", q);
-                m.put("lastWrongAt", wrongs.get(qid));
+                m.put("lastWrongAt", wrongs.get(qid).at());
+                m.put("lastWrongAnswer", wrongs.get(qid).answer());
                 m.put("wrongCount", counts.getOrDefault(qid, 1));
                 records.add(m);
             }
@@ -80,10 +81,11 @@ public class MistakeService {
         return new ArrayList<>(latestWrong(userId, courseId).keySet());
     }
 
-    /** 每题最近一次作答时间与对错；courseId 为空聚合全部课程。 */
-    private Map<Long, LocalDateTime> latestWrong(Long userId, Long courseId) {
+    /** 每题最近一次作答时间、答案与对错；courseId 为空聚合全部课程。 */
+    private Map<Long, WrongInfo> latestWrong(Long userId, Long courseId) {
         Map<Long, LocalDateTime> latest = new LinkedHashMap<>();
         Map<Long, Boolean> latestCorrect = new LinkedHashMap<>();
+        Map<Long, String> latestAnswer = new LinkedHashMap<>();
 
         // 练习作答：practice 上的 createdAt 作为作答时间
         List<Practice> practices = practiceMapper.selectList(new LambdaQueryWrapper<Practice>()
@@ -96,7 +98,7 @@ public class MistakeService {
             }
             for (PracticeQuestion pq : pqMapper.selectList(new LambdaQueryWrapper<PracticeQuestion>()
                     .in(PracticeQuestion::getPracticeId, pt.keySet()))) {
-                merge(latest, latestCorrect, pq.getQuestionId(), pt.get(pq.getPracticeId()), pq.getCorrect());
+                merge(latest, latestCorrect, latestAnswer, pq.getQuestionId(), pt.get(pq.getPracticeId()), pq.getUserAnswer(), pq.getCorrect());
             }
         }
 
@@ -119,17 +121,20 @@ public class MistakeService {
                 answers = answers.stream().filter(a -> courseRecordIds.contains(a.getRecordId())).toList();
             }
             for (ExamAnswer ea : answers) {
-                merge(latest, latestCorrect, ea.getQuestionId(), rt.get(ea.getRecordId()), ea.getCorrect());
+                merge(latest, latestCorrect, latestAnswer, ea.getQuestionId(), rt.get(ea.getRecordId()), ea.getUserAnswer(), ea.getCorrect());
             }
         }
 
-        Map<Long, LocalDateTime> wrong = new LinkedHashMap<>();
+        Map<Long, WrongInfo> wrong = new LinkedHashMap<>();
         latest.entrySet().stream()
                 .filter(e -> !Boolean.TRUE.equals(latestCorrect.get(e.getKey())))
                 .sorted(Map.Entry.<Long, LocalDateTime>comparingByValue(Comparator.reverseOrder()))
-                .forEach(e -> wrong.put(e.getKey(), e.getValue()));
+                .forEach(e -> wrong.put(e.getKey(), new WrongInfo(e.getValue(), latestAnswer.get(e.getKey()))));
         return wrong;
     }
+
+    /** 一次错题的聚合信息：最近答错时间 + 当时的作答内容。 */
+    private record WrongInfo(LocalDateTime at, String answer) {}
 
     /** 累计答错次数（练习 + 考试）。 */
     private Map<Long, Integer> wrongCounts(Long userId, Long courseId) {
@@ -160,7 +165,8 @@ public class MistakeService {
     }
 
     private void merge(Map<Long, LocalDateTime> latest, Map<Long, Boolean> latestCorrect,
-                       Long questionId, LocalDateTime at, Boolean correct) {
+                       Map<Long, String> latestAnswer,
+                       Long questionId, LocalDateTime at, String answer, Boolean correct) {
         if (questionId == null) {
             return;
         }
@@ -168,6 +174,7 @@ public class MistakeService {
         if (cur == null || at.isAfter(cur)) {
             latest.put(questionId, at);
             latestCorrect.put(questionId, Boolean.TRUE.equals(correct));
+            latestAnswer.put(questionId, answer);
         }
     }
 
