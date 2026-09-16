@@ -93,18 +93,26 @@
       <div class="card">
         <h3>错题本</h3>
         <div v-if="!summary.wrongBook.length" class="empty">太棒了，暂无错题</div>
-        <table v-else>
-          <thead><tr><th>题目</th><th>知识点</th><th>你的答案</th><th>参考答案</th><th>时间</th></tr></thead>
-          <tbody>
-            <tr v-for="(w, i) in summary.wrongBook" :key="i">
-              <td>{{ w.stem }}</td>
-              <td><span class="tag bad">{{ w.kpName }}</span></td>
-              <td>{{ w.userAnswer || '未作答' }}</td>
-              <td>{{ w.answer }}</td>
-              <td>{{ fmtTime(w.wrongAt) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else class="wb-list">
+          <div class="wb-card" v-for="(w, i) in summary.wrongBook" :key="i">
+            <div class="wb-head">
+              <div class="wb-no">#{{ i + 1 }}</div>
+              <span class="tag bad">{{ w.kpName }}</span>
+              <div class="wb-time">{{ fmtTime(w.wrongAt) }}</div>
+            </div>
+            <div class="wb-stem">{{ w.stem }}</div>
+            <div class="wb-answers">
+              <div class="wb-ans wrong">
+                <div class="wb-ans-label"><i>✗</i>我的答案</div>
+                <div class="wb-ans-text">{{ w.userAnswer || '未作答' }}</div>
+              </div>
+              <div class="wb-ans right">
+                <div class="wb-ans-label"><i>✓</i>参考答案</div>
+                <div class="wb-ans-text">{{ w.answer }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </template>
   </div>
@@ -191,4 +199,46 @@ const load = async () => {
 .hm-3 { background: #c08c4e; }
 .hm-4 { background: #8c6844; }
 .hm-legend { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; margin-bottom: 10px; }
+
+.wb-list { display: flex; flex-direction: column; gap: 16px; }
+.wb-card {
+  border: 1px solid #e3dfd8;
+  border-radius: 14px;
+  padding: 16px 18px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.04);
+}
+.wb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.wb-no {
+  font-size: 12px; font-weight: 800; color: #fff; background: linear-gradient(135deg, #e06c5a, #c94f4f);
+  border-radius: 20px; padding: 2px 10px; font-family: "SF Mono", Consolas, monospace; letter-spacing: 0.04em;
+}
+.wb-time { margin-left: auto; font-size: 12px; color: #9a968d; }
+.wb-stem {
+  font-size: 14px; line-height: 1.75; color: #2c2c2c;
+  background: #faf9f6; border: 1px solid #eeeae2; border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 14px;
+}
+.wb-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.wb-ans { border-radius: 10px; padding: 12px 14px; }
+.wb-ans.wrong { background: #fdf1f0; border: 1px solid #f0cecb; }
+.wb-ans.right { background: #f1f8f1; border: 1px solid #cfe4d1; }
+.wb-ans-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; margin-bottom: 6px;
+}
+.wb-ans.wrong .wb-ans-label { color: #c94f4f; }
+.wb-ans.right .wb-ans-label { color: #3a8f52; }
+.wb-ans-label i {
+  width: 16px; height: 16px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-style: normal; color: #fff;
+}
+.wb-ans.wrong .wb-ans-label i { background: #d96a5c; }
+.wb-ans.right .wb-ans-label i { background: #4faf6a; }
+.wb-ans-text { font-size: 13.5px; line-height: 1.7; color: #3a3a3a; word-break: break-word; }
+
+@media (max-width: 480px) {
+  .wb-answers { grid-template-columns: 1fr; }
+}
 </style>
