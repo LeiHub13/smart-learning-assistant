@@ -10,6 +10,11 @@ if [ ! -f .env ]; then
   echo "     请先执行: nano .env  填入 AI_API_KEY 后重新运行 $0"
   exit 1
 fi
+# 模板值/空值提醒：不阻塞部署，但 AI 问答会不可用
+# 注：拆成两条简单正则，避免部分 grep 实现（如 ugrep）不支持空交替分支 (a|)
+if grep -qE '^AI_API_KEY=sk-x{5,}' .env || grep -qE '^AI_API_KEY=[[:space:]]*$' .env; then
+  echo "[1/4] ⚠ 警告：.env 中 AI_API_KEY 仍是模板值或为空，部署后 AI 问答/生成会失败"
+fi
 
 # 2. 构建镜像并启动（.env 中 VECTOR_MODE=milvus 时附带启用 milvus 容器组）
 COMPOSE_ARGS=(-d --build)
@@ -21,25 +26,42 @@ echo "[2/4] 构建镜像并启动服务..."
 docker compose up "${COMPOSE_ARGS[@]}"
 
 # 3. 等待 AI 服务健康（ai-service 未映射宿主机端口，直接查容器 healthcheck）
+#    首次部署 Python 依赖导入较慢，最多等 120 秒；容器异常退出则立即失败，不白等
 echo "[3/4] 等待 ai-service 健康检查..."
-for i in $(seq 1 30); do
-  status=$(docker inspect --format='{{.State.Health.Status}}' la-ai 2>/dev/null || echo "missing")
-  if [ "$status" = "healthy" ]; then
+for i in $(seq 1 60); do
+  state=$(docker inspect --format='{{.State.Status}}' la-ai 2>/dev/null || echo missing)
+  health=$(docker inspect --format='{{.State.Health.Status}}' la-ai 2>/dev/null || echo none)
+  if [ "$health" = "healthy" ]; then
     echo "      ai-service 就绪 ✓"
     break
   fi
-  [ "$i" = 30 ] && echo "      ai-service 未就绪，请查看 docker compose logs ai-service" && exit 1
+  if [ "$state" != "running" ] && [ "$state" != "created" ]; then
+    echo "      ai-service 容器状态异常（$state），请查看: docker compose logs ai-service"
+    exit 1
+  fi
+  if [ "$i" = 60 ]; then
+    echo "      ai-service 未在 120 秒内就绪，请查看: docker compose logs ai-service"
+    exit 1
+  fi
   sleep 2
 done
 
-# 4. 等待后端
+# 4. 等待后端（本机回环探测；容器异常退出则立即失败）
 echo "[4/4] 等待 backend 就绪..."
-for i in $(seq 1 30); do
+for i in $(seq 1 60); do
   if curl -sf http://127.0.0.1:8080/api/health >/dev/null 2>&1; then
     echo "      backend 就绪 ✓"
     break
   fi
-  [ "$i" = 30 ] && echo "      backend 未就绪，请查看 docker compose logs backend" && exit 1
+  state=$(docker inspect --format='{{.State.Status}}' la-backend 2>/dev/null || echo missing)
+  if [ "$state" != "running" ] && [ "$state" != "created" ]; then
+    echo "      backend 容器状态异常（$state），请查看: docker compose logs backend"
+    exit 1
+  fi
+  if [ "$i" = 60 ]; then
+    echo "      backend 未在 120 秒内就绪，请查看: docker compose logs backend"
+    exit 1
+  fi
   sleep 2
 done
 
