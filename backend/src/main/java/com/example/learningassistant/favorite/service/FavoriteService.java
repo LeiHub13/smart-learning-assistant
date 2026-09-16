@@ -3,14 +3,23 @@ package com.example.learningassistant.favorite.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.learningassistant.course.entity.Course;
 import com.example.learningassistant.course.mapper.CourseMapper;
+import com.example.learningassistant.exam.entity.ExamAnswer;
+import com.example.learningassistant.exam.entity.ExamRecord;
+import com.example.learningassistant.exam.mapper.ExamAnswerMapper;
+import com.example.learningassistant.exam.mapper.ExamRecordMapper;
 import com.example.learningassistant.favorite.entity.Favorite;
 import com.example.learningassistant.favorite.mapper.FavoriteMapper;
+import com.example.learningassistant.practice.entity.Practice;
+import com.example.learningassistant.practice.entity.PracticeQuestion;
 import com.example.learningassistant.practice.entity.Question;
+import com.example.learningassistant.practice.mapper.PracticeMapper;
+import com.example.learningassistant.practice.mapper.PracticeQuestionMapper;
 import com.example.learningassistant.practice.mapper.QuestionMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +37,10 @@ public class FavoriteService {
     private final FavoriteMapper favoriteMapper;
     private final QuestionMapper questionMapper;
     private final CourseMapper courseMapper;
+    private final PracticeMapper practiceMapper;
+    private final PracticeQuestionMapper pqMapper;
+    private final ExamRecordMapper examRecordMapper;
+    private final ExamAnswerMapper examAnswerMapper;
 
     /** 切换收藏状态：已收藏则取消，未收藏则添加。返回切换后的状态。 */
     public boolean toggle(Long userId, Long questionId) {
@@ -90,6 +103,8 @@ public class FavoriteService {
         Map<Long, String> names = courseIds.isEmpty() ? Map.of()
                 : courseMapper.selectBatchIds(courseIds).stream()
                         .collect(java.util.stream.Collectors.toMap(Course::getId, Course::getName));
+        Map<Long, AnswerInfo> answers = questions.isEmpty() ? Map.of()
+                : latestAnswers(userId, questions.stream().map(Question::getId).toList());
 
         return questions.stream().map(q -> {
             Map<String, Object> m = new java.util.LinkedHashMap<>();
@@ -103,9 +118,76 @@ public class FavoriteService {
             m.put("options", q.getOptions());
             m.put("answer", q.getAnswer());
             m.put("analysis", q.getAnalysis());
+            // 用户最近一次作答（可能为 null：收藏但从未做过），供前端红绿对比
+            AnswerInfo ai = answers.get(q.getId());
+            m.put("lastAnswer", ai == null ? null : ai.answer());
+            m.put("lastCorrect", ai == null ? null : ai.correct());
             return m;
         }).toList();
     }
+
+    /**
+     * 用户对指定题目的最近一次作答（练习 + 考试取更晚的一次）。
+     * 收藏的题可能从未作答，故仅在存在记录时返回。
+     */
+    private Map<Long, AnswerInfo> latestAnswers(Long userId, Collection<Long> questionIds) {
+        Map<Long, LocalDateTime> at = new LinkedHashMap<>();
+        Map<Long, String> ans = new LinkedHashMap<>();
+        Map<Long, Boolean> ok = new LinkedHashMap<>();
+
+        // 练习作答
+        List<Practice> practices = practiceMapper.selectList(new LambdaQueryWrapper<Practice>()
+                .eq(Practice::getUserId, userId));
+        if (!practices.isEmpty()) {
+            Map<Long, LocalDateTime> pt = new LinkedHashMap<>();
+            for (Practice p : practices) {
+                pt.put(p.getId(), p.getCreatedAt() == null ? LocalDateTime.MIN : p.getCreatedAt());
+            }
+            for (PracticeQuestion pq : pqMapper.selectList(new LambdaQueryWrapper<PracticeQuestion>()
+                    .in(PracticeQuestion::getPracticeId, pt.keySet())
+                    .in(PracticeQuestion::getQuestionId, questionIds))) {
+                mergeLatest(at, ans, ok, pq.getQuestionId(), pt.get(pq.getPracticeId()),
+                        pq.getUserAnswer(), pq.getCorrect());
+            }
+        }
+
+        // 考试作答
+        List<ExamRecord> records = examRecordMapper.selectList(new LambdaQueryWrapper<ExamRecord>()
+                .eq(ExamRecord::getUserId, userId)
+                .isNotNull(ExamRecord::getSubmittedAt));
+        if (!records.isEmpty()) {
+            Map<Long, LocalDateTime> rt = new LinkedHashMap<>();
+            for (ExamRecord r : records) {
+                rt.put(r.getId(), r.getSubmittedAt() == null ? LocalDateTime.MIN : r.getSubmittedAt());
+            }
+            for (ExamAnswer ea : examAnswerMapper.selectList(new LambdaQueryWrapper<ExamAnswer>()
+                    .in(ExamAnswer::getRecordId, rt.keySet())
+                    .in(ExamAnswer::getQuestionId, questionIds))) {
+                mergeLatest(at, ans, ok, ea.getQuestionId(), rt.get(ea.getRecordId()),
+                        ea.getUserAnswer(), ea.getCorrect());
+            }
+        }
+
+        Map<Long, AnswerInfo> out = new LinkedHashMap<>();
+        at.forEach((qid, t) -> out.put(qid, new AnswerInfo(ans.get(qid), ok.get(qid))));
+        return out;
+    }
+
+    private void mergeLatest(Map<Long, LocalDateTime> at, Map<Long, String> ans, Map<Long, Boolean> ok,
+                             Long questionId, LocalDateTime when, String answer, Boolean correct) {
+        if (questionId == null) {
+            return;
+        }
+        LocalDateTime cur = at.get(questionId);
+        if (cur == null || (when != null && when.isAfter(cur))) {
+            at.put(questionId, when == null ? LocalDateTime.MIN : when);
+            ans.put(questionId, answer);
+            ok.put(questionId, correct);
+        }
+    }
+
+    /** 一次作答的聚合：作答内容与是否正确。 */
+    private record AnswerInfo(String answer, Boolean correct) {}
 
     /** 题目是否已收藏（报告页标记用）。 */
     public Set<Long> favoritedIds(Long userId, List<Long> questionIds) {
