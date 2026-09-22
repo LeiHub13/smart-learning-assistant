@@ -61,19 +61,25 @@ def _chunks_to_text(chunks) -> str:
     return "\n".join(parts)
 
 
-def _build_messages(scene: str, question: str, chunks) -> list:
+def _note_suffix(note: str | None) -> str:
+    """Java 侧随请求附带的学情说明（如薄弱知识点），拼在系统提示末尾。"""
+    return ("\n" + note.strip()) if note and note.strip() else ""
+
+
+def _build_messages(scene: str, question: str, chunks, note: str = None) -> list:
     chunks_text = _chunks_to_text(chunks)
     if scene == "rag_qa":
         return [
             SystemMessage(
                 "你是智能学习助手，请结合下方课程知识库资料回答学生问题，引用资料时标注编号[1][2]等；"
                 "若资料与问题无关则如实说明。\n【知识库资料】\n" + chunks_text + "\n【资料结束】"
+                + _note_suffix(note)
             ),
             HumanMessage(question),
         ]
     if scene == "free":
         return [
-            SystemMessage("你是智能学习助手，用中文友好、准确地解答学生的学习问题。"),
+            SystemMessage("你是智能学习助手，用中文友好、准确地解答学生的学习问题。" + _note_suffix(note)),
             HumanMessage(question),
         ]
     if scene == "lecture":
@@ -158,9 +164,9 @@ def _summarizer(old_summary: str, rows_text: str) -> str:
     return get_model().invoke([HumanMessage(prompt)]).content.strip()
 
 
-def _assemble(scene: str, question: str, chunks, session_id: str) -> list:
+def _assemble(scene: str, question: str, chunks, session_id: str, note: str = None) -> list:
     """组装消息：系统提示 + （摘要）+ 最近 N 轮 + 当前问题。"""
-    msgs = _build_messages(scene, question, chunks)
+    msgs = _build_messages(scene, question, chunks, note)
     if session_id and scene in ("rag_qa", "free"):
         head = [msgs[0]]
         s = memory.summary(session_id)
@@ -174,12 +180,38 @@ def _memorable(scene: str) -> bool:
     return scene in ("rag_qa", "free")
 
 
-def complete(scene: str, question: str, chunks=None, session_id: str = None) -> str:
+def complete_with(messages, scene: str = "rewrite") -> str:
+    """直接以给定消息列表调用模型（供 RAG 流水线内部的改写/重排使用），带并发限制与统计。"""
+    return _call_with_limit(lambda: get_model().invoke(messages).content, scene)
+
+
+def _prepare_rag(scene: str, question: str, chunks, session_id, kb_id, meta: dict):
+    """rag_qa 场景若未随请求携带 chunks，则由本服务自行完成向量检索。
+
+    检索链路（查询改写 -> Chroma 召回 -> 重排）已自 Java 侧迁移至 app/rag.py；
+    引用编号 sources 通过 meta 回传给调用方（Java 落库）。
+    """
+    if scene != "rag_qa" or chunks:
+        return chunks
+    if not kb_id:
+        meta.setdefault("sources", "")
+        return None
+    from app import rag
+    ctx = rag.build_context(kb_id, question, memory.recent(session_id) if session_id else None)
+    meta["sources"] = ctx.sources
+    return ctx.context
+
+
+def complete(scene: str, question: str, chunks=None, session_id: str = None,
+             user_id=None, kb_id=None, note: str = None, meta: dict | None = None) -> str:
     """非流式完整回答（生成/批改/建议），带记忆。"""
+    meta = meta if meta is not None else {}
     if scene == "agent":
         from app import agent
-        return agent.complete_agent(get_model(), question, chunks, session_id)
-    msgs = _assemble(scene, question, chunks, session_id)
+        return agent.complete_agent(get_model(), question, chunks=chunks, session_id=session_id,
+                                    user_id=user_id, kb_id=kb_id, note=note, meta=meta)
+    chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta)
+    msgs = _assemble(scene, question, chunks, session_id, note)
     answer = _call_with_limit(lambda: get_model().invoke(msgs).content, scene)
     if session_id and _memorable(scene):
         memory.add(session_id, "user", question)
@@ -192,13 +224,17 @@ def complete(scene: str, question: str, chunks=None, session_id: str = None) -> 
     return answer
 
 
-def stream(scene: str, question: str, chunks=None, session_id: str = None):
-    """流式生成，yield (delta) / (None, done) 标记。"""
+def stream(scene: str, question: str, chunks=None, session_id: str = None,
+           user_id=None, kb_id=None, note: str = None, meta: dict | None = None):
+    """流式生成，yield 增量文本；检索到的引用编号通过 meta["sources"] 传出。"""
+    meta = meta if meta is not None else {}
     if scene == "agent":
         from app import agent
-        yield from agent.stream_agent(get_model(), question, chunks, session_id)
+        yield from agent.stream_agent(get_model(), question, chunks=chunks, session_id=session_id,
+                                      user_id=user_id, kb_id=kb_id, note=note, meta=meta)
         return
-    msgs = _assemble(scene, question, chunks, session_id)
+    chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta)
+    msgs = _assemble(scene, question, chunks, session_id, note)
     model = get_model()
     full = ""
     start = time.time()

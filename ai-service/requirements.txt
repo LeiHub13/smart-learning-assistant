@@ -6,3 +6,10 @@ fastapi>=0.141
 uvicorn>=0.52
 sse-starlette>=3.4
 python-dotenv>=1.2
+# RAG 检索：Chroma 本地持久化向量库（含 numpy）
+chromadb>=0.5.5
+# 文档解析（自 Java 侧 DocumentParser 迁移）：PDF / .docx 文本抽取
+pypdf>=5.0
+python-docx>=1.1
+# multipart 上传端点（FastAPI UploadFile 依赖）
+python-multipart>=0.0.9

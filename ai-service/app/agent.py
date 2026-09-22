@@ -179,14 +179,20 @@ def _call_java_tool(path: str) -> str:
         return f"暂时无法获取该数据（{type(e).__name__}），请基于已知信息回答。"
 
 
-def _make_tools(chunks, user_id):
-    """构建绑定本次请求上下文的工具集（闭包捕获 chunks / user_id）。"""
+def _make_tools(chunks, user_id, kb_id=None):
+    """构建绑定本次请求上下文的工具集（闭包捕获 chunks / user_id / kb_id）。
+
+    带 kb_id 时 search_materials 走真正的向量检索器（全库范围）；
+    否则退回 Java 随请求下发的 chunks 集合做关键词匹配。
+    """
     docs = [str(c).strip() for c in (chunks or []) if str(c).strip()]
 
     @tool
     def list_material_topics() -> str:
         """列出当前可用的课程知识库资料清单（编号 + 内容摘要）。"""
         if not docs:
+            if kb_id:
+                return f"已接入知识库（kbId={kb_id}），可直接用 search_materials 按关键词检索全库资料。"
             return "当前没有可用的课程资料，请基于自身知识回答并说明未检索到课程资料。"
         lines = []
         for i, d in enumerate(docs, start=1):
@@ -197,15 +203,23 @@ def _make_tools(chunks, user_id):
     @tool
     def search_materials(keyword: str) -> str:
         """按关键词在课程知识库资料中检索，返回命中的资料原文（带编号）。"""
-        if not docs:
-            return "当前没有可用的课程资料。"
         kw = (keyword or "").strip()
         if not kw:
             return "关键词为空，请提供要检索的关键词。"
-        hits = [(i, d) for i, d in enumerate(docs, start=1) if kw in d]
-        if not hits:
+        if kb_id:
+            try:
+                from app import retriever
+                hits = retriever.search(kw, kb_id=kb_id, top_k=5)
+                if hits:
+                    return "\n".join(f"[{i}] {h['content']}" for i, h in enumerate(hits, start=1))
+            except Exception as e:  # noqa: BLE001
+                logger.warning("search_materials 向量检索失败，回退关键词匹配: %s", e)
+        if not docs:
+            return "当前没有可用的课程资料。"
+        local = [(i, d) for i, d in enumerate(docs, start=1) if kw in d]
+        if not local:
             return f"没有检索到包含该关键词的资料：{kw}，建议先调用 list_material_topics 查看清单后换关键词。"
-        return "\n".join(f"[{i}] {d}" for i, d in hits)
+        return "\n".join(f"[{i}] {d}" for i, d in local)
 
     @tool
     def query_wrong_book() -> str:
@@ -266,12 +280,31 @@ def _remember(session_id: str, question: str, answer: str) -> None:
         memory.maybe_compress(session_id, _summarizer)
 
 
-def complete_agent(model, question: str, chunks=None, session_id: str = None, user_id=None) -> str:
+def _seed_materials(chunks, session_id, kb_id, question, meta):
+    """Agent 模式下若未携带资料，先用 RAG 流水线召回一轮，产出 sources 引用编号。"""
+    if chunks or not kb_id:
+        meta.setdefault("sources", "")
+        return chunks
+    from app import rag
+    ctx = rag.build_context(kb_id, question, memory.recent(session_id) if session_id else None)
+    if meta is not None:
+        meta["sources"] = ctx.sources
+    return [h["content"] for h in ctx.hits]
+
+
+def _system_prompt(mcp_tools: list, note: str = None) -> str:
+    from app import chains
+    return SYSTEM_PROMPT + (MCP_PROMPT_SUFFIX if mcp_tools else "") + chains._note_suffix(note)
+
+
+def complete_agent(model, question: str, chunks=None, session_id: str = None,
+                   user_id=None, kb_id=None, note: str = None, meta: dict | None = None) -> str:
     """非流式：跑完整 ReAct 循环后返回最终回答。"""
+    meta = meta if meta is not None else {}
+    chunks = _seed_materials(chunks, session_id, kb_id, question, meta)
     mcp_tools = get_mcp_tools()
-    tools = _make_tools(chunks, user_id) + mcp_tools
-    prompt = SYSTEM_PROMPT + (MCP_PROMPT_SUFFIX if mcp_tools else "")
-    agent = create_agent(model, tools, system_prompt=prompt)
+    tools = _make_tools(chunks, user_id, kb_id) + mcp_tools
+    agent = create_agent(model, tools, system_prompt=_system_prompt(mcp_tools, note))
     result = agent.invoke(
         {"messages": _build_messages(question, session_id)},
         config={"recursion_limit": RECURSION_LIMIT},
@@ -281,12 +314,14 @@ def complete_agent(model, question: str, chunks=None, session_id: str = None, us
     return answer
 
 
-def stream_agent(model, question: str, chunks=None, session_id: str = None, user_id=None):
+def stream_agent(model, question: str, chunks=None, session_id: str = None,
+                 user_id=None, kb_id=None, note: str = None, meta: dict | None = None):
     """流式：逐块 yield 最终回答的 token。"""
+    meta = meta if meta is not None else {}
+    chunks = _seed_materials(chunks, session_id, kb_id, question, meta)
     mcp_tools = get_mcp_tools()
-    tools = _make_tools(chunks, user_id) + mcp_tools
-    prompt = SYSTEM_PROMPT + (MCP_PROMPT_SUFFIX if mcp_tools else "")
-    agent = create_agent(model, tools, system_prompt=prompt)
+    tools = _make_tools(chunks, user_id, kb_id) + mcp_tools
+    agent = create_agent(model, tools, system_prompt=_system_prompt(mcp_tools, note))
     full = ""
     try:
         for item in agent.stream(

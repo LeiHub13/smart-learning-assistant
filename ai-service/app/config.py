@@ -28,6 +28,33 @@ LLM_TIMEOUT = int(os.getenv("AI_TIMEOUT", "120"))
 JAVA_TOOL_BASE = os.getenv("JAVA_TOOL_BASE", "http://localhost:8080")
 JAVA_TOOL_TOKEN = os.getenv("JAVA_TOOL_TOKEN", "internal-tool-token")
 
+# ===== RAG 检索链路（自 Java 侧迁移过来）=====
+# 向量库：Chroma 本地持久化目录（默认放在 data/chroma，随 ai-data 卷持久）
+CHROMA_DIR = os.getenv(
+    "RAG_CHROMA_DIR",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "chroma"))
+RAG_COLLECTION = os.getenv("RAG_COLLECTION", "learnassist_chunks")
+
+# 向量化：hash（离线字符 n-gram，128 维，默认）| dashscope（通义 text-embedding-v3）
+EMBEDDING_PROVIDER = os.getenv("RAG_EMBEDDING_PROVIDER", "hash").lower()
+EMBEDDING_MODEL = os.getenv("RAG_EMBEDDING_MODEL", "text-embedding-v3")
+EMBEDDING_BASE_URL = os.getenv(
+    "RAG_EMBEDDING_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+# 不单独配置时复用 AI_API_KEY（通义场景下与生成模型同一把 key）
+EMBEDDING_API_KEY = os.getenv("RAG_EMBEDDING_API_KEY", API_KEY)
+
+# 召回与重排参数（原 Java 侧 app.rag.* / ChatService 常量）
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
+RAG_RERANK_CANDIDATES = int(os.getenv("RAG_RERANK_CANDIDATES", "20"))
+RAG_REWRITE_ENABLED = os.getenv("RAG_REWRITE_ENABLED", "true").lower() in ("1", "true", "yes")
+RAG_RERANK_ENABLED = os.getenv("RAG_RERANK_ENABLED", "true").lower() in ("1", "true", "yes")
+# chunk 正文的唯一数据源仍是 Java 侧 t_chunk，索引时按页拉取
+RAG_CHUNK_PAGE_SIZE = int(os.getenv("RAG_CHUNK_PAGE_SIZE", "500"))
+
+# ===== 文档解析与分块（自 Java 侧迁移过来）=====
+# 定长切块的块大小，与原 Java KbService.CHUNK_SIZE 同值，改动会让新老文档召回粒度不一致
+RAG_CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "200"))
+
 # ===== MCP（Model Context Protocol）外部工具接入 =====
 # 通过 AI_MCP_CONFIG 传入 JSON（格式与 Claude/Cursor 的 mcpServers 一致，transport 缺省为 stdio）。
 # 未配置时默认启用自带 web-search（Bing 中文，免 key 零依赖）；设 AI_MCP_CONFIG=none 显式关闭；
