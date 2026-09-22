@@ -92,7 +92,12 @@
                 <button class="btn small" @click="doUpload(c.id, kb.id)">解析入库</button>
               </div>
               </div>
-              <textarea v-model="docContent" placeholder="支持 .txt/.md/.pdf/.doc/.docx；选择文件自动解析，或直接粘贴文档内容；系统自动分块向量化…"
+              <div v-if="pickedFile" class="row" style="margin-top:8px;align-items:center;gap:8px">
+                <span style="font-size:13px">已选择：{{ pickedFile.name }}（{{ (pickedFile.size / 1024).toFixed(0) }} KB），上传原始文件由后端解析</span>
+                <button class="btn ghost small" @click="clearPicked">改为粘贴文本</button>
+              </div>
+              <textarea v-model="docContent" :disabled="!!pickedFile"
+                        placeholder="支持 .txt/.md/.pdf/.doc/.docx；选择文件自动解析，或直接粘贴文档内容；系统自动分块向量化…"
                         style="margin-top:8px;min-height:130px"></textarea>
             </div>
           </div>
@@ -165,6 +170,7 @@ const newInHub = ref(false)
 const newKbName = ref('')
 const docName = ref('')
 const docContent = ref('')
+const pickedFile = ref(null)
 const error = ref('')
 const confirmKb = ref(null)
 
@@ -254,28 +260,48 @@ const toggleUpload = (kbId) => {
   uploadingKb.value = uploadingKb.value === kbId ? null : kbId
   docName.value = ''
   docContent.value = ''
+  pickedFile.value = null
 }
+
+const BINARY_EXT = ['.pdf', '.doc', '.docx']
 
 const pickFile = (e) => {
   const f = e.target.files && e.target.files[0]
   if (!f) return
   docName.value = f.name
-  const reader = new FileReader()
-  reader.onload = () => {
-    docContent.value = String(reader.result || '')
+  pickedFile.value = f
+  const lower = f.name.toLowerCase()
+  if (BINARY_EXT.some((x) => lower.endsWith(x))) {
+    // 二进制文件不能按文本读（会破坏字节导致后端解析乱码），交由后端解析，清空预览框
+    docContent.value = ''
+  } else {
+    const reader = new FileReader()
+    reader.onload = () => {
+      docContent.value = String(reader.result || '')
+    }
+    reader.readAsText(f)
   }
-  reader.readAsText(f)
   e.target.value = ''
+}
+
+const clearPicked = () => {
+  pickedFile.value = null
+  docContent.value = ''
 }
 
 const doUpload = async (courseId, kbId) => {
   const name = docName.value.trim() || '未命名文档'
-  if (!docContent.value.trim()) {
-    error.value = '请选择文件或粘贴文档内容'
-    return
-  }
   const fd = new FormData()
-  fd.append('file', new File([docContent.value], name, { type: 'text/plain' }))
+  if (pickedFile.value) {
+    // 直接上传原始文件字节，由后端 DocumentParser 解析
+    fd.append('file', pickedFile.value, pickedFile.value.name)
+  } else {
+    if (!docContent.value.trim()) {
+      error.value = '请选择文件或粘贴文档内容'
+      return
+    }
+    fd.append('file', new File([docContent.value], name, { type: 'text/plain' }))
+  }
   await api('/api/kb/' + kbId + '/documents/upload', { method: 'POST', body: fd })
   uploadingKb.value = null
   await refreshKbs(courseId)
