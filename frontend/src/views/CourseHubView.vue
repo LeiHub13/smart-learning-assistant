@@ -13,25 +13,20 @@
       </div>
     </div>
 
-    <div v-else class="hub-grid">
-      <div v-for="c in list" :key="c.id" class="card hub-card">
-        <h3>{{ c.name }}
-          <span v-if="c.role === 'creator'" class="tag ok">我创建的</span>
-        </h3>
-        <div class="hub-desc">{{ c.description || '暂无简介' }}</div>
-        <div class="hub-meta">
-          <span>创建者：{{ c.ownerName }}</span>
-          <span>{{ c.memberCount }} 人加入</span>
-          <span>题库 {{ c.questionCount }} 题</span>
-        </div>
-        <div class="hub-ops">
+    <div v-else class="grid2">
+      <CourseCard v-for="c in list" :key="c.id" :course="c" :clickable="false">
+        <template #actions>
           <button v-if="!c.enrolled" class="btn small" :disabled="busyId === c.id" @click="join(c)">
             {{ busyId === c.id ? '加入中…' : '加入课程' }}
           </button>
-          <span v-else class="tag ok">已加入</span>
-          <button class="btn ghost small" @click="go('/practice')">去练习</button>
-        </div>
-      </div>
+          <template v-else>
+            <button class="btn ghost small" @click="goPractice(c)">去练习</button>
+            <button v-if="c.role !== 'creator'" class="btn ghost small" :disabled="busyId === c.id" @click="leave(c)">
+              {{ busyId === c.id ? '退出中…' : '退出课程' }}
+            </button>
+          </template>
+        </template>
+      </CourseCard>
     </div>
   </div>
 </template>
@@ -40,6 +35,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
+import CourseCard from '../components/CourseCard.vue'
 
 defineOptions({ name: 'CourseHubView' })
 
@@ -49,7 +45,7 @@ const loading = ref(true)
 const error = ref('')
 const busyId = ref('')
 
-const go = (path) => router.push(path)
+const goPractice = (c) => router.push('/practice?courseId=' + c.id)
 
 const load = async () => {
   loading.value = true
@@ -76,19 +72,24 @@ const join = async (c) => {
   }
 }
 
+const leave = async (c) => {
+  busyId.value = c.id
+  error.value = ''
+  try {
+    await api('/api/courses/' + c.id + '/enroll', { method: 'DELETE' })
+    c.enrolled = false
+    c.memberCount = Math.max((c.memberCount || 1) - 1, 0)
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    busyId.value = ''
+  }
+}
+
 onMounted(load)
 </script>
 
 <style scoped>
-.hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
-.hub-card { margin-bottom: 0; display: flex; flex-direction: column; }
-.hub-card h3 { margin-bottom: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.hub-desc { color: var(--muted); font-size: 13px; line-height: 1.7; min-height: 42px; }
-.hub-meta {
-  display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px;
-  font-size: 12px; color: var(--muted);
-}
-.hub-ops { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+/* 卡片与两列网格（.grid2）均复用「我的课程」同一套样式 */
 .muted { color: var(--muted); font-size: 12px; }
-@media (max-width: 768px) { .hub-grid { grid-template-columns: 1fr; } }
 </style>

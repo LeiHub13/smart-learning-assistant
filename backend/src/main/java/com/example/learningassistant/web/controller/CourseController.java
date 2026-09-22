@@ -7,6 +7,7 @@ import com.example.learningassistant.security.AuthUser;
 import com.example.learningassistant.security.CurrentUser;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -66,8 +67,16 @@ public class CourseController {
         return ApiResponse.ok(null);
     }
 
+    /** 退出课程：仅解除本人与该课程的绑定。 */
+    @DeleteMapping("/{id}/enroll")
+    public ApiResponse<Void> unenroll(HttpServletRequest request, @PathVariable Long id) {
+        AuthUser u = CurrentUser.get(request);
+        courseService.unenroll(u.id(), id);
+        return ApiResponse.ok(null);
+    }
+
     /** 删除课程（仅创建者可删，级联清理依赖数据）。 */
-    @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
+    @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(HttpServletRequest request, @PathVariable Long id) {
         AuthUser u = CurrentUser.get(request);
         courseService.delete(u.id(), id);

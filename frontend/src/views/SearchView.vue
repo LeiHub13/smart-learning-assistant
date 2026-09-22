@@ -5,7 +5,9 @@
 
     <div class="card">
       <div class="row" style="gap:10px">
-        <input v-model="q" placeholder="输入关键词，回车搜索" @keyup.enter="doSearch" style="flex:1" />
+        <el-input v-model="q" placeholder="输入关键词，回车搜索" clearable @keyup.enter="doSearch">
+          <template #prefix><AppIcon name="search" :size="14" /></template>
+        </el-input>
         <button class="btn small" :disabled="loading" @click="doSearch">{{ loading ? '搜索中…' : '搜索' }}</button>
       </div>
     </div>
@@ -62,7 +64,10 @@
 <script setup>
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElInput } from 'element-plus'
+import 'element-plus/es/components/input/style/css'
 import { api } from '../api'
+import AppIcon from '../components/AppIcon.vue'
 
 defineOptions({ name: 'SearchView' })
 

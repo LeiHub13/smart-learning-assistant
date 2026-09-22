@@ -30,8 +30,10 @@
   <div class="right">
     <header class="topbar">
       <div class="tb-title">{{ pageTitle }}</div>
-      <input class="global-search" v-model="searchQ" placeholder="搜索题目 / 笔记 / 文档 / 考试…"
-             @keyup.enter="doSearch" />
+      <el-input class="global-search" v-model="searchQ" placeholder="搜索题目 / 笔记 / 文档 / 考试…"
+                clearable @keyup.enter="doSearch">
+        <template #prefix><AppIcon name="search" :size="14" /></template>
+      </el-input>
       <div class="tb-right">
         <div class="bell" @click.stop="toggleBell">
           <AppIcon name="bell" :size="17" />
@@ -95,6 +97,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElInput } from 'element-plus'
+import 'element-plus/es/components/input/style/css'
 import { api, getToken, clearToken, resetApiCache, listNotifications, unreadCount, markRead, markAllRead } from './api'
 import AppIcon from './components/AppIcon.vue'
 
@@ -279,12 +283,14 @@ watch(
 
 <style scoped>
 img.avatar { object-fit: cover; padding: 0; }
-.global-search {
-  flex: 0 1 260px; min-width: 120px; height: 34px; margin-left: 18px;
-  border: 1px solid var(--border); border-radius: 10px; padding: 0 12px;
-  font-size: 13px; background: var(--soft); outline: none;
+.global-search { flex: 0 1 260px; min-width: 120px; margin-left: 18px; }
+.global-search :deep(.el-input__wrapper) {
+  background: var(--soft); border-radius: 10px; padding: 0 10px;
+  box-shadow: 0 0 0 1px var(--border) inset;
 }
-.global-search:focus { border-color: var(--accent); background: #fff; }
+.global-search :deep(.el-input__wrapper.is-focus) { background: #fff; box-shadow: 0 0 0 1px var(--accent) inset; }
+.global-search :deep(.el-input__inner) { height: 32px; font-size: 13px; }
+.global-search :deep(.el-input__prefix-inner > :first-child) { margin-right: 4px; }
 .tab-bar { display: flex; border-bottom: 1px solid #f0ece6; }
 .tab-bar span { flex: 1; text-align: center; padding: 10px 0 9px; font-size: 13px; font-weight: 700; color: #999; cursor: pointer; }
 .tab-bar span.on { color: #1a1a1a; box-shadow: inset 0 -2px 0 #c98f4e; }

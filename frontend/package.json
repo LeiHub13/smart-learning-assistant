@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "echarts": "^6.1.0",
+    "element-plus": "^2.14.6",
     "vue": "^3.4.31",
     "vue-router": "^4.4.0"
   },

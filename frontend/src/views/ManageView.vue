@@ -26,86 +26,87 @@
       </div>
     </div>
 
-    <div v-for="c in courses" :key="c.id" class="card">
-      <div class="row" style="justify-content:space-between">
-        <div style="flex:1">
-          <h3 style="margin-bottom:4px">{{ c.name }}
-            <span v-if="c.role === 'creator'" class="tag ok">我创建的</span>
-            <span v-else class="tag">我加入的</span>
-            <span v-if="c.inHub" class="tag">已入驻 Hub</span>
-          </h3>
-          <div style="color:var(--muted)">{{ c.description }}</div>
-          <div style="margin-top:6px;font-size:12px;color:var(--muted)">知识库 {{ c.kbCount }} 个 · 题库 {{ c.questionCount }} 题</div>
-        </div>
-        <button v-if="c.ownerId === meId" class="btn ghost small" style="margin-left:8px" @click="toggleHub(c)">
-          {{ c.inHub ? '移出课程 Hub' : '加入课程 Hub' }}
-        </button>
-        <button v-if="c.ownerId === meId" class="btn danger small" style="margin-left:8px" @click="askDeleteCourse(c)">删除课程</button>
-      </div>
+    <div class="grid2">
+      <CourseCard v-for="c in courses" :key="c.id" :course="c" :active="expanded === c.id" :clickable="false">
+        <template #actions>
+          <button class="btn ghost small" @click="goPractice(c)">去练习</button>
+          <button class="btn ghost small" @click="openDetail(c)">知识库</button>
+          <button v-if="c.ownerId === meId" class="btn ghost small" @click="toggleHub(c)">
+            {{ c.inHub ? '移出 Hub' : '入驻 Hub' }}
+          </button>
+          <button v-if="c.ownerId === meId" class="btn danger small" @click="askDeleteCourse(c)">删除课程</button>
+          <button v-if="c.role !== 'creator'" class="btn ghost small" @click="askLeaveCourse(c)">退出课程</button>
+        </template>
+      </CourseCard>
+    </div>
 
-      <template v-if="expanded === c.id">
-        <div style="margin-top:14px">
-          <div class="row" style="margin-bottom:10px">
-            <input v-model="newKbName" type="text" placeholder="新知识库名称" />
-            <div class="btns">
-            <button class="btn ghost small" @click="createKb(c.id)">创建知识库</button>
+    <div v-if="sel" class="modal-mask" @click.self="expanded = null">
+      <div class="modal-box wide">
+        <div class="detail-hd">
+          <div>
+            <h3 class="detail-title">{{ sel.name }} · 知识库</h3>
+            <div class="detail-sub">创建知识库、上传资料，供 AI 答疑检索</div>
           </div>
-          </div>
-          <div v-for="kb in c.kbs" :key="kb.id" class="qi">
-            <div class="hd">
-              <b>{{ kb.name }}</b>
-              <span class="tag">知识库</span>
-              <button class="btn ghost small" style="margin-left:auto" @click="toggleUpload(kb.id)">上传文档</button>
-              <button class="btn danger small" style="margin-left:8px" @click="askDeleteKb(c.id, kb.id, kb.name)">删除知识库</button>
-            </div>
-            <div v-for="d in kb.docs" :key="d.id" class="ans" style="margin:4px 0">
-              <div class="row" style="justify-content:space-between">
-                <span>📄 {{ d.fileName }} · {{ d.chunkCount }} 个片段</span>
-                <span class="row" style="gap:8px">
-                  <button class="btn ghost small" @click="togglePreview(kb.id, d.id)">
-                    {{ previewDocId === d.id ? '收起预览' : '预览' }}
-                  </button>
-                  <button class="btn danger small" @click="deleteDoc(kb.id, d.id)">删除</button>
-                </span>
-              </div>
-              <div v-if="previewDocId === d.id" class="doc-preview">
-                <div v-if="previewLoading" class="loading"><i></i>加载中…</div>
-                <template v-else-if="preview">
-                  <div class="muted small" style="margin-bottom:6px">
-                    {{ preview.fileName }} · {{ preview.fileType }} · {{ preview.chunkCount }} 个片段 · {{ preview.parseStatus }}
-                  </div>
-                  <div class="pv-text">{{ preview.text || '（无文本内容：索引未完成或文档为空）' }}</div>
-                  <div v-if="preview.fileUrl" style="margin-top:8px">
-                    <a :href="preview.fileUrl" target="_blank" class="link">下载原始文件</a>
-                  </div>
-                </template>
-              </div>
-            </div>
-            <div v-if="uploadingKb === kb.id" style="margin-top:8px">
-              <div class="row">
-                <input v-model="docName" type="text" placeholder="文档名（如：HashMap原理.md）" />
-                <div class="btns">
-                <label class="btn ghost small" style="cursor:pointer">
-                  📄 选择文件
-                  <input type="file" accept=".txt,.md,.markdown,.pdf,.doc,.docx,.java,.json,.xml,.yml,.sql" style="display:none" @change="pickFile" />
-                </label>
-                <button class="btn small" @click="doUpload(c.id, kb.id)">解析入库</button>
-              </div>
-              </div>
-              <div v-if="pickedFile" class="row" style="margin-top:8px;align-items:center;gap:8px">
-                <span style="font-size:13px">已选择：{{ pickedFile.name }}（{{ (pickedFile.size / 1024).toFixed(0) }} KB），上传原始文件由后端解析</span>
-                <button class="btn ghost small" @click="clearPicked">改为粘贴文本</button>
-              </div>
-              <textarea v-model="docContent" :disabled="!!pickedFile"
-                        placeholder="支持 .txt/.md/.pdf/.doc/.docx；选择文件自动解析，或直接粘贴文档内容；系统自动分块向量化…"
-                        style="margin-top:8px;min-height:130px"></textarea>
-            </div>
+          <button class="btn ghost small" @click="expanded = null">关闭</button>
+        </div>
+
+        <div class="row" style="margin-bottom:10px">
+          <input v-model="newKbName" type="text" placeholder="新知识库名称" />
+          <div class="btns">
+            <button class="btn ghost small" @click="createKb(sel.id)">创建知识库</button>
           </div>
         </div>
-      </template>
-      <button class="btn ghost small" style="margin-top:12px" @click="toggleExpand(c)">
-        {{ expanded === c.id ? '收起' : '查看知识库' }}
-      </button>
+        <div v-for="kb in sel.kbs" :key="kb.id" class="qi">
+          <div class="hd">
+            <b>{{ kb.name }}</b>
+            <span class="tag">知识库</span>
+            <button class="btn ghost small" style="margin-left:auto" @click="toggleUpload(kb.id)">上传文档</button>
+            <button class="btn danger small" style="margin-left:8px" @click="askDeleteKb(sel.id, kb.id, kb.name)">删除知识库</button>
+          </div>
+          <div v-for="d in kb.docs" :key="d.id" class="ans" style="margin:4px 0">
+            <div class="row" style="justify-content:space-between">
+              <span>📄 {{ d.fileName }} · {{ d.chunkCount }} 个片段</span>
+              <span class="row" style="gap:8px">
+                <button class="btn ghost small" @click="togglePreview(kb.id, d.id)">
+                  {{ previewDocId === d.id ? '收起预览' : '预览' }}
+                </button>
+                <button class="btn danger small" @click="deleteDoc(kb.id, d.id)">删除</button>
+              </span>
+            </div>
+            <div v-if="previewDocId === d.id" class="doc-preview">
+              <div v-if="previewLoading" class="loading"><i></i>加载中…</div>
+              <template v-else-if="preview">
+                <div class="muted small" style="margin-bottom:6px">
+                  {{ preview.fileName }} · {{ preview.fileType }} · {{ preview.chunkCount }} 个片段 · {{ preview.parseStatus }}
+                </div>
+                <div class="pv-text">{{ preview.text || '（无文本内容：索引未完成或文档为空）' }}</div>
+                <div v-if="preview.fileUrl" style="margin-top:8px">
+                  <a :href="preview.fileUrl" target="_blank" class="link">下载原始文件</a>
+                </div>
+              </template>
+            </div>
+          </div>
+          <div v-if="uploadingKb === kb.id" style="margin-top:8px">
+            <div class="row">
+              <input v-model="docName" type="text" placeholder="文档名（如：HashMap原理.md）" />
+              <div class="btns">
+              <label class="btn ghost small" style="cursor:pointer">
+                📄 选择文件
+                <input type="file" accept=".txt,.md,.markdown,.pdf,.docx,.java,.json,.xml,.yml,.sql" style="display:none" @change="pickFile" />
+              </label>
+              <button class="btn small" @click="doUpload(sel.id, kb.id)">解析入库</button>
+            </div>
+            </div>
+            <div v-if="pickedFile" class="row" style="margin-top:8px;align-items:center;gap:8px">
+              <span style="font-size:13px">已选择：{{ pickedFile.name }}（{{ (pickedFile.size / 1024).toFixed(0) }} KB），上传原始文件由后端解析</span>
+              <button class="btn ghost small" @click="clearPicked">改为粘贴文本</button>
+            </div>
+            <textarea v-model="docContent" :disabled="!!pickedFile"
+                      placeholder="支持 .txt/.md/.pdf/.docx（旧版 .doc 请先另存为 .docx）；选择文件自动解析，或直接粘贴文档内容；系统自动分块向量化…"
+                      style="margin-top:8px;min-height:130px"></textarea>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div v-if="confirmKb" class="modal-mask" @click.self="confirmKb = null">
@@ -115,6 +116,17 @@
         <div class="modal-ops">
           <button class="btn ghost small" @click="confirmKb = null">取消</button>
           <button class="btn danger small" @click="doDeleteKb">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="confirmLeave" class="modal-mask" @click.self="confirmLeave = null">
+      <div class="modal-box">
+        <h3>退出课程</h3>
+        <p>确定退出课程「{{ confirmLeave.name }}」吗？退出后该课程不再出现在「我的课程」里，你已产生的练习/笔记等数据仍保留；课程若仍在 Hub 中可随时重新加入。</p>
+        <div class="modal-ops">
+          <button class="btn ghost small" @click="confirmLeave = null">取消</button>
+          <button class="btn danger small" @click="doLeaveCourse">确认退出</button>
         </div>
       </div>
     </div>
@@ -133,15 +145,22 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { api, getCourses } from '../api'
+import CourseCard from '../components/CourseCard.vue'
 
 defineOptions({ name: 'ManageView' })
 
+const router = useRouter()
+const goPractice = (c) => router.push('/practice?courseId=' + c.id)
+
 const courses = ref([])
 const expanded = ref(null)
+const sel = computed(() => courses.value.find((c) => c.id === expanded.value) || null)
 const meId = ref(null)
 const confirmCourse = ref(null)
+const confirmLeave = ref(null)
 const uploadingKb = ref(null)
 const previewDocId = ref(null)
 const preview = ref(null)
@@ -192,6 +211,24 @@ const askDeleteCourse = (c) => {
   confirmCourse.value = c
 }
 
+const askLeaveCourse = (c) => {
+  confirmLeave.value = c
+}
+
+const doLeaveCourse = async () => {
+  const c = confirmLeave.value
+  if (!c) return
+  try {
+    await api('/api/courses/' + c.id + '/enroll', { method: 'DELETE' })
+    confirmLeave.value = null
+    showHint('已退出课程「' + c.name + '」')
+    courses.value = await getCourses(true)
+  } catch (e) {
+    confirmLeave.value = null
+    showHint(e.message)
+  }
+}
+
 const doDeleteCourse = async () => {
   const c = confirmCourse.value
   if (!c) return
@@ -228,12 +265,11 @@ const toggleHub = async (c) => {
   }
 }
 
-const toggleExpand = async (c) => {
-  if (expanded.value === c.id) {
-    expanded.value = null
-    return
-  }
+const openDetail = async (c) => {
   expanded.value = c.id
+  uploadingKb.value = null
+  previewDocId.value = null
+  preview.value = null
   await refreshKbs(c.id)
 }
 
@@ -247,7 +283,8 @@ const refreshKbs = async (courseId) => {
   }
   c.kbs = kbs
   c.kbCount = kbs.length
-  expanded.value = courseId
+  c.docCount = kbs.reduce((n, kb) => n + kb.docs.length, 0)
+  c.chunkCount = kbs.reduce((n, kb) => n + kb.docs.reduce((s, d) => s + (d.chunkCount || 0), 0), 0)
 }
 
 const createKb = async (courseId) => {
@@ -263,7 +300,7 @@ const toggleUpload = (kbId) => {
   pickedFile.value = null
 }
 
-const BINARY_EXT = ['.pdf', '.doc', '.docx']
+const BINARY_EXT = ['.pdf', '.docx']
 
 const pickFile = (e) => {
   const f = e.target.files && e.target.files[0]
@@ -293,7 +330,7 @@ const doUpload = async (courseId, kbId) => {
   const name = docName.value.trim() || '未命名文档'
   const fd = new FormData()
   if (pickedFile.value) {
-    // 直接上传原始文件字节，由后端 DocumentParser 解析
+    // 直接上传原始文件字节，由 ai-service 解析并切块
     fd.append('file', pickedFile.value, pickedFile.value.name)
   } else {
     if (!docContent.value.trim()) {
@@ -332,6 +369,20 @@ const doDeleteKb = async () => {
 </script>
 
 <style scoped>
+/* 知识库详情用宽版弹窗：全局 .modal-box 只有 400px，装不下上传框和预览 */
+.modal-box.wide {
+  width: min(760px, 94vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 20px 22px;
+}
+.detail-hd { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+.detail-hd > div { flex: 1; }
+.detail-hd .btn { flex: 0 0 auto; }
+.detail-title { font-size: 16px; margin: 0 0 4px; }
+.detail-sub { color: var(--muted); font-size: 12px; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
 .doc-preview {
   margin-top: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
   background: var(--soft);
@@ -342,4 +393,5 @@ const doDeleteKb = async () => {
   font-family: Consolas, "Microsoft YaHei", monospace; font-size: 13px;
   background: #faf9f7; border-radius: 8px; padding: 10px 12px;
 }
+@media (max-width: 900px) { .pk-grid { grid-template-columns: minmax(0, 1fr); } }
 </style>

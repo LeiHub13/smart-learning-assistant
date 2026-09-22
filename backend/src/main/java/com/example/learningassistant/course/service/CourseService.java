@@ -6,7 +6,9 @@ import com.example.learningassistant.course.entity.Course;
 import com.example.learningassistant.course.entity.CourseUser;
 import com.example.learningassistant.course.mapper.CourseMapper;
 import com.example.learningassistant.course.mapper.CourseUserMapper;
+import com.example.learningassistant.kb.entity.Document;
 import com.example.learningassistant.kb.entity.KnowledgeBase;
+import com.example.learningassistant.kb.mapper.DocumentMapper;
 import com.example.learningassistant.kb.mapper.KnowledgeBaseMapper;
 import com.example.learningassistant.practice.entity.Question;
 import com.example.learningassistant.practice.mapper.QuestionMapper;
@@ -16,9 +18,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 课程服务：创建课程、课程列表（含选课/统计）、选课。
@@ -31,6 +35,7 @@ public class CourseService {
     private final CourseMapper courseMapper;
     private final CourseUserMapper courseUserMapper;
     private final KnowledgeBaseMapper kbMapper;
+    private final DocumentMapper documentMapper;
     private final QuestionMapper questionMapper;
     private final com.example.learningassistant.kb.service.KbService kbService;
     private final com.example.learningassistant.exam.mapper.ExamMapper examMapper;
@@ -56,9 +61,12 @@ public class CourseService {
         java.util.Set<Long> enrolledIds = courseUserMapper.selectList(new LambdaQueryWrapper<CourseUser>()
                         .eq(CourseUser::getUserId, userId)).stream()
                 .map(CourseUser::getCourseId).collect(java.util.stream.Collectors.toSet());
-        return courses.stream()
+        List<Course> mine = courses.stream()
                 .filter(c -> isOwner(c, userId) || enrolledIds.contains(c.getId()))
-                .map(c -> toMap(c, isEnrolled(c, userId, enrolledIds), roleOf(c, userId)))
+                .toList();
+        Map<Long, int[]> stats = kbStats(mine);
+        return mine.stream()
+                .map(c -> toMap(c, isEnrolled(c, userId, enrolledIds), roleOf(c, userId), stats.get(c.getId())))
                 .toList();
     }
 
@@ -71,8 +79,9 @@ public class CourseService {
         java.util.Set<Long> enrolledIds = courseUserMapper.selectList(new LambdaQueryWrapper<CourseUser>()
                         .eq(CourseUser::getUserId, userId)).stream()
                 .map(CourseUser::getCourseId).collect(java.util.stream.Collectors.toSet());
+        Map<Long, int[]> stats = kbStats(courses);
         return courses.stream().map(c -> {
-            Map<String, Object> m = toMap(c, isEnrolled(c, userId, enrolledIds), roleOf(c, userId));
+            Map<String, Object> m = toMap(c, isEnrolled(c, userId, enrolledIds), roleOf(c, userId), stats.get(c.getId()));
             m.put("memberCount", courseUserMapper.selectCount(new LambdaQueryWrapper<CourseUser>()
                     .eq(CourseUser::getCourseId, c.getId())).intValue());
             return m;
@@ -102,7 +111,49 @@ public class CourseService {
         courseMapper.updateById(c);
     }
 
-    private Map<String, Object> toMap(Course c, boolean enrolled, String role) {
+    /**
+     * 知识库统计：整批课程只查两次（知识库、文档），派生 [kbCount, docCount, chunkCount]。
+     */
+    private Map<Long, int[]> kbStats(List<Course> courses) {
+        Map<Long, int[]> stats = new HashMap<>();
+        if (courses.isEmpty()) {
+            return stats;
+        }
+        List<Long> courseIds = courses.stream().map(Course::getId).toList();
+        Map<Long, List<Long>> kbIdsByCourse = kbMapper.selectList(new LambdaQueryWrapper<KnowledgeBase>()
+                        .in(KnowledgeBase::getCourseId, courseIds)
+                        .select(KnowledgeBase::getId, KnowledgeBase::getCourseId)).stream()
+                .collect(Collectors.groupingBy(KnowledgeBase::getCourseId,
+                        Collectors.mapping(KnowledgeBase::getId, Collectors.toList())));
+
+        List<Long> allKbIds = kbIdsByCourse.values().stream().flatMap(List::stream).toList();
+        Map<Long, int[]> docByKb = new HashMap<>();
+        if (!allKbIds.isEmpty()) {
+            for (Document d : documentMapper.selectList(new LambdaQueryWrapper<Document>()
+                    .in(Document::getKbId, allKbIds)
+                    .select(Document::getKbId, Document::getChunkCount))) {
+                int[] s = docByKb.computeIfAbsent(d.getKbId(), k -> new int[2]);
+                s[0]++;
+                s[1] += d.getChunkCount() == null ? 0 : d.getChunkCount();
+            }
+        }
+
+        for (Long courseId : courseIds) {
+            List<Long> kbIds = kbIdsByCourse.getOrDefault(courseId, List.of());
+            int[] total = {kbIds.size(), 0, 0};
+            for (Long kbId : kbIds) {
+                int[] s = docByKb.get(kbId);
+                if (s != null) {
+                    total[1] += s[0];
+                    total[2] += s[1];
+                }
+            }
+            stats.put(courseId, total);
+        }
+        return stats;
+    }
+
+    private Map<String, Object> toMap(Course c, boolean enrolled, String role, int[] stat) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", c.getId());
         m.put("name", c.getName());
@@ -112,8 +163,9 @@ public class CourseService {
         m.put("inHub", c.getInHub() != null && c.getInHub() == 1);
         m.put("enrolled", enrolled);
         m.put("role", role);
-        m.put("kbCount", kbMapper.selectCount(new LambdaQueryWrapper<KnowledgeBase>()
-                .eq(KnowledgeBase::getCourseId, c.getId())).intValue());
+        m.put("kbCount", stat == null ? 0 : stat[0]);
+        m.put("docCount", stat == null ? 0 : stat[1]);
+        m.put("chunkCount", stat == null ? 0 : stat[2]);
         m.put("questionCount", questionMapper.selectCount(new LambdaQueryWrapper<Question>()
                 .eq(Question::getCourseId, c.getId())).intValue());
         return m;
@@ -145,6 +197,20 @@ public class CourseService {
         cu.setUserId(userId);
         cu.setJoinedAt(LocalDateTime.now());
         courseUserMapper.insert(cu);
+    }
+
+    /**
+     * 退出课程：只解除本人与课程的绑定，课程数据与本人历史数据都保留。
+     * 创建者不走这里（应删除课程），否则会留下一门没人拥有权限口径的门。
+     */
+    public void unenroll(Long userId, Long courseId) {
+        Course c = require(courseId);
+        if (isOwner(c, userId)) {
+            throw new BizException("课程创建者不能退出该课程，如需移除请删除课程");
+        }
+        courseUserMapper.delete(new LambdaQueryWrapper<CourseUser>()
+                .eq(CourseUser::getCourseId, courseId)
+                .eq(CourseUser::getUserId, userId));
     }
 
     public Course require(Long id) {
