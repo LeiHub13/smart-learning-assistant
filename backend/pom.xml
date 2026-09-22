@@ -134,6 +134,11 @@
             <artifactId>poi-ooxml</artifactId>
             <version>5.3.0</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-scratchpad</artifactId>
+            <version>5.3.0</version>
+        </dependency>
         <!-- 学习报告 PDF 导出（STSong-Light 内嵌中文字体） -->
         <dependency>
             <groupId>com.github.librepdf</groupId>

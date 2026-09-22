@@ -4,6 +4,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.poi.hwpf.HWPFDocument;
+import org.apache.poi.hwpf.extractor.WordExtractor;
 import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.springframework.stereotype.Service;
@@ -24,9 +26,12 @@ public class DocumentParser {
             if ("pdf".equalsIgnoreCase(ext) || isMime(contentType, "application/pdf")) {
                 return parsePdf(data);
             }
-            if ("docx".equalsIgnoreCase(ext) || "doc".equalsIgnoreCase(ext)
+            if ("docx".equalsIgnoreCase(ext)
                     || isMime(contentType, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")) {
-                return parseWord(data);
+                return parseDocx(data);
+            }
+            if ("doc".equalsIgnoreCase(ext)) {
+                return parseDoc(data);
             }
             // txt / md / code 等按 UTF-8 文本处理
             return new String(data, StandardCharsets.UTF_8);
@@ -42,9 +47,16 @@ public class DocumentParser {
         }
     }
 
-    private String parseWord(byte[] data) throws Exception {
+    private String parseDocx(byte[] data) throws Exception {
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(data));
              XWPFWordExtractor extractor = new XWPFWordExtractor(doc)) {
+            return extractor.getText();
+        }
+    }
+
+    private String parseDoc(byte[] data) throws Exception {
+        try (HWPFDocument doc = new HWPFDocument(new ByteArrayInputStream(data));
+             WordExtractor extractor = new WordExtractor(doc)) {
             return extractor.getText();
         }
     }
