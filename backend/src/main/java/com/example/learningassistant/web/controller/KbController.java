@@ -89,6 +89,8 @@ public class KbController {
             content = documentParser.parse(name, file.getContentType(), file.getBytes());
         } catch (IOException e) {
             throw new com.example.learningassistant.common.BizException("文件读取失败: " + e.getMessage());
+        } catch (DocumentParser.DocumentParseException e) {
+            throw new com.example.learningassistant.common.BizException(e.getMessage());
         }
         Document doc = kbService.indexTextDocument(kbId, name, content);
         Map<String, Object> m = new LinkedHashMap<>();
