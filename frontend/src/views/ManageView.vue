@@ -65,7 +65,7 @@
           </div>
           <div v-for="d in kb.docs" :key="d.id" class="ans" style="margin:4px 0">
             <div class="row" style="justify-content:space-between">
-              <span>📄 {{ d.fileName }} · {{ d.chunkCount }} 个片段</span>
+              <span class="shrink">📄 {{ d.fileName }} · {{ d.chunkCount }} 个片段</span>
               <span class="row" style="gap:8px">
                 <button class="btn ghost small" @click="togglePreview(kb.id, d.id)">
                   {{ previewDocId === d.id ? '收起预览' : '预览' }}
@@ -98,7 +98,7 @@
             </div>
             </div>
             <div v-if="pickedFile" class="row" style="margin-top:8px;align-items:center;gap:8px">
-              <span style="font-size:13px">已选择：{{ pickedFile.name }}（{{ (pickedFile.size / 1024).toFixed(0) }} KB），上传原始文件由后端解析</span>
+              <span class="shrink" style="font-size:13px">已选择：{{ pickedFile.name }}（{{ (pickedFile.size / 1024).toFixed(0) }} KB），上传原始文件由后端解析</span>
               <button class="btn ghost small" @click="clearPicked">改为粘贴文本</button>
             </div>
             <textarea v-model="docContent" :disabled="!!pickedFile"
