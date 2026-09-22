@@ -31,7 +31,12 @@ public class DocumentParser {
                 return parseDocx(data);
             }
             if ("doc".equalsIgnoreCase(ext)) {
-                return parseDoc(data);
+                try {
+                    return parseDoc(data);
+                } catch (Exception e) {
+                    log.warn(".doc 解析失败，降级当纯文本读取: {} - {}", fileName, e.getMessage());
+                    return new String(data, StandardCharsets.UTF_8);
+                }
             }
             // txt / md / code 等按 UTF-8 文本处理
             return new String(data, StandardCharsets.UTF_8);
