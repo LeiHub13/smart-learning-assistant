@@ -6,7 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 /**
- * 文档分块：文本抽取后切分，向量化写入向量库，chunkId 与向量一一对应。
+ * 文档分块：文本抽取后切分落库。正文的唯一数据源，ai-service 据此建向量索引。
  */
 @Data
 @TableName("t_chunk")

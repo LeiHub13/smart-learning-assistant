@@ -3,8 +3,10 @@ package com.example.learningassistant.web.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.learningassistant.common.ApiResponse;
 import com.example.learningassistant.common.BizException;
+import com.example.learningassistant.kb.entity.Chunk;
 import com.example.learningassistant.kb.entity.Document;
 import com.example.learningassistant.kb.entity.KnowledgeBase;
+import com.example.learningassistant.kb.mapper.ChunkMapper;
 import com.example.learningassistant.kb.mapper.DocumentMapper;
 import com.example.learningassistant.kb.mapper.KnowledgeBaseMapper;
 import com.example.learningassistant.practice.entity.Practice;
@@ -43,6 +45,7 @@ public class InternalToolController {
     private final QuestionMapper questionMapper;
     private final KnowledgeBaseMapper kbMapper;
     private final DocumentMapper documentMapper;
+    private final ChunkMapper chunkMapper;
 
     @Value("${app.internal-tool-token:internal-tool-token}")
     private String internalToken;
@@ -150,6 +153,38 @@ public class InternalToolController {
                 row.put("chunkCount", d.getChunkCount());
                 result.add(row);
             }
+        }
+        return ApiResponse.ok(result);
+    }
+
+    /**
+     * chunk 正文下发：ai-service 建向量索引时按游标分页拉取（RAG 检索链路已迁移到 Python，
+     * t_chunk 仍是正文的唯一数据源，向量库只是它的派生索引）。
+     *
+     * @param cursor 上一页最后一条 chunkId，首页传 0
+     */
+    @GetMapping("/chunks")
+    public ApiResponse<List<Map<String, Object>>> chunks(HttpServletRequest request,
+                                                         @RequestParam(required = false) Long kbId,
+                                                         @RequestParam(required = false) Long docId,
+                                                         @RequestParam(defaultValue = "0") Long cursor,
+                                                         @RequestParam(defaultValue = "500") Integer limit) {
+        checkToken(request);
+        int size = Math.min(Math.max(limit == null ? 500 : limit, 1), 2000);
+        List<Chunk> list = chunkMapper.selectList(new LambdaQueryWrapper<Chunk>()
+                .gt(Chunk::getId, cursor)
+                .eq(kbId != null, Chunk::getKbId, kbId)
+                .eq(docId != null, Chunk::getDocId, docId)
+                .orderByAsc(Chunk::getId)
+                .last("LIMIT " + size));
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Chunk c : list) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("chunkId", c.getId());
+            row.put("docId", c.getDocId());
+            row.put("kbId", c.getKbId());
+            row.put("content", c.getContent());
+            result.add(row);
         }
         return ApiResponse.ok(result);
     }

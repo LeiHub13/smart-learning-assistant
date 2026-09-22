@@ -1,7 +1,6 @@
 package com.example.learningassistant.recommend.service;
 
-import com.example.learningassistant.ai.EmbeddingService;
-import com.example.learningassistant.infra.vector.VectorStore;
+import com.example.learningassistant.ai.PythonRagClient;
 import com.example.learningassistant.kb.entity.Chunk;
 import com.example.learningassistant.kb.entity.Document;
 import com.example.learningassistant.kb.mapper.ChunkMapper;
@@ -37,8 +36,7 @@ public class RecommendService {
     private final PracticeMapper practiceMapper;
     private final KnowledgeMasteryMapper masteryMapper;
     private final SpacedRepetitionService spacedRepetitionService;
-    private final EmbeddingService embeddingService;
-    private final VectorStore vectorStore;
+    private final PythonRagClient ragClient;
     private final ChunkMapper chunkMapper;
     private final DocumentMapper documentMapper;
 
@@ -109,14 +107,14 @@ public class RecommendService {
         return items.subList(0, Math.min(items.size(), MAX_ITEMS));
     }
 
-    /** 按知识点名称做语义检索，返回最相关的知识库片段文本（含来源文档名）。 */
+    /** 按知识点名称走 ai-service 语义检索，返回最相关的知识库片段文本（含来源文档名）。 */
     private String relatedDoc(String kpName) {
         try {
-            List<VectorStore.ScoredId> hits = vectorStore.search(embeddingService.embed(kpName), 1);
+            List<PythonRagClient.Hit> hits = ragClient.retrieve(kpName, null, 1);
             if (hits.isEmpty()) {
                 return null;
             }
-            Chunk chunk = chunkMapper.selectById(hits.get(0).id());
+            Chunk chunk = chunkMapper.selectById(hits.get(0).chunkId());
             if (chunk == null) {
                 return null;
             }

@@ -1,11 +1,10 @@
 package com.example.learningassistant.kb.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.example.learningassistant.ai.EmbeddingService;
+import com.example.learningassistant.ai.PythonRagClient;
 import com.example.learningassistant.common.BizException;
 import com.example.learningassistant.infra.mq.MessagePublisher;
 import com.example.learningassistant.infra.storage.FileStorage;
-import com.example.learningassistant.infra.vector.VectorStore;
 import com.example.learningassistant.kb.entity.Chunk;
 import com.example.learningassistant.kb.entity.Document;
 import com.example.learningassistant.kb.entity.KnowledgeBase;
@@ -23,10 +22,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 知识库服务：知识库管理 + 文档登记 + 文本分块索引（同步）。
+ * 知识库服务：知识库管理 + 文档登记 + chunk 落库（同步）。
  *
- * 索引链路：文档文本 -> 智能分块 -> 向量化写向量库 + chunk 元数据入库
- * 检索链路：问题 -> 向量召回（见 ChatService.buildContext）
+ * 分工：文档解析与分块在 ai-service 侧完成（app/parsing.py），Java 拿到 chunks 后落库；
+ * t_chunk 仍是 chunk 正文的唯一数据源，向量化与检索也在 ai-service 侧（app/rag.py、app/retriever.py）。
+ * 索引链路：chunk 落库 -> 通知 Python 拉取该文档并写入 Chroma（PythonRagClient.index）
  */
 @Slf4j
 @Service
@@ -37,12 +37,10 @@ public class KbService {
     private final DocumentMapper documentMapper;
     private final ChunkMapper chunkMapper;
     private final FileStorage fileStorage;
-    private final VectorStore vectorStore;
-    private final EmbeddingService embeddingService;
+    private final PythonRagClient ragClient;
     private final MessagePublisher messagePublisher;
 
     public static final String TOPIC_DOC_INDEX = "kb.document.index";
-    private static final int CHUNK_SIZE = 200;
 
     public KnowledgeBase createKb(Long courseId, String name) {
         KnowledgeBase kb = new KnowledgeBase();
@@ -103,27 +101,45 @@ public class KbService {
     }
 
     /**
-     * 纯文本文档索引（前端粘贴文本场景）：同步分块 + 向量化 + 落库。
+     * 纯文本文档索引（前端粘贴文本、AI 讲义、种子数据场景）：Python 切块 -> 落库 -> 向量化。
      */
     public Document indexTextDocument(Long kbId, String fileName, String content) {
-        requireKb(kbId);
         String text = content == null ? "" : content.trim();
         if (text.isEmpty()) {
             throw new BizException("文档内容不能为空");
+        }
+        return indexChunks(kbId, fileName, "text/plain",
+                ragClient.chunkText(text), text.length());
+    }
+
+    /**
+     * 上传型文档索引（PDF/DOCX/文本文件）：原始字节交给 ai-service 解析并切块，Java 落库后触发向量化。
+     *
+     * @throws com.example.learningassistant.ai.PythonRagClient.RagException 解析失败，message 为可读原因
+     */
+    public Document indexUploadedDocument(Long kbId, String fileName, String contentType, byte[] data) {
+        return indexChunks(kbId, fileName, contentType,
+                ragClient.parseChunks(fileName, contentType, data), data.length);
+    }
+
+    private Document indexChunks(Long kbId, String fileName, String fileType,
+                                 List<String> parts, long fileSize) {
+        requireKb(kbId);
+        if (parts == null || parts.isEmpty()) {
+            throw new BizException("未能从该文档切分出任何内容块");
         }
 
         Document doc = new Document();
         doc.setKbId(kbId);
         doc.setFileName(fileName);
         doc.setFileUrl(null);
-        doc.setFileType("text/plain");
-        doc.setFileSize((long) text.length());
+        doc.setFileType(fileType);
+        doc.setFileSize(fileSize);
         doc.setChunkCount(0);
         doc.setParseStatus("SUCCESS");
         doc.setCreatedAt(LocalDateTime.now());
         documentMapper.insert(doc);
 
-        List<String> parts = split(text, CHUNK_SIZE);
         int idx = 0;
         for (String part : parts) {
             Chunk chunk = new Chunk();
@@ -132,21 +148,37 @@ public class KbService {
             chunk.setContent(part);
             chunk.setIdx(idx++);
             chunkMapper.insert(chunk);
-            vectorStore.put(chunk.getId(), embeddingService.embed(part));
         }
         doc.setChunkCount(parts.size());
         documentMapper.updateById(doc);
-        log.info("文档 {} 已索引，chunk 数={}", doc.getId(), parts.size());
+        requestIndex(kbId, doc.getId());
+        log.info("文档 {} 已分块落库，chunk 数={}", doc.getId(), parts.size());
         return doc;
+    }
+
+    /**
+     * 通知 ai-service 为本文档建向量索引。失败不回滚：chunk 已在库中，
+     * 下次启动的一致性检查或 POST /api/kb/reindex 可补齐索引。
+     */
+    private void requestIndex(Long kbId, Long docId) {
+        try {
+            ragClient.index(kbId, docId);
+        } catch (Exception e) {
+            log.warn("文档 {} 向量索引失败（可调用 POST /api/kb/reindex 重建）: {}", docId, e.getMessage());
+        }
     }
 
     public void deleteDocument(Long docId) {
         List<Chunk> chunks = chunkMapper.selectList(new LambdaQueryWrapper<Chunk>().eq(Chunk::getDocId, docId));
         for (Chunk c : chunks) {
-            vectorStore.remove(c.getId());
             chunkMapper.deleteById(c.getId());
         }
         documentMapper.deleteById(docId);
+        try {
+            ragClient.delete(docId, null);
+        } catch (Exception e) {
+            log.warn("文档 {} 向量删除失败（不影响正文已删除）: {}", docId, e.getMessage());
+        }
     }
 
     public List<Document> documents(Long kbId) {
@@ -185,14 +217,10 @@ public class KbService {
     }
 
     /**
-     * 向量化一个文本片段并写入向量库。
+     * ai-service 侧的向量条数（-1 表示 ai-service 不可达）。
      */
-    public void indexChunk(Long chunkId, String content) {
-        vectorStore.put(chunkId, embeddingService.embed(content));
-    }
-
-    public int vectorCount() {
-        return vectorStore.size();
+    public long vectorCount() {
+        return ragClient.vectorCount();
     }
 
     public int chunkCount() {
@@ -200,24 +228,13 @@ public class KbService {
     }
 
     /**
-     * 从 chunk 表重建向量库索引（内存模式重启后 / Milvus 维度变更后调用）。
+     * 全量重建 ai-service 侧向量索引：上传时索引失败、更换 Embedding 模型、或误删后使用。
      *
      * @return 重建的向量条数
      */
     public int reindexFromChunks() {
-        List<Chunk> chunks = chunkMapper.selectList(null);
-        for (Chunk c : chunks) {
-            vectorStore.put(c.getId(), embeddingService.embed(c.getContent()));
-        }
-        log.info("向量库重建完成，共 {} 条 chunk", chunks.size());
-        return chunks.size();
-    }
-
-    private List<String> split(String text, int size) {
-        java.util.List<String> parts = new java.util.ArrayList<>();
-        for (int i = 0; i < text.length(); i += size) {
-            parts.add(text.substring(i, Math.min(i + size, text.length())));
-        }
-        return parts;
+        int n = ragClient.rebuild();
+        log.info("ai-service 向量索引重建完成，共 {} 条 chunk", n);
+        return n;
     }
 }

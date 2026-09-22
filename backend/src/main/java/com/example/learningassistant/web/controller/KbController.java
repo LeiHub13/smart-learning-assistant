@@ -1,9 +1,9 @@
 package com.example.learningassistant.web.controller;
 
+import com.example.learningassistant.ai.PythonRagClient;
 import com.example.learningassistant.common.ApiResponse;
 import com.example.learningassistant.kb.entity.Document;
 import com.example.learningassistant.kb.entity.KnowledgeBase;
-import com.example.learningassistant.kb.service.DocumentParser;
 import com.example.learningassistant.kb.service.KbService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +30,6 @@ import java.util.Set;
 public class KbController {
 
     private final KbService kbService;
-    private final DocumentParser documentParser;
 
     @GetMapping("/api/courses/{courseId}/kb")
     public ApiResponse<List<KnowledgeBase>> kbList(@PathVariable Long courseId) {
@@ -74,7 +72,7 @@ public class KbController {
 
     private static final Set<String> SUPPORTED_EXT = Set.of(
             "txt", "md", "markdown", "java", "json", "xml", "yml", "yaml", "sql",
-            "pdf", "doc", "docx");
+            "pdf", "docx");
 
     @PostMapping(value = "/api/kb/{kbId}/documents/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<Map<String, Object>> uploadDocument(@PathVariable Long kbId,
@@ -82,17 +80,17 @@ public class KbController {
         String name = file.getOriginalFilename() == null ? "未命名文档" : file.getOriginalFilename();
         String ext = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1).toLowerCase() : "";
         if (!SUPPORTED_EXT.contains(ext)) {
-            throw new com.example.learningassistant.common.BizException("仅支持 .txt/.md/.pdf/.doc/.docx 及代码文件");
+            throw new com.example.learningassistant.common.BizException("仅支持 .txt/.md/.pdf/.docx 及代码文件");
         }
-        final String content;
+        final Document doc;
         try {
-            content = documentParser.parse(name, file.getContentType(), file.getBytes());
+            // 原始字节直传 ai-service 解析并切块；解析失败时 message 已是可读原因
+            doc = kbService.indexUploadedDocument(kbId, name, file.getContentType(), file.getBytes());
         } catch (IOException e) {
             throw new com.example.learningassistant.common.BizException("文件读取失败: " + e.getMessage());
-        } catch (DocumentParser.DocumentParseException e) {
+        } catch (PythonRagClient.RagException e) {
             throw new com.example.learningassistant.common.BizException(e.getMessage());
         }
-        Document doc = kbService.indexTextDocument(kbId, name, content);
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", doc.getId());
         m.put("fileName", doc.getFileName());
@@ -108,7 +106,7 @@ public class KbController {
     }
 
     /**
-     * 手动重建向量库索引：内存模式重启丢索引、或 Milvus 集合因 Embedding 维度变更被重建后使用。
+     * 手动重建 ai-service 侧向量索引：上传时索引失败、更换 Embedding 模型、或向量卷被清空后使用。
      */
     @PostMapping("/api/kb/reindex")
     public ApiResponse<Map<String, Object>> reindex() {

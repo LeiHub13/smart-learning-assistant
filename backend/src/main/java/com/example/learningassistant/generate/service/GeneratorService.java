@@ -164,7 +164,7 @@ public class GeneratorService {
                     acc.append(delta);
                     onDelta.accept(delta);
                 },
-                () -> {
+                ignored -> {
                     GeneratedContent g = new GeneratedContent();
                     g.setUserId(userId);
                     g.setCourseId(courseId);

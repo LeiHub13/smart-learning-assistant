@@ -65,27 +65,17 @@ app:
     temperature: 0.7
   infra:
     # 中间件开关：配置了真实中间件即切换，未配置/未填则自动使用内存降级实现
+    # 向量库不在此列：RAG 检索链路已整体迁移到 ai-service（Chroma），Java 侧不再持有向量
     cache-mode: redis      # memory | redis
-    vector-mode: memory     # memory | milvus
     storage-mode: minio     # local | minio
     mq-mode: rabbit        # memory | rabbit
-    milvus:
-      host: ${MILVUS_HOST:localhost}
-      port: ${MILVUS_PORT:19530}
-      collection: learnassist_vectors
     storage:
       local-path: ./data/files
       minio:
         endpoint: http://localhost:9000
         access-key: minioadmin
         secret-key: minioadmin123
-  embedding:
-    # 向量模型：hash（默认，离线） | dashscope（通义 text-embedding-v3）
-    provider: hash
-    api-key: ${DASHSCOPE_API_KEY:}
-    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    model: text-embedding-v3
-  # 内部工具 API 鉴权（ai-service 的 Agent 工具回调 Java 取数）
+  # 内部工具 API 鉴权（ai-service 的 Agent 工具回调、chunk 下发与 RAG 端点共用这把 token）
   internal-tool-token: ${INTERNAL_TOOL_TOKEN:internal-tool-token}
   notify:
     # 邮件渠道开关：true 时站内信同步外发邮件（用户已绑定邮箱才会发）

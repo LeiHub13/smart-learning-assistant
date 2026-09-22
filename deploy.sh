@@ -16,14 +16,9 @@ if grep -qE '^AI_API_KEY=sk-x{5,}' .env || grep -qE '^AI_API_KEY=[[:space:]]*$' 
   echo "[1/4] ⚠ 警告：.env 中 AI_API_KEY 仍是模板值或为空，部署后 AI 问答/生成会失败"
 fi
 
-# 2. 构建镜像并启动（.env 中 VECTOR_MODE=milvus 时附带启用 milvus 容器组）
-COMPOSE_ARGS=(-d --build)
-if grep -qE '^VECTOR_MODE=milvus' .env; then
-  echo "[2/4] 检测到 VECTOR_MODE=milvus，附加 milvus profile..."
-  COMPOSE_ARGS=(--profile milvus -d --build)
-fi
+# 2. 构建镜像并启动（向量索引由 ai-service 自带 Chroma 持久化，无需额外中间件）
 echo "[2/4] 构建镜像并启动服务..."
-docker compose up "${COMPOSE_ARGS[@]}"
+docker compose up -d --build
 
 # 3. 等待 AI 服务健康（ai-service 未映射宿主机端口，直接查容器 healthcheck）
 #    首次部署 Python 依赖导入较慢，最多等 120 秒；容器异常退出则立即失败，不白等

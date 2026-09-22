@@ -52,7 +52,6 @@ public class DataSeeder implements CommandLineRunner {
         seedMasteryAndPractices(pg13Id, courseId);
         seedQuestions(courseId);
         seedKbs(courses);
-        kbService.reindexFromChunks();
         log.info("V2 演示数据初始化完成");
     }
 

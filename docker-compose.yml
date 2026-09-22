@@ -75,10 +75,6 @@ services:
       APP_MODEL_PROVIDER: python
       # 生产建议通过环境变量覆盖默认密钥（属性路径 app.security.jwt-secret）
       APP_SECURITY_JWT_SECRET: ${JWT_SECRET:-learning-assistant-v2-jwt-secret-please-change-me-0123456789}
-      # 向量库切换：.env 设 VECTOR_MODE=milvus 并配合 --profile milvus 启动 Milvus 容器组
-      APP_INFRA_VECTOR_MODE: ${VECTOR_MODE:-memory}
-      APP_INFRA_MILVUS_HOST: ${MILVUS_HOST:-milvus}
-      APP_INFRA_MILVUS_PORT: ${MILVUS_PORT:-19530}
       # Redis 缓存：默认启用，指向 compose 内 redis 服务
       APP_INFRA_CACHE_MODE: ${CACHE_MODE:-redis}
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
@@ -127,10 +123,22 @@ services:
       AI_MODEL: ${AI_MODEL:-deepseek-chat}
       AI_HOST: 0.0.0.0
       AI_PORT: 8000
+      # RAG 检索链路（自 Java 侧迁移过来）：Chroma 向量索引落在 ai-data 卷内，随容器重启保留
+      RAG_CHROMA_DIR: /app/data/chroma
+      # 向量化模型：hash（离线字符 n-gram，默认）| dashscope（通义 text-embedding-v3）
+      # 切换 provider 后需调用一次 POST /api/kb/reindex 重建索引（维度不同）
+      RAG_EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
+      RAG_EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-v3}
+      RAG_EMBEDDING_API_KEY: ${DASHSCOPE_API_KEY:-}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      # 文档解析与分块（自 Java 侧迁移）：定长切块块大小，与原 Java CHUNK_SIZE 同值
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-200}
+      RAG_RERANK_ENABLED: ${RAG_RERANK_ENABLED:-true}
+      RAG_REWRITE_ENABLED: ${RAG_REWRITE_ENABLED:-true}
       # MCP 外部工具接入（JSON，格式同 Claude/Cursor mcpServers）
       # 留空默认启用自带 web-search（Bing 中文免key）；.env 设 AI_MCP_CONFIG=none 关闭，或传 JSON 换 tavily-mcp 等
       AI_MCP_CONFIG: ${AI_MCP_CONFIG:-}
-      # Agent 工具回调 Java 内部 API（容器间访问）
+      # Agent 工具回调 + chunk 下发：Java 内部 API（容器间访问）
       JAVA_TOOL_BASE: http://backend:8080
       JAVA_TOOL_TOKEN: ${INTERNAL_TOOL_TOKEN:-internal-tool-token}
     volumes:
@@ -154,91 +162,13 @@ services:
     depends_on:
       - backend
 
-  # ===== 可选：Milvus 向量库（--profile milvus 启用） =====
-  # 用法：.env 中设 VECTOR_MODE=milvus，然后 docker compose --profile milvus up -d
-  etcd:
-    profiles: ["milvus"]
-    image: quay.io/coreos/etcd:v3.5.18
-    container_name: la-etcd
-    restart: unless-stopped
-    environment:
-      - ETCD_AUTO_COMPACTION_MODE=revision
-      - ETCD_AUTO_COMPACTION_RETENTION=1000
-      - ETCD_QUOTA_BACKEND_BYTES=4294967296
-      - ETCD_SNAPSHOT_COUNT=50000
-    volumes:
-      - etcd-data:/etcd
-    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
-    networks: [la-net]
-
-  milvus-minio:
-    profiles: ["milvus"]
-    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
-    container_name: la-milvus-minio
-    restart: unless-stopped
-    environment:
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-    volumes:
-      - milvus-minio-data:/minio_data
-    command: minio server /minio_data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    networks: [la-net]
-
-  # 预创建 Milvus 所需的 bucket（a-bucket）
-  milvus-minio-init:
-    profiles: ["milvus"]
-    image: minio/mc
-    depends_on:
-      milvus-minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      until /usr/bin/mc alias set myminio http://milvus-minio:9000 minioadmin minioadmin; do
-        echo waiting for minio...; sleep 2;
-      done;
-      /usr/bin/mc mb --ignore-existing myminio/a-bucket;
-      exit 0"
-    networks: [la-net]
-
-  milvus:
-    profiles: ["milvus"]
-    image: milvusdb/milvus:v2.5.6
-    container_name: la-milvus
-    restart: unless-stopped
-    command: ["milvus", "run", "standalone"]
-    environment:
-      ETCD_ENDPOINTS: etcd:2379
-      MINIO_ADDRESS: milvus-minio:9000
-    volumes:
-      - milvus-data:/var/lib/milvus
-    ports:
-      - "19530:19530"
-      - "9091:9091"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
-      interval: 30s
-      timeout: 20s
-      retries: 5
-      start_period: 60s
-    depends_on:
-      - etcd
-      - milvus-minio-init
-    networks: [la-net]
-
 volumes:
   mysql-data:
   redis-data:
   minio-data:
   backend-data:
+  # ai-service 数据：会话记忆 data/memory + 向量索引 data/chroma
   ai-data:
-  etcd-data:
-  milvus-minio-data:
-  milvus-data:
 
 networks:
   la-net:

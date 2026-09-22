@@ -66,13 +66,14 @@ public class OpenAiCompatibleChatModel implements ChatModel {
     }
 
     @Override
-    public void stream(List<AIChatMessage> messages, Consumer<String> onDelta, Runnable onDone, Consumer<Throwable> onError) {
+    public void stream(List<AIChatMessage> messages, Consumer<String> onDelta, Consumer<String> onDone, Consumer<Throwable> onError) {
         try {
             String answer = complete(messages);
             for (String ch : answer.split("")) {
                 onDelta.accept(ch);
             }
-            onDone.run();
+            // 该适配器不经过 ai-service，无知识库检索能力，引用来源恒为空
+            onDone.accept("");
         } catch (Exception e) {
             onError.accept(e);
         }

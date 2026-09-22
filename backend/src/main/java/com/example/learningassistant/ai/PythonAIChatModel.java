@@ -14,7 +14,6 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -25,7 +24,9 @@ import java.util.function.Consumer;
  * 场景映射（从 system 消息中的标记解析）：
  *   RAG_QA / FREE -> /ai/stream（SSE 流式，带会话记忆）
  *   GEN_LECTURE / GEN_QUESTIONS / REVIEW_SUBJECTIVE / ADVICE -> /ai/complete
- * 知识库资料：【知识库资料】...【资料结束】 -> chunks 传给 Python 侧组装上下文。
+ * 知识库答疑：system 中的 KB_ID 随请求传给 Python，检索链路（查询改写 -> 向量召回 -> 重排）
+ * 全在 ai-service 内完成，引用编号 sources 由流式 done 事件回传（Java 落库）。
+ * 学情说明：system 中的 NOTE（如薄弱知识点）拼进 Python 侧系统提示。
  * 会话标识：system 中的 SESSION_ID:xxx 用于 Python 端按会话持久化记忆。
  *
  * Agent 模式：app.model.agent-enabled=true 时，RAG_QA / FREE 升级为 agent 场景，
@@ -74,10 +75,11 @@ public class PythonAIChatModel implements ChatModel {
     }
 
     @Override
-    public void stream(List<AIChatMessage> messages, Consumer<String> onDelta, Runnable onDone, Consumer<Throwable> onError) {
+    public void stream(List<AIChatMessage> messages, Consumer<String> onDelta, Consumer<String> onDone, Consumer<Throwable> onError) {
         RequestPayload payload = toPayload(messages);
         Thread streamThread = new Thread(() -> {
             HttpURLConnection conn = null;
+            String sources = "";
             try {
                 conn = (HttpURLConnection) URI.create(baseUrl + "/ai/stream").toURL().openConnection();
                 conn.setRequestMethod("POST");
@@ -108,6 +110,8 @@ public class PythonAIChatModel implements ChatModel {
                         if (d.containsKey("delta")) {
                             onDelta.accept(String.valueOf(d.get("delta")));
                         } else if (Boolean.TRUE.equals(d.get("done"))) {
+                            Object s = d.get("sources");
+                            sources = s == null ? "" : String.valueOf(s);
                             break;
                         } else if (d.containsKey("error")) {
                             throw new IllegalStateException("ai-service: " + d.get("error"));
@@ -116,7 +120,7 @@ public class PythonAIChatModel implements ChatModel {
                         log.warn("SSE 行解析跳过: {}", data);
                     }
                 }
-                onDone.run();
+                onDone.accept(sources);
             } catch (Exception e) {
                 onError.accept(e);
             } finally {
@@ -154,10 +158,6 @@ public class PythonAIChatModel implements ChatModel {
             scene = "review";
         } else if (system.contains("ADVICE")) {
             scene = "advice";
-        } else if (system.contains("REWRITE")) {
-            scene = "rewrite";
-        } else if (system.contains("RERANK")) {
-            scene = "rerank";
         } else if (system.contains("PLAN")) {
             scene = "plan";
         } else if (system.contains("REPORT")) {
@@ -169,32 +169,9 @@ public class PythonAIChatModel implements ChatModel {
         if (agentEnabled && ("rag_qa".equals(scene) || "free".equals(scene))) {
             scene = "agent";
         }
-        return new RequestPayload(scene, lastUser, extractChunks(system), extractSessionId(system),
-                extractMarker(system, "USER_ID"), extractMarker(system, "COURSE_ID"));
-    }
-
-    private List<String> extractChunks(String system) {
-        int s = system.indexOf("【知识库资料】");
-        int e = system.indexOf("【资料结束】");
-        if (s < 0 || e <= s) {
-            return null;
-        }
-        String ctx = system.substring(s + "【知识库资料】".length(), e).trim();
-        if (ctx.isEmpty() || ctx.contains("暂无相关资料")) {
-            return null;
-        }
-        List<String> lines = new ArrayList<>();
-        for (String line : ctx.split("\n")) {
-            String t = line.trim();
-            if (!t.isEmpty()) {
-                lines.add(t.replaceFirst("^\\[\\d+\\]\\s*", ""));
-            }
-        }
-        return lines.isEmpty() ? null : lines;
-    }
-
-    private String extractSessionId(String system) {
-        return extractMarker(system, "SESSION_ID");
+        return new RequestPayload(scene, lastUser, extractMarker(system, "SESSION_ID"),
+                extractMarker(system, "USER_ID"), extractMarker(system, "COURSE_ID"),
+                extractMarker(system, "KB_ID"), extractMarker(system, "NOTE"));
     }
 
     private String extractMarker(String system, String key) {
@@ -209,33 +186,33 @@ public class PythonAIChatModel implements ChatModel {
         return id.isEmpty() ? null : id;
     }
 
-    private record RequestPayload(String scene, String question, List<String> chunks, String sessionId,
-                                  String userId, String courseId) {
+    private record RequestPayload(String scene, String question, String sessionId,
+                                  String userId, String courseId, String kbId, String note) {
         Map<String, Object> toMap() {
             Map<String, Object> m = new java.util.LinkedHashMap<>();
             m.put("scene", scene);
             m.put("question", question);
-            if (chunks != null) {
-                m.put("chunks", chunks);
-            }
             if (sessionId != null) {
                 m.put("sessionId", sessionId);
             }
-            if (userId != null) {
-                try {
-                    m.put("userId", Integer.parseInt(userId));
-                } catch (NumberFormatException e) {
-                    // ignore
-                }
-            }
-            if (courseId != null) {
-                try {
-                    m.put("courseId", Integer.parseInt(courseId));
-                } catch (NumberFormatException e) {
-                    // ignore
-                }
+            putInt(m, "userId", userId);
+            putInt(m, "courseId", courseId);
+            putInt(m, "kbId", kbId);
+            if (note != null && !note.isBlank()) {
+                m.put("note", note);
             }
             return m;
+        }
+
+        private static void putInt(Map<String, Object> m, String key, String raw) {
+            if (raw == null) {
+                return;
+            }
+            try {
+                m.put(key, Integer.parseInt(raw.trim()));
+            } catch (NumberFormatException e) {
+                log.warn("system 标记 {} 非数字，已忽略: {}", key, raw);
+            }
         }
     }
 }

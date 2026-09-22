@@ -1,9 +1,7 @@
 package com.example.learningassistant.search.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.example.learningassistant.ai.EmbeddingService;
-import com.example.learningassistant.chat.entity.ChatSession;
-import com.example.learningassistant.infra.vector.VectorStore;
+import com.example.learningassistant.ai.PythonRagClient;
 import com.example.learningassistant.kb.entity.Chunk;
 import com.example.learningassistant.kb.entity.Document;
 import com.example.learningassistant.kb.entity.KnowledgeBase;
@@ -40,8 +38,7 @@ public class SearchService {
     private final ChunkMapper chunkMapper;
     private final DocumentMapper documentMapper;
     private final com.example.learningassistant.exam.mapper.ExamMapper examMapper;
-    private final EmbeddingService embeddingService;
-    private final VectorStore vectorStore;
+    private final PythonRagClient ragClient;
 
     public Map<String, Object> search(Long userId, String q, Long courseId) {
         String keyword = q == null ? "" : q.trim();
@@ -114,15 +111,25 @@ public class SearchService {
     }
 
     /**
-     * 文档片段：优先向量语义检索（含跨 chunk 关键词兜底），再按课程过滤。
+     * 文档片段：优先走 ai-service 向量语义检索（失败/无结果降级 SQL LIKE），再按课程过滤。
      */
     private List<Map<String, Object>> searchDocs(String keyword, Long courseId) {
         List<Chunk> chunks = new ArrayList<>();
         try {
-            List<VectorStore.ScoredId> hits = vectorStore.search(embeddingService.embed(keyword), 10);
-            List<Long> ids = hits.stream().map(VectorStore.ScoredId::id).toList();
-            if (!ids.isEmpty()) {
-                chunks = chunkMapper.selectBatchIds(ids);
+            List<PythonRagClient.Hit> hits = ragClient.retrieve(keyword, null, 10);
+            if (!hits.isEmpty()) {
+                Map<Long, Chunk> byId = new HashMap<>();
+                for (Chunk c : chunkMapper.selectBatchIds(hits.stream()
+                        .map(PythonRagClient.Hit::chunkId).toList())) {
+                    byId.put(c.getId(), c);
+                }
+                // 保持按相关度排序；正文以 t_chunk 为准，索引里残留的已删片段自动跳过
+                for (PythonRagClient.Hit h : hits) {
+                    Chunk c = byId.get(h.chunkId());
+                    if (c != null) {
+                        chunks.add(c);
+                    }
+                }
             }
         } catch (Exception e) {
             log.warn("向量搜索失败，降级 SQL LIKE: {}", e.getMessage());

@@ -16,6 +16,10 @@ public interface ChatModel {
     /** 非流式补全 */
     String complete(List<AIChatMessage> messages);
 
-    /** 流式补全：增量文本回调 + 完成回调 + 异常回调 */
-    void stream(List<AIChatMessage> messages, Consumer<String> onDelta, Runnable onDone, Consumer<Throwable> onError);
+    /**
+     * 流式补全：增量文本回调 + 完成回调 + 异常回调。
+     *
+     * @param onDone 完成回调，参数为引用来源（RAG 命中的片段编号，如 "1,2,3"；无引用时为空串）
+     */
+    void stream(List<AIChatMessage> messages, Consumer<String> onDelta, Consumer<String> onDone, Consumer<Throwable> onError);
 }

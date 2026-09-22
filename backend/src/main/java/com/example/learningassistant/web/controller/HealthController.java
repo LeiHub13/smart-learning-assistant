@@ -1,11 +1,11 @@
 package com.example.learningassistant.web.controller;
 
 import com.example.learningassistant.ai.ChatModelFactory;
+import com.example.learningassistant.ai.PythonRagClient;
 import com.example.learningassistant.common.ApiResponse;
 import com.example.learningassistant.infra.cache.CacheService;
 import com.example.learningassistant.infra.mq.MessagePublisher;
 import com.example.learningassistant.infra.storage.FileStorage;
-import com.example.learningassistant.infra.vector.VectorStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,7 +23,7 @@ public class HealthController {
 
     private final ChatModelFactory modelFactory;
     private final CacheService cacheService;
-    private final VectorStore vectorStore;
+    private final PythonRagClient ragClient;
     private final FileStorage fileStorage;
     private final MessagePublisher messagePublisher;
 
@@ -33,9 +33,20 @@ public class HealthController {
                 "app", "learning-assistant-v2",
                 "llmProvider", modelFactory.get().provider(),
                 "cache", cacheService.getClass().getSimpleName(),
-                "vectorStore", vectorStore.getClass().getSimpleName() + "(" + vectorStore.size() + ")",
+                "rag", ragStatus(),
                 "fileStorage", fileStorage.getClass().getSimpleName(),
                 "mq", messagePublisher.getClass().getSimpleName(),
                 "status", "UP"));
+    }
+
+    /** 向量库已迁到 ai-service（Chroma）：展示 embedding provider 与向量条数，不可达时给出原因。 */
+    private String ragStatus() {
+        try {
+            Map<String, Object> s = ragClient.stats();
+            return "ai-service-chroma(" + s.get("provider") + ":" + s.get("model")
+                    + ", vectors=" + s.get("vectors") + ")";
+        } catch (Exception e) {
+            return "ai-service(不可用)";
+        }
     }
 }

@@ -4,39 +4,30 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.learningassistant.ai.AIChatMessage;
 import com.example.learningassistant.ai.ChatModel;
 import com.example.learningassistant.ai.ChatModelFactory;
-import com.example.learningassistant.ai.EmbeddingService;
 import com.example.learningassistant.chat.entity.ChatMessage;
 import com.example.learningassistant.chat.entity.ChatSession;
 import com.example.learningassistant.chat.mapper.ChatMessageMapper;
 import com.example.learningassistant.chat.mapper.ChatSessionMapper;
 import com.example.learningassistant.common.BizException;
-import com.example.learningassistant.infra.vector.VectorStore;
-import com.example.learningassistant.infra.vector.VectorStore.ScoredId;
-import com.example.learningassistant.kb.entity.Chunk;
-import com.example.learningassistant.kb.mapper.ChunkMapper;
 import com.example.learningassistant.progress.entity.KnowledgeMastery;
 import com.example.learningassistant.progress.mapper.KnowledgeMasteryMapper;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 /**
- * 答疑服务：会话管理 + RAG 检索 + 流式生成 + 消息落库。
+ * 答疑服务：会话管理 + 答疑调用 + 消息落库。
  *
- * 链路（架构文档 §7.1）：
- *   RAG 模式：向量检索知识库 -> 组装带 [n] 引用的上下文 -> ChatModel.stream() 增量转发
- *   自由模式：系统提示 + 最近 N 轮历史 -> ChatModel.stream()
- *   完成回调：保存 assistant 消息（含 sources）
+ * 链路（RAG 检索链路已整体迁移到 ai-service，见 ai-service/app/rag.py）：
+ *   RAG 模式：system 带 RAG_QA + KB_ID 标记 -> ai-service 侧查询改写/向量召回/重排/组装引用
+ *             -> 流式增量转发 -> done 事件回传 sources（引用编号，如 "1,2,3"）-> 落库
+ *   自由模式：FREE 标记 + 会话记忆 -> 流式生成
+ *   注：openai-compatible / spring-ai 适配器不经过 ai-service，无知识库检索能力，仅按普通对话回答。
  */
 @Slf4j
 @Service
@@ -46,21 +37,9 @@ public class ChatService {
     private final ChatSessionMapper sessionMapper;
     private final ChatMessageMapper messageMapper;
     private final ChatModelFactory modelFactory;
-    private final VectorStore vectorStore;
-    private final EmbeddingService embeddingService;
-    private final ChunkMapper chunkMapper;
     private final KnowledgeMasteryMapper masteryMapper;
-    private final ObjectMapper objectMapper;
 
     private static final int HISTORY_ROUNDS = 5;
-    private static final int RAG_TOP_K = 5;
-    private static final int RAG_RERANK_CANDIDATES = 20;
-
-    @Value("${app.rag.rewrite-enabled:true}")
-    private boolean rewriteEnabled;
-
-    @Value("${app.rag.rerank-enabled:true}")
-    private boolean rerankEnabled;
 
     public List<ChatSession> sessions(Long userId) {
         return sessionMapper.selectList(new LambdaQueryWrapper<ChatSession>()
@@ -151,34 +130,18 @@ public class ChatService {
         userMsg.setCreatedAt(now);
         messageMapper.insert(userMsg);
 
-        List<AIChatMessage> history = historyMessages(sessionId, HISTORY_ROUNDS);
-        String effectiveQuestion = question;
-        if (rewriteEnabled && !history.isEmpty()) {
-            effectiveQuestion = rewriteQuery(question, history);
-        }
-
-        final String sources;
         StringBuilder system = new StringBuilder();
-
         if (session.getKbId() != null) {
-            String ctx = buildContext(session.getKbId(), effectiveQuestion);
-            if (ctx.contains("暂无相关资料")) {
-                sources = "";
-                system.append("RAG_QA\n你是智能学习助手，用中文友好地解答问题。\n【知识库资料】").append(ctx).append("【资料结束】");
-            } else {
-                sources = ctx.lines().filter(l -> l.startsWith("["))
-                        .map(l -> l.substring(1, l.indexOf(']')))
-                        .collect(Collectors.joining(","));
-                system.append("RAG_QA\n你是智能学习助手，结合下方课程知识库资料回答学生问题，并标注引用编号[1][2]等。\n【知识库资料】").append(ctx).append("【资料结束】");
-            }
+            system.append("RAG_QA\n你是智能学习助手，结合课程知识库资料回答学生问题，并标注引用编号[1][2]等。")
+                    .append("\nKB_ID:").append(session.getKbId());
         } else {
-            sources = "";
             system.append("FREE\n你是智能学习助手，用中文友好地解答学生的学习问题。");
         }
 
         String profile = weakKpProfile(userId, session.getCourseId());
         if (!profile.isEmpty()) {
-            system.append("\n").append(profile);
+            // NOTE 供 ai-service 拼进系统提示（单行，标记以换行结尾）；其余适配器直接续在 system 后
+            system.append("\nNOTE:").append(profile.replaceAll("\\s+", " "));
         }
 
         system.append("\nUSER_ID:").append(userId)
@@ -187,23 +150,24 @@ public class ChatService {
 
         List<AIChatMessage> messages = new ArrayList<>();
         messages.add(new AIChatMessage("system", system.toString()));
-        messages.addAll(history);
+        messages.addAll(historyMessages(sessionId, HISTORY_ROUNDS));
         messages.add(new AIChatMessage("user", question));
 
         ChatModel model = modelFactory.get();
         StringBuilder acc = new StringBuilder();
-        model.stream(messages, delta -> {
-            acc.append(delta);
-            onDelta.accept(delta);
-        }, () -> {
+        model.stream(messages, msg -> {
+            acc.append(msg);
+            onDelta.accept(msg);
+        }, sources -> {
+            String refs = sources == null ? "" : sources.trim();
             ChatMessage aiMsg = new ChatMessage();
             aiMsg.setSessionId(sessionId);
             aiMsg.setRole("assistant");
             aiMsg.setContent(acc.toString());
-            aiMsg.setSources(sources.isEmpty() ? null : sources);
+            aiMsg.setSources(refs.isEmpty() ? null : refs);
             aiMsg.setCreatedAt(LocalDateTime.now());
             messageMapper.insert(aiMsg);
-            onDone.accept(sources);
+            onDone.accept(refs);
         }, e -> {
             log.error("对话流式生成失败: sessionId={}", sessionId, e);
             throw new BizException("生成失败，请重试");
@@ -221,88 +185,6 @@ public class ChatService {
         }
         return all.subList(size - rounds, size).stream()
                 .map(m -> new AIChatMessage(m.getRole(), m.getContent())).toList();
-    }
-
-    private String buildContext(Long kbId, String question) {
-        int topN = rerankEnabled ? RAG_RERANK_CANDIDATES : RAG_TOP_K;
-        List<ScoredId> hits = vectorStore.search(embeddingService.embed(question), topN);
-        if (hits.isEmpty()) {
-            return "暂无相关资料";
-        }
-        List<Long> chunkIds = hits.stream().map(ScoredId::id).toList();
-        List<Chunk> chunks = chunkMapper.selectBatchIds(chunkIds);
-        Map<Long, Chunk> byId = chunks.stream().collect(Collectors.toMap(Chunk::getId, c -> c));
-
-        List<Chunk> ordered = new ArrayList<>();
-        for (Long cid : chunkIds) {
-            Chunk c = byId.get(cid);
-            if (c != null) {
-                ordered.add(c);
-            }
-        }
-        if (rerankEnabled && ordered.size() > RAG_TOP_K) {
-            ordered = rerankChunks(question, ordered);
-        }
-
-        StringBuilder sb = new StringBuilder();
-        int n = 1;
-        for (Chunk c : ordered.subList(0, Math.min(ordered.size(), RAG_TOP_K))) {
-            sb.append('[').append(n).append("] ").append(c.getContent()).append('\n');
-            n++;
-        }
-        return sb.toString();
-    }
-
-    private String rewriteQuery(String question, List<AIChatMessage> history) {
-        try {
-            StringBuilder sb = new StringBuilder();
-            for (AIChatMessage m : history) {
-                sb.append(m.role()).append(":").append(m.content()).append("\n");
-            }
-            sb.append("user:").append(question);
-            ChatModel model = modelFactory.get();
-            String rewritten = model.complete(List.of(
-                    new AIChatMessage("system", "REWRITE\n你是查询改写器。把用户最新问题改写成独立完整的检索查询。只输出改写后的查询本身。"),
-                    new AIChatMessage("user", sb.toString())));
-            if (rewritten != null && !rewritten.isBlank()) {
-                return rewritten.trim();
-            }
-        } catch (Exception e) {
-            log.warn("Query 改写失败，使用原问题: {}", e.getMessage());
-        }
-        return question;
-    }
-
-    private List<Chunk> rerankChunks(String question, List<Chunk> candidates) {
-        try {
-            StringBuilder prompt = new StringBuilder();
-            prompt.append("问题：").append(question).append("\n\n");
-            for (int i = 0; i < candidates.size(); i++) {
-                prompt.append("[").append(i + 1).append("] ")
-                        .append(candidates.get(i).getContent()).append("\n");
-            }
-            ChatModel model = modelFactory.get();
-            String raw = model.complete(List.of(
-                    new AIChatMessage("system", "RERANK\n你是相关性排序器。按与问题的相关程度从高到低排序，只输出 JSON 数组（元素为片段编号整数）。"),
-                    new AIChatMessage("user", prompt.toString())));
-            List<Integer> indices = objectMapper.readValue(raw, new TypeReference<List<Integer>>() {
-            });
-            List<Chunk> result = new ArrayList<>();
-            for (Integer idx : indices) {
-                if (idx != null && idx >= 1 && idx <= candidates.size()) {
-                    result.add(candidates.get(idx - 1));
-                    if (result.size() >= RAG_TOP_K) {
-                        break;
-                    }
-                }
-            }
-            if (!result.isEmpty()) {
-                return result;
-            }
-        } catch (Exception e) {
-            log.warn("Rerank 失败，使用向量原排序: {}", e.getMessage());
-        }
-        return candidates;
     }
 
     private String weakKpProfile(Long userId, Long courseId) {
