@@ -57,9 +57,8 @@ public class CourseService {
                         .eq(CourseUser::getUserId, userId)).stream()
                 .map(CourseUser::getCourseId).collect(java.util.stream.Collectors.toSet());
         return courses.stream()
-                .filter(c -> (c.getOwnerId() != null && c.getOwnerId().equals(userId)) || enrolledIds.contains(c.getId()))
-                .map(c -> toMap(c, enrolledIds.contains(c.getId()),
-                        c.getOwnerId() != null && c.getOwnerId().equals(userId) ? "creator" : "joined"))
+                .filter(c -> isOwner(c, userId) || enrolledIds.contains(c.getId()))
+                .map(c -> toMap(c, isEnrolled(c, userId, enrolledIds), roleOf(c, userId)))
                 .toList();
     }
 
@@ -73,18 +72,30 @@ public class CourseService {
                         .eq(CourseUser::getUserId, userId)).stream()
                 .map(CourseUser::getCourseId).collect(java.util.stream.Collectors.toSet());
         return courses.stream().map(c -> {
-            Map<String, Object> m = toMap(c, enrolledIds.contains(c.getId()),
-                    c.getOwnerId() != null && c.getOwnerId().equals(userId) ? "creator" : "joined");
+            Map<String, Object> m = toMap(c, isEnrolled(c, userId, enrolledIds), roleOf(c, userId));
             m.put("memberCount", courseUserMapper.selectCount(new LambdaQueryWrapper<CourseUser>()
                     .eq(CourseUser::getCourseId, c.getId())).intValue());
             return m;
         }).toList();
     }
 
+    private boolean isOwner(Course c, Long userId) {
+        return c.getOwnerId() != null && c.getOwnerId().equals(userId);
+    }
+
+    /** 创建者天然视为已加入，无需选课记录。 */
+    private boolean isEnrolled(Course c, Long userId, java.util.Set<Long> enrolledIds) {
+        return isOwner(c, userId) || enrolledIds.contains(c.getId());
+    }
+
+    private String roleOf(Course c, Long userId) {
+        return isOwner(c, userId) ? "creator" : "joined";
+    }
+
     /** 仅创建者可把课程加入/移出课程 Hub。 */
     public void setHub(Long userId, Long courseId, boolean inHub) {
         Course c = require(courseId);
-        if (c.getOwnerId() == null || !c.getOwnerId().equals(userId)) {
+        if (!isOwner(c, userId)) {
             throw new BizException("仅课程创建者可设置是否加入课程 Hub");
         }
         c.setInHub(inHub ? 1 : 0);

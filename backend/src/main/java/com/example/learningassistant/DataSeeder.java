@@ -1,7 +1,9 @@
 package com.example.learningassistant;
 
 import com.example.learningassistant.course.entity.Course;
+import com.example.learningassistant.course.entity.CourseUser;
 import com.example.learningassistant.course.mapper.CourseMapper;
+import com.example.learningassistant.course.mapper.CourseUserMapper;
 import com.example.learningassistant.kb.service.KbService;
 import com.example.learningassistant.practice.entity.Practice;
 import com.example.learningassistant.practice.entity.Question;
@@ -33,6 +35,7 @@ public class DataSeeder implements CommandLineRunner {
 
     private final UserMapper userMapper;
     private final CourseMapper courseMapper;
+    private final CourseUserMapper courseUserMapper;
     private final KnowledgeMasteryMapper masteryMapper;
     private final PracticeMapper practiceMapper;
     private final QuestionMapper questionMapper;
@@ -44,6 +47,7 @@ public class DataSeeder implements CommandLineRunner {
         seedUser("xiaohong", "小红");
         seedUser("xiaoyu", "小宇");
         List<Course> courses = seedCourses(pg13Id);
+        ensureOwnerEnrolled(courses);
         Long courseId = courses.get(0).getId();
         seedMasteryAndPractices(pg13Id, courseId);
         seedQuestions(courseId);
@@ -93,6 +97,34 @@ public class DataSeeder implements CommandLineRunner {
             courseMapper.insert(course);
         }
         return courseMapper.selectList(null);
+    }
+
+    /**
+     * 补齐创建者的选课记录：种子课程是裸 insert 出来的，缺少 t_course_user 行，
+     * 会让创建者在 Hub 里看到自己课程的"加入课程"按钮。幂等，可在每次启动安全执行。
+     */
+    private void ensureOwnerEnrolled(List<Course> allCourses) {
+        int fixed = 0;
+        for (Course c : allCourses) {
+            if (c.getOwnerId() == null) {
+                continue;
+            }
+            Long cnt = courseUserMapper.selectCount(new LambdaQueryWrapper<CourseUser>()
+                    .eq(CourseUser::getCourseId, c.getId())
+                    .eq(CourseUser::getUserId, c.getOwnerId()));
+            if (cnt != null && cnt > 0) {
+                continue;
+            }
+            CourseUser cu = new CourseUser();
+            cu.setCourseId(c.getId());
+            cu.setUserId(c.getOwnerId());
+            cu.setJoinedAt(LocalDateTime.now());
+            courseUserMapper.insert(cu);
+            fixed++;
+        }
+        if (fixed > 0) {
+            log.info("已补齐 {} 门课程的创建者选课记录", fixed);
+        }
     }
 
     private void seedMasteryAndPractices(Long userId, Long courseId) {
