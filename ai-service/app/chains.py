@@ -203,13 +203,15 @@ def _prepare_rag(scene: str, question: str, chunks, session_id, kb_id, meta: dic
 
 
 def complete(scene: str, question: str, chunks=None, session_id: str = None,
-             user_id=None, kb_id=None, note: str = None, meta: dict | None = None) -> str:
+             user_id=None, kb_id=None, note: str = None, meta: dict | None = None,
+             course_id=None) -> str:
     """非流式完整回答（生成/批改/建议），带记忆。"""
     meta = meta if meta is not None else {}
     if scene == "agent":
         from app import agent
         return agent.complete_agent(get_model(), question, chunks=chunks, session_id=session_id,
-                                    user_id=user_id, kb_id=kb_id, note=note, meta=meta)
+                                    user_id=user_id, kb_id=kb_id, note=note, meta=meta,
+                                    course_id=course_id)
     chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta)
     msgs = _assemble(scene, question, chunks, session_id, note)
     answer = _call_with_limit(lambda: get_model().invoke(msgs).content, scene)
@@ -225,13 +227,15 @@ def complete(scene: str, question: str, chunks=None, session_id: str = None,
 
 
 def stream(scene: str, question: str, chunks=None, session_id: str = None,
-           user_id=None, kb_id=None, note: str = None, meta: dict | None = None):
+           user_id=None, kb_id=None, note: str = None, meta: dict | None = None,
+           course_id=None):
     """流式生成，yield 增量文本；检索到的引用编号通过 meta["sources"] 传出。"""
     meta = meta if meta is not None else {}
     if scene == "agent":
         from app import agent
         yield from agent.stream_agent(get_model(), question, chunks=chunks, session_id=session_id,
-                                      user_id=user_id, kb_id=kb_id, note=note, meta=meta)
+                                      user_id=user_id, kb_id=kb_id, note=note, meta=meta,
+                                      course_id=course_id)
         return
     chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta)
     msgs = _assemble(scene, question, chunks, session_id, note)

@@ -57,6 +57,7 @@ class CompleteRequest(BaseModel):
     sessionId: str | None = Field(default=None)
     userId: int | None = Field(default=None)
     kbId: int | None = Field(default=None)
+    courseId: int | None = Field(default=None)
     note: str | None = Field(default=None)
 
 
@@ -111,7 +112,8 @@ def complete(req: CompleteRequest):
     meta: dict = {}
     try:
         content = chains.complete(req.scene, req.question, req.chunks, req.sessionId,
-                                  user_id=req.userId, kb_id=req.kbId, note=req.note, meta=meta)
+                                  user_id=req.userId, kb_id=req.kbId, note=req.note, meta=meta,
+                                  course_id=req.courseId or None)
         return {"content": content, "sources": meta.get("sources", "")}
     except RuntimeError as e:
         logger.error("complete 失败: %s", e)
@@ -128,7 +130,8 @@ async def stream(req: StreamRequest):
     def gen():
         try:
             for delta in chains.stream(req.scene, req.question, req.chunks, req.sessionId,
-                                       user_id=req.userId, kb_id=req.kbId, note=req.note, meta=meta):
+                                       user_id=req.userId, kb_id=req.kbId, note=req.note, meta=meta,
+                                       course_id=req.courseId or None):
                 yield {"event": "message", "data": json.dumps({"delta": delta}, ensure_ascii=False)}
             # sources：本服务自行检索时产出的引用编号，由 Java 落库
             yield {"event": "message",

@@ -28,6 +28,9 @@ LLM_TIMEOUT = int(os.getenv("AI_TIMEOUT", "120"))
 JAVA_TOOL_BASE = os.getenv("JAVA_TOOL_BASE", "http://localhost:8080")
 JAVA_TOOL_TOKEN = os.getenv("JAVA_TOOL_TOKEN", "internal-tool-token")
 
+# Agent 写动作工具（排复习提醒 / 学习计划打卡）：默认关闭，只读工具不受影响
+AGENT_WRITE_TOOLS = os.getenv("AGENT_WRITE_TOOLS", "false").lower() in ("1", "true", "yes")
+
 # ===== RAG 检索链路（自 Java 侧迁移过来）=====
 # 向量库：Chroma 本地持久化目录（默认放在 data/chroma，随 ai-data 卷持久）
 CHROMA_DIR = os.getenv(

@@ -22,5 +22,9 @@ public class Notification {
     private String title;
     private String content;
     private Boolean readFlag;
+
+    /** 定时投递时间：非空表示尚未到点，列表里不可见；投递器置空后才放行。 */
+    private LocalDateTime scheduledAt;
+
     private LocalDateTime createdAt;
 }

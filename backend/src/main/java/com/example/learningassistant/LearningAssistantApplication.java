@@ -3,6 +3,7 @@ package com.example.learningassistant;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * V2 模块化单体启动入口。
@@ -13,6 +14,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * 由 mybatis-plus.mapper-locations=classpath*:mapper/**&#47;*.xml 加载。
  */
 @SpringBootApplication
+@EnableScheduling
 @MapperScan("com.example.learningassistant.*.mapper")
 public class LearningAssistantApplication {
 

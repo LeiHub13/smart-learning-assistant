@@ -46,6 +46,14 @@ MCP_PROMPT_SUFFIX = (
 
 RECURSION_LIMIT = 20
 
+# 开启写动作工具后追加的提示：先查再改，改完要如实汇报
+WRITE_PROMPT_SUFFIX = (
+    "\n你还可以为学生做出实际动作：schedule_review 安排复习提醒、"
+    "finish_plan_task 给学习任务打卡。做这类动作前先确认信息（打卡前必须先用 query_plan_tasks 拿到 taskId），"
+    "一次对话里不要重复安排同一条提醒，也不要在未经学生同意的情况下反复打卡；"
+    "动作完成后在回答里简述你做了什么、什么时候生效。"
+)
+
 # ===== MCP 工具懒加载（全局缓存 + 失败冷却） =====
 _MCP_LOCK = threading.Lock()
 _MCP_TOOLS = None       # None=尚未加载；[]=[]=加载失败/未配置
@@ -179,11 +187,28 @@ def _call_java_tool(path: str) -> str:
         return f"暂时无法获取该数据（{type(e).__name__}），请基于已知信息回答。"
 
 
-def _make_tools(chunks, user_id, kb_id=None):
-    """构建绑定本次请求上下文的工具集（闭包捕获 chunks / user_id / kb_id）。
+def _post_java_tool(path: str, payload: dict) -> str:
+    """回调 Java 内部写接口。失败时返回友好说明，不中断 Agent 循环。"""
+    url = config.JAVA_TOOL_BASE.rstrip("/") + path
+    req = urllib.request.Request(
+        url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), method="POST",
+        headers={"X-Internal-Token": config.JAVA_TOOL_TOKEN, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            if body.get("code") != 0:
+                return "操作失败：" + str(body.get("message", "未知错误"))
+            return json.dumps(body.get("data") or {}, ensure_ascii=False)
+    except Exception as e:  # noqa: BLE001
+        return f"操作未能完成（{type(e).__name__}），请如实告知用户，不要重复尝试。"
+
+
+def _make_tools(chunks, user_id, kb_id=None, course_id=None):
+    """构建绑定本次请求上下文的工具集（闭包捕获 chunks / user_id / kb_id / course_id）。
 
     带 kb_id 时 search_materials 走真正的向量检索器（全库范围）；
     否则退回 Java 随请求下发的 chunks 集合做关键词匹配。
+    course_id 由会话上下文绑定而非模型填写，避免跨课程取错数据。
     """
     docs = [str(c).strip() for c in (chunks or []) if str(c).strip()]
 
@@ -229,10 +254,12 @@ def _make_tools(chunks, user_id, kb_id=None):
         return _call_java_tool(f"/internal/tools/wrong-book?userId={user_id}")
 
     @tool
-    def query_mastery(course_id: int = 1) -> str:
-        """查询当前学生在指定课程下各知识点的掌握度明细（百分比、练习次数、正确率）。"""
+    def query_mastery() -> str:
+        """查询当前学生在当前课程下各知识点的掌握度明细（百分比、练习次数、正确率）。"""
         if not user_id:
             return "未提供用户信息，无法查询掌握度。"
+        if not course_id:
+            return "当前会话未绑定课程，无法查询掌握度。"
         return _call_java_tool(f"/internal/tools/mastery?userId={user_id}&courseId={course_id}")
 
     @tool
@@ -243,12 +270,45 @@ def _make_tools(chunks, user_id, kb_id=None):
         return _call_java_tool(f"/internal/tools/recent-practices?userId={user_id}")
 
     @tool
-    def query_kb_documents(course_id: int = 1) -> str:
-        """查询指定课程的知识库与文档清单（知识库名、文档名、分块数）。"""
+    def query_kb_documents() -> str:
+        """查询当前课程的知识库与文档清单（知识库名、文档名、分块数）。"""
+        if not course_id:
+            return "当前会话未绑定课程，无法查询知识库清单。"
         return _call_java_tool(f"/internal/tools/kb-documents?courseId={course_id}")
 
-    return [list_material_topics, search_materials,
-            query_wrong_book, query_mastery, query_recent_practices, query_kb_documents]
+    read_tools = [list_material_topics, search_materials,
+                  query_wrong_book, query_mastery, query_recent_practices, query_kb_documents]
+
+    @tool
+    def query_plan_tasks(only_pending: bool = True) -> str:
+        """查询当前学生的学习计划任务清单（含 taskId、日期、标题、是否已打卡）。打卡前先调用它拿到 taskId。"""
+        if not user_id:
+            return "未提供用户信息，无法查询学习任务。"
+        flag = "true" if only_pending else "false"
+        return _call_java_tool(f"/internal/tools/plan-tasks?userId={user_id}&onlyPending={flag}")
+
+    @tool
+    def schedule_review(kp_name: str, remind_at: str = "", note: str = "") -> str:
+        """为学生安排一条复习提醒。remind_at 传 yyyy-MM-dd（当天 09:00）或 yyyy-MM-ddTHH:mm，留空表示立即提醒；
+        note 是一句话备注（会被截断），提醒正文由系统模板生成。"""
+        if not user_id:
+            return "未提供用户信息，无法安排复习提醒。"
+        if not (kp_name or "").strip():
+            return "请提供要复习的知识点名称。"
+        return _post_java_tool("/internal/tools/actions/review", {
+            "userId": user_id, "kpName": kp_name.strip(),
+            "remindAt": (remind_at or "").strip(), "note": (note or "").strip()})
+
+    @tool
+    def finish_plan_task(task_id: int) -> str:
+        """给指定学习任务打卡。幂等：已打卡过的任务不会重复操作，也不会取消。"""
+        if not user_id:
+            return "未提供用户信息，无法打卡。"
+        return _post_java_tool("/internal/tools/actions/plan-task-check",
+                               {"userId": user_id, "taskId": int(task_id)})
+
+    return read_tools + ([query_plan_tasks, schedule_review, finish_plan_task]
+                         if config.AGENT_WRITE_TOOLS else [])
 
 
 def _build_messages(question: str, session_id: str = None) -> list:
@@ -294,16 +354,20 @@ def _seed_materials(chunks, session_id, kb_id, question, meta):
 
 def _system_prompt(mcp_tools: list, note: str = None) -> str:
     from app import chains
-    return SYSTEM_PROMPT + (MCP_PROMPT_SUFFIX if mcp_tools else "") + chains._note_suffix(note)
+    return (SYSTEM_PROMPT
+            + (MCP_PROMPT_SUFFIX if mcp_tools else "")
+            + (WRITE_PROMPT_SUFFIX if config.AGENT_WRITE_TOOLS else "")
+            + chains._note_suffix(note))
 
 
 def complete_agent(model, question: str, chunks=None, session_id: str = None,
-                   user_id=None, kb_id=None, note: str = None, meta: dict | None = None) -> str:
+                   user_id=None, kb_id=None, note: str = None, meta: dict | None = None,
+                   course_id=None) -> str:
     """非流式：跑完整 ReAct 循环后返回最终回答。"""
     meta = meta if meta is not None else {}
     chunks = _seed_materials(chunks, session_id, kb_id, question, meta)
     mcp_tools = get_mcp_tools()
-    tools = _make_tools(chunks, user_id, kb_id) + mcp_tools
+    tools = _make_tools(chunks, user_id, kb_id, course_id) + mcp_tools
     agent = create_agent(model, tools, system_prompt=_system_prompt(mcp_tools, note))
     result = agent.invoke(
         {"messages": _build_messages(question, session_id)},
@@ -315,12 +379,13 @@ def complete_agent(model, question: str, chunks=None, session_id: str = None,
 
 
 def stream_agent(model, question: str, chunks=None, session_id: str = None,
-                 user_id=None, kb_id=None, note: str = None, meta: dict | None = None):
+                 user_id=None, kb_id=None, note: str = None, meta: dict | None = None,
+                 course_id=None):
     """流式：逐块 yield 最终回答的 token。"""
     meta = meta if meta is not None else {}
     chunks = _seed_materials(chunks, session_id, kb_id, question, meta)
     mcp_tools = get_mcp_tools()
-    tools = _make_tools(chunks, user_id, kb_id) + mcp_tools
+    tools = _make_tools(chunks, user_id, kb_id, course_id) + mcp_tools
     agent = create_agent(model, tools, system_prompt=_system_prompt(mcp_tools, note))
     full = ""
     try:

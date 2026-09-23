@@ -112,6 +112,41 @@ public class PlanService {
     }
 
     /**
+     * 该用户的学习任务清单（供 Agent 定位 taskId 后打卡）。
+     *
+     * @param onlyPending 只返回未打卡的任务
+     */
+    public List<Map<String, Object>> tasksOf(Long userId, boolean onlyPending) {
+        List<StudyPlan> plans = list(userId);
+        if (plans.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, StudyPlan> planById = plans.stream()
+                .collect(java.util.stream.Collectors.toMap(StudyPlan::getId, p -> p, (a, b) -> a));
+        LambdaQueryWrapper<PlanTask> w = new LambdaQueryWrapper<PlanTask>()
+                .in(PlanTask::getPlanId, planById.keySet())
+                .orderByAsc(PlanTask::getTaskDate);
+        if (onlyPending) {
+            w.eq(PlanTask::getDone, false);
+        }
+        List<Map<String, Object>> rows = new java.util.ArrayList<>();
+        for (PlanTask t : taskMapper.selectList(w)) {
+            StudyPlan plan = planById.get(t.getPlanId());
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("taskId", t.getId());
+            m.put("planId", t.getPlanId());
+            m.put("courseId", plan == null ? null : plan.getCourseId());
+            m.put("goal", plan == null ? null : plan.getGoal());
+            m.put("taskDate", t.getTaskDate());
+            m.put("title", t.getTitle());
+            m.put("focusKp", t.getFocusKp());
+            m.put("done", Boolean.TRUE.equals(t.getDone()));
+            rows.add(m);
+        }
+        return rows;
+    }
+
+    /**
      * 打卡日历：某月内按天聚合任务数与完成数（跨该用户全部计划，缺数据的日期补 0）。
      *
      * @param month "yyyy-MM"

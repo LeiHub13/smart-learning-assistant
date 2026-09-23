@@ -281,6 +281,7 @@ CREATE TABLE IF NOT EXISTS t_notification (
     title       VARCHAR(200),
     content     TEXT,
     read_flag   BOOLEAN DEFAULT FALSE,
+    scheduled_at TIMESTAMP NULL,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
