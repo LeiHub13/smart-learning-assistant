@@ -46,15 +46,14 @@ MCP_PROMPT_SUFFIX = (
 
 RECURSION_LIMIT = 20
 
-# 开启写动作工具后追加的提示：先查再改；只有存资料走待确认动作，另两个工具是即时生效的
+# 开启写动作工具后追加的提示：先查再改；三个写工具都只登记待确认动作，人点确认后才生效
 WRITE_PROMPT_SUFFIX = (
-    "\n你还可以为学生做出实际动作：schedule_review 安排复习提醒、"
+    "\n你还可以为学生登记三类动作：schedule_review 安排复习提醒、"
     "finish_plan_task 给学习任务打卡、save_material_to_kb 把答疑中值得留存的一段资料存进本课程知识库。"
-    "注意：save_material_to_kb 不会直接写入，它只生成「待确认动作」，必须由用户在消息下方点击『确认执行』后才真正生效；"
-    "因此调用它时绝不能声称资料已保存，而应提醒用户去点『确认执行』。"
-    "schedule_review 与 finish_plan_task 则是调用后立刻生效的，须在学生明确同意后才用，并在回答里如实说明做了什么。"
-    "做这类动作前先确认信息（打卡前必须先用 query_plan_tasks 拿到 taskId），"
-    "一次对话里不要重复安排同一条提醒，也不要在未经学生同意的情况下反复打卡。"
+    "注意：这些写工具都不会直接写入，它们只生成「待确认动作」，必须由用户在消息下方点击『确认执行』后才真正生效；"
+    "因此你绝不能声称提醒已安排、打卡已完成或资料已保存，调用后应提醒用户在消息下方点击『确认执行』。"
+    "登记前先确认信息（打卡前必须先用 query_plan_tasks 拿到 taskId），"
+    "一次对话里不要重复登记同一条动作，也不要在学生没提出意图时擅自登记。"
 )
 
 # ===== MCP 工具懒加载（全局缓存 + 失败冷却） =====
@@ -291,39 +290,12 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
         flag = "true" if only_pending else "false"
         return _call_java_tool(f"/internal/tools/plan-tasks?userId={user_id}&onlyPending={flag}")
 
-    @tool
-    def schedule_review(kp_name: str, remind_at: str = "", note: str = "") -> str:
-        """为学生安排一条复习提醒。remind_at 传 yyyy-MM-dd（当天 09:00）或 yyyy-MM-ddTHH:mm，留空表示立即提醒；
-        note 是一句话备注（会被截断），提醒正文由系统模板生成。"""
-        if not user_id:
-            return "未提供用户信息，无法安排复习提醒。"
-        if not (kp_name or "").strip():
-            return "请提供要复习的知识点名称。"
-        return _post_java_tool("/internal/tools/actions/review", {
-            "userId": user_id, "kpName": kp_name.strip(),
-            "remindAt": (remind_at or "").strip(), "note": (note or "").strip()})
+    def _propose_action(kind: str, inner: dict) -> str:
+        """登记待确认动作的统一出口：只生成 proposal，真正写入要等用户点『确认执行』。
 
-    @tool
-    def finish_plan_task(task_id: int) -> str:
-        """给指定学习任务打卡。幂等：已打卡过的任务不会重复操作，也不会取消。"""
-        if not user_id:
-            return "未提供用户信息，无法打卡。"
-        return _post_java_tool("/internal/tools/actions/plan-task-check",
-                               {"userId": user_id, "taskId": int(task_id)})
-
-    @tool
-    def save_material_to_kb(title: str, content: str) -> str:
-        """把答疑中值得留存的一段资料登记为「待确认动作」，由用户确认后才存入当前课程的知识库。
-        该工具不会直接写入任何数据；kbId/courseId 由会话上下文绑定，不由模型填写。"""
-        if not user_id:
-            return "未提供用户信息，无法登记资料。"
-        if not (title or "").strip() or not (content or "").strip():
-            return "请提供资料标题与正文内容。"
-        inner = {"title": title.strip(), "content": content.strip()}
-        if kb_id:
-            inner["kbId"] = kb_id
-        payload = {"userId": user_id, "courseId": course_id,
-                   "kind": "add_material", "payload": inner}
+        userId/courseId/sessionId 一律由闭包（即会话上下文）绑定，模型无从伪造。
+        """
+        payload = {"userId": user_id, "courseId": course_id, "kind": kind, "payload": inner}
         if session_id:
             try:
                 payload["sessionId"] = int(session_id)
@@ -336,8 +308,42 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
             summary = (json.loads(result) or {}).get("summary") or ""
         except (ValueError, TypeError):
             summary = ""
-        return (f"已生成待确认动作：{summary}。资料不会自动写入，"
-                "请告诉用户在消息下方点击『确认执行』。")
+        return (f"已生成待确认动作：{summary}。这不会自动写入，"
+                "请告诉用户在消息下方点击『确认执行』才会生效。")
+
+    @tool
+    def schedule_review(kp_name: str, remind_at: str = "", note: str = "") -> str:
+        """为学生安排一条复习提醒（登记为待确认动作，用户确认后才真正生效）。
+        remind_at 传 yyyy-MM-dd（当天 09:00）或 yyyy-MM-ddTHH:mm，留空表示立即提醒；
+        note 是一句话备注（会被截断），提醒正文由系统模板生成。"""
+        if not user_id:
+            return "未提供用户信息，无法安排复习提醒。"
+        if not (kp_name or "").strip():
+            return "请提供要复习的知识点名称。"
+        return _propose_action("schedule_review", {
+            "kpName": kp_name.strip(), "remindAt": (remind_at or "").strip(),
+            "note": (note or "").strip()})
+
+    @tool
+    def finish_plan_task(task_id: int) -> str:
+        """给指定学习任务打卡（登记为待确认动作，用户确认后才真正生效）。
+        必须先用 query_plan_tasks 拿到 taskId；已打卡的任务会被服务端拒绝登记。"""
+        if not user_id:
+            return "未提供用户信息，无法打卡。"
+        return _propose_action("finish_plan_task", {"taskId": int(task_id)})
+
+    @tool
+    def save_material_to_kb(title: str, content: str) -> str:
+        """把答疑中值得留存的一段资料登记为「待确认动作」，由用户确认后才存入当前课程的知识库。
+        该工具不会直接写入任何数据；kbId/courseId 由会话上下文绑定，不由模型填写。"""
+        if not user_id:
+            return "未提供用户信息，无法登记资料。"
+        if not (title or "").strip() or not (content or "").strip():
+            return "请提供资料标题与正文内容。"
+        inner = {"title": title.strip(), "content": content.strip()}
+        if kb_id:
+            inner["kbId"] = kb_id
+        return _propose_action("add_material", inner)
 
     return read_tools + ([query_plan_tasks, schedule_review, finish_plan_task, save_material_to_kb]
                          if config.AGENT_WRITE_TOOLS else [])

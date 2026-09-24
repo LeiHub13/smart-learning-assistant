@@ -13,7 +13,7 @@ def test_write_tools_hidden_by_default(monkeypatch):
     assert names == {"list_material_topics", "search_materials", "query_wrong_book",
                      "query_mastery", "query_recent_practices", "query_kb_documents"}
     assert "save_material_to_kb" not in names
-    assert "做出实际动作" not in agent._system_prompt([])
+    assert "待确认动作" not in agent._system_prompt([])
 
 
 def test_write_tools_mounted_when_enabled(monkeypatch):
@@ -21,7 +21,10 @@ def test_write_tools_mounted_when_enabled(monkeypatch):
     names = _names(agent._make_tools([], user_id=1, course_id=9))
     assert {"query_plan_tasks", "schedule_review", "finish_plan_task",
             "save_material_to_kb"} <= names
-    assert "schedule_review" in agent._system_prompt([])
+    prompt = agent._system_prompt([])
+    assert "schedule_review" in prompt
+    # 写提示词必须讲清「只登记待确认动作」，否则模型会对学生谎称动作已生效
+    assert "待确认动作" in prompt and "确认执行" in prompt
 
 
 def test_course_id_comes_from_request_not_the_model():
@@ -76,3 +79,30 @@ def test_save_material_proposes_with_closure_context(monkeypatch):
     assert payload["payload"] == {"title": "T", "content": "C", "kbId": 5}
     assert "待确认动作" in out and "确认执行" in out
     assert "已保存" not in out
+
+
+def test_review_and_checkin_also_go_through_propose(monkeypatch):
+    """复习提醒与打卡同样只能登记待确认动作：直写端点已删除，任何调用都不得再指向它们。"""
+    monkeypatch.setattr(config, "AGENT_WRITE_TOOLS", True)
+    calls = []
+
+    def fake_post(path, payload):
+        calls.append((path, payload))
+        return '{"actionId": 8, "summary": "已登记"}'
+
+    monkeypatch.setattr(agent, "_post_java_tool", fake_post)
+    tools = {t.name: t for t in agent._make_tools(
+        [], user_id=3, course_id=9, session_id="12")}
+
+    out1 = tools["schedule_review"].invoke({"kp_name": "索引", "remind_at": "2026-09-26", "note": ""})
+    out2 = tools["finish_plan_task"].invoke({"task_id": 41})
+
+    assert [c[0] for c in calls] == ["/internal/tools/actions/propose"] * 2
+    assert calls[0][1]["kind"] == "schedule_review"
+    assert calls[0][1]["payload"] == {"kpName": "索引", "remindAt": "2026-09-26", "note": ""}
+    assert calls[1][1]["kind"] == "finish_plan_task"
+    assert calls[1][1]["payload"] == {"taskId": 41}
+    for _, p in calls:
+        assert p["userId"] == 3 and p["courseId"] == 9 and p["sessionId"] == 12
+    assert "已安排" not in out1 and "打卡成功" not in out2
+    assert "待确认动作" in out1 and "待确认动作" in out2

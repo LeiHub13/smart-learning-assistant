@@ -11,7 +11,6 @@ import com.example.learningassistant.kb.entity.KnowledgeBase;
 import com.example.learningassistant.kb.mapper.ChunkMapper;
 import com.example.learningassistant.kb.mapper.DocumentMapper;
 import com.example.learningassistant.kb.mapper.KnowledgeBaseMapper;
-import com.example.learningassistant.notify.service.NotifyService;
 import com.example.learningassistant.plan.service.PlanService;
 import com.example.learningassistant.practice.entity.Practice;
 import com.example.learningassistant.practice.entity.PracticeQuestion;
@@ -31,8 +30,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -55,7 +52,6 @@ public class InternalToolController {
     private final KnowledgeBaseMapper kbMapper;
     private final DocumentMapper documentMapper;
     private final ChunkMapper chunkMapper;
-    private final NotifyService notifyService;
     private final PlanService planService;
     private final AgentActionService agentActionService;
 
@@ -215,72 +211,8 @@ public class InternalToolController {
     }
 
     /**
-     * 安排复习提醒：落一条定时站内通知，到点由 NotifyService 投递。
-     * remindAt 支持 yyyy-MM-dd（当天 09:00）或 ISO 日期时间；解析失败或早于当前时间则立即投递。
-     */
-    @PostMapping("/actions/review")
-    public ApiResponse<Map<String, Object>> scheduleReview(HttpServletRequest request,
-                                                           @RequestBody Map<String, Object> body) {
-        checkToken(request);
-        Long userId = asLong(body.get("userId"));
-        if (userId == null) {
-            throw new BizException("缺少 userId");
-        }
-        String kp = clip(body.get("kpName"), 50);
-        if (kp == null || kp.isBlank()) {
-            throw new BizException("缺少知识点名称");
-        }
-        LocalDateTime at = parseRemindAt(body.get("remindAt"));
-        String note = clip(body.get("note"), 100);
-        String content = "「" + kp + "」的复习提醒"
-                + (at == null ? "（现在）" : "，计划时间 " + at.format(FMT))
-                + (note == null || note.isBlank() ? "" : "。备注：" + note);
-        notifyService.send(userId, "review", "复习提醒：" + kp, content,
-                at == null ? LocalDateTime.now() : at);
-
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("scheduled", at != null && at.isAfter(LocalDateTime.now()));
-        data.put("remindAt", at == null ? null : at.format(FMT));
-        data.put("content", content);
-        return ApiResponse.ok(data);
-    }
-
-    /**
-     * 学习计划打卡：幂等——已完成的任务不再反选，直接返回当前状态。
-     * 任务不属于该用户时拒绝（tasksOf 只返回本人任务，越权 taskId 天然查不到）。
-     */
-    @PostMapping("/actions/plan-task-check")
-    public ApiResponse<Map<String, Object>> checkInPlanTask(HttpServletRequest request,
-                                                            @RequestBody Map<String, Object> body) {
-        checkToken(request);
-        Long userId = asLong(body.get("userId"));
-        Long taskId = asLong(body.get("taskId"));
-        if (userId == null || taskId == null) {
-            throw new BizException("缺少 userId 或 taskId");
-        }
-        Map<String, Object> task = planService.tasksOf(userId, false).stream()
-                .filter(t -> taskId.equals(asLong(t.get("taskId"))))
-                .findFirst()
-                .orElseThrow(() -> new BizException("任务不存在或不属于当前用户"));
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("taskId", taskId);
-        data.put("title", task.get("title"));
-        if (Boolean.TRUE.equals(task.get("done"))) {
-            data.put("done", true);
-            data.put("changed", false);
-            data.put("message", "该任务此前已打卡，未重复操作");
-            return ApiResponse.ok(data);
-        }
-        planService.checkIn(userId, taskId);
-        data.put("done", true);
-        data.put("changed", true);
-        data.put("message", "打卡成功");
-        return ApiResponse.ok(data);
-    }
-
-    /**
-     * 登记待确认动作（add_material）：Agent 只能创建 proposal，真正入库发生在用户点击确认后。
-     * 校验失败按 BizException 抛出（ApiResponse code!=0），由 Python 侧转成可读文案。
+     * 登记 Agent 待确认动作：Agent 侧所有写动作的唯一入口（add_material / schedule_review /
+     * finish_plan_task），只落 proposal，真正写入发生在用户点「确认执行」之后。
      */
     @PostMapping("/actions/propose")
     public ApiResponse<Map<String, Object>> proposeAction(HttpServletRequest request,
@@ -305,21 +237,6 @@ public class InternalToolController {
     }
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-
-    private LocalDateTime parseRemindAt(Object raw) {
-        if (raw == null || String.valueOf(raw).isBlank()) {
-            return null;
-        }
-        String s = String.valueOf(raw).trim();
-        try {
-            if (s.length() <= 10) {
-                return LocalDate.parse(s).atTime(9, 0);
-            }
-            return LocalDateTime.parse(s.replace(" ", "T"));
-        } catch (Exception e) {
-            return null;
-        }
-    }
 
     private String clip(Object raw, int max) {
         if (raw == null) {
