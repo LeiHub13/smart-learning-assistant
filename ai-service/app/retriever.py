@@ -67,27 +67,32 @@ def index_chunks(rows: list[dict]) -> int:
     return len(rows)
 
 
-def index_document(kb_id=None, doc_id=None) -> int:
-    """索引一个文档（或整个知识库）的全部 chunk。"""
-    total = 0
+def _iter_java_pages(kb_id=None, doc_id=None):
+    """按游标从 Java 分页拉 chunk，逐页 yield；拉取失败直接向上抛，不吞异常。"""
     cursor = 0
     while True:
         rows = _fetch_java_chunks(kb_id=kb_id, doc_id=doc_id, cursor=cursor)
         if not rows:
-            break
-        total += index_chunks(rows)
+            return
+        yield rows
         last = max(int(r["chunkId"]) for r in rows)
         if last <= cursor:
-            break
+            return
         cursor = last
         if len(rows) < config.RAG_CHUNK_PAGE_SIZE:
-            break
+            return
+
+
+def index_document(kb_id=None, doc_id=None) -> int:
+    """索引一个文档（或整个知识库）的全部 chunk。"""
+    total = 0
+    for page in _iter_java_pages(kb_id, doc_id):
+        total += index_chunks(page)
     logger.info("索引完成 kbId=%s docId=%s chunks=%s", kb_id, doc_id, total)
     return total
 
 
-def rebuild_all() -> int:
-    """全量重建：清空集合后从 t_chunk 重新拉取。"""
+def _clear_collection() -> None:
     col = _collection()
     try:
         col.delete(where={})
@@ -104,7 +109,21 @@ def rebuild_all() -> int:
             except Exception as e:  # noqa: BLE001
                 logger.debug("删除集合失败（可能不存在）: %s", e)
         _collection()
-    return index_document()
+
+
+def rebuild_all() -> int:
+    """全量重建：先把 t_chunk 完整拉回内存，确认拉取成功后才清空集合并重写。
+
+    顺序不能反：先清空再拉取的话，Java 不可达（未启动 / token 不符）时会把可用索引一起毁掉，
+    重建失败后所有检索都变成「暂无相关资料」。
+    """
+    pages = list(_iter_java_pages())
+    _clear_collection()
+    total = 0
+    for page in pages:
+        total += index_chunks(page)
+    logger.info("全量重建完成 chunks=%s", total)
+    return total
 
 
 def remove_chunks(chunk_ids: list[int]) -> int:

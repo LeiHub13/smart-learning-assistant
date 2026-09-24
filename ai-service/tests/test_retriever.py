@@ -72,6 +72,26 @@ def test_index_document_pulls_all_chunks_via_pagination(java_stub):
     assert retriever.stats()["vectors"] == 3
 
 
+def test_rebuild_all_keeps_index_when_java_unreachable(java_stub, monkeypatch):
+    """全量重建须先把 chunk 完整拉回再清空集合：否则 Java 不可达时会连同可用索引一起被清掉，检索全退化为「暂无相关资料」。"""
+    assert retriever.index_document() == 4
+    assert retriever.stats()["vectors"] == 4
+
+    # 正常路径：stub 可达时全量重建应拉回全部 4 条、计数不变
+    assert retriever.rebuild_all() == 4
+    assert retriever.stats()["vectors"] == 4
+
+    # 故障路径：拉取阶段就抛错，clear 不得执行，既有索引必须原样保留
+    def boom(*_a, **_k):
+        raise RuntimeError("java down")
+
+    with monkeypatch.context() as m:
+        m.setattr(retriever, "_fetch_java_chunks", boom)
+        with pytest.raises(Exception):
+            retriever.rebuild_all()
+    assert retriever.stats()["vectors"] == 4, "重建失败不得清空既有向量索引"
+
+
 def test_search_returns_most_relevant_first(java_stub):
     retriever.index_document()
     hits = retriever.search("HashMap 底层数据结构", kb_id=100, top_k=2)
