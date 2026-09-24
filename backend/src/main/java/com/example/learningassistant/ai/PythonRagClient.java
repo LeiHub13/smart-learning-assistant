@@ -69,7 +69,25 @@ public class PythonRagClient {
         body.put("query", query);
         body.put("kbId", kbId);
         body.put("topK", topK);
-        Object raw = post("/ai/retrieve", body).get("hits");
+        return toHits(post("/ai/retrieve", body).get("hits"));
+    }
+
+    /**
+     * 向量召回并限定在给定知识库集合内：一个课程可有多个知识库，按课程隔离检索必须传多个 kbId，
+     * 否则会命中其他课程的资料。
+     *
+     * @param kbIds 允许命中的知识库 id；为空等价于全库检索
+     * @throws RagException ai-service 不可用时抛出，调用方决定降级策略
+     */
+    public List<Hit> retrieveIn(String query, List<Long> kbIds, int topK) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("query", query);
+        body.put("kbIds", kbIds);
+        body.put("topK", topK);
+        return toHits(post("/ai/retrieve", body).get("hits"));
+    }
+
+    private static List<Hit> toHits(Object raw) {
         List<Hit> hits = new ArrayList<>();
         if (raw instanceof List<?> list) {
             for (Object item : list) {

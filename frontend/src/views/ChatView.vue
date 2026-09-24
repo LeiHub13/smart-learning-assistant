@@ -19,6 +19,11 @@
           <option :value="null" disabled>请选择知识库</option>
           <option v-for="kb in kbs" :key="kb.id" :value="kb.id">{{ kb.name }}</option>
         </select>
+        <span class="label" style="margin-top:8px">检索范围</span>
+        <select v-model="kbScope" @change="onScopeChange">
+          <option value="single">仅选中的知识库</option>
+          <option value="course">本课程全部知识库</option>
+        </select>
       </template>
       <div style="flex:1;overflow:auto;margin-top:10px">
         <div v-for="s in filteredSessions" :key="s.id" class="sess" :class="{ on: s.id === sessionId }" @click="openSession(s.id)">
@@ -99,6 +104,7 @@ const streaming = ref(false)
 const mode = ref('kb')
 const courseId = ref(null)
 const kbId = ref(null)
+const kbScope = ref('single')
 const bodyRef = ref(null)
 const suggestions = ['HashMap 的底层原理是什么？', 'Java 多线程有哪些核心要点？', '什么是受检异常？']
 
@@ -128,6 +134,7 @@ const setMode = async (m) => {
     courseId.value = null
     kbId.value = null
     kbs.value = []
+    kbScope.value = 'single'
   }
   // 当前会话与新模式不匹配时，清空当前会话，让用户重新选择或新建
   const current = sessions.value.find((x) => x.id === sessionId.value)
@@ -153,10 +160,21 @@ const onKbChange = async () => {
 }
 
 const newSession = async () => {
-  const body = mode.value === 'kb' ? { courseId: courseId.value, kbId: kbId.value } : {}
+  const body = mode.value === 'kb' ? { courseId: courseId.value, kbId: kbId.value, kbScope: kbScope.value } : {}
   const s = await api('/api/chat/sessions', { method: 'POST', body })
   sessions.value.unshift(s)
   await openSession(s.id)
+}
+
+const onScopeChange = async () => {
+  if (!sessionId.value) return
+  try {
+    const up = await api('/api/chat/sessions/' + sessionId.value, { method: 'PUT', body: { kbScope: kbScope.value } })
+    const s = sessions.value.find((x) => x.id === sessionId.value)
+    if (s) s.kbScope = up.kbScope
+  } catch (e) {
+    showHint(e.message)
+  }
 }
 
 let hintTimer = null
@@ -236,6 +254,7 @@ const openSession = async (id) => {
     if (mode.value === 'kb') {
       courseId.value = s.courseId || null
       kbId.value = s.kbId || null
+      kbScope.value = s.kbScope || 'single'
       if (courseId.value) {
         try { kbs.value = await api('/api/courses/' + courseId.value + '/kb') } catch (e) { kbs.value = [] }
       }

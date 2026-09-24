@@ -34,7 +34,8 @@ public class SchemaMigrator implements CommandLineRunner {
             new ColumnSpec("t_course", "owner_name", "VARCHAR(50) NULL AFTER owner_id"),
             new ColumnSpec("t_course", "in_hub", "TINYINT DEFAULT 0 AFTER owner_name"),
             new ColumnSpec("t_knowledge_mastery", "last_practice_at", "TIMESTAMP NULL AFTER correct_count"),
-            new ColumnSpec("t_notification", "scheduled_at", "TIMESTAMP NULL AFTER read_flag"));
+            new ColumnSpec("t_notification", "scheduled_at", "TIMESTAMP NULL AFTER read_flag"),
+            new ColumnSpec("t_chat_session", "kb_scope", "VARCHAR(10) NULL AFTER kb_id"));
 
     @Override
     public void run(String... args) {

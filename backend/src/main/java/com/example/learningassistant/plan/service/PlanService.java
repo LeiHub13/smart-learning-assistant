@@ -36,6 +36,7 @@ public class PlanService {
     private final KnowledgeMasteryMapper masteryMapper;
     private final ChatModelFactory modelFactory;
     private final ObjectMapper objectMapper;
+    private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     /**
      * 生成学习计划：LLM 输出 JSON 数组 -> 落库 plan + tasks。
@@ -64,6 +65,15 @@ public class PlanService {
                         + "\n起始日期:" + LocalDate.now()
                         + "\n请生成逐日学习计划。")));
 
+        List<Map<String, Object>> items;
+        try {
+            items = objectMapper.readValue(raw, new TypeReference<>() {
+            });
+        } catch (Exception e) {
+            log.warn("学习计划解析失败: {}", raw);
+            throw new BizException("学习计划生成失败，请重试");
+        }
+
         StudyPlan plan = new StudyPlan();
         plan.setUserId(userId);
         plan.setCourseId(courseId);
@@ -71,11 +81,10 @@ public class PlanService {
         plan.setDays(days);
         plan.setStatus("active");
         plan.setCreatedAt(LocalDateTime.now());
-        planMapper.insert(plan);
 
-        try {
-            List<Map<String, Object>> items = objectMapper.readValue(raw, new TypeReference<>() {
-            });
+        // 计划与逐日任务同事务落库：t_plan_task 无外键级联，半途失败会留下不属于任何计划的孤儿任务
+        transactionTemplate.executeWithoutResult(status -> {
+            planMapper.insert(plan);
             int dayNo = 1;
             for (Map<String, Object> item : items) {
                 PlanTask task = new PlanTask();
@@ -97,11 +106,7 @@ public class PlanService {
                 taskMapper.insert(task);
                 dayNo++;
             }
-        } catch (Exception e) {
-            log.warn("学习计划解析失败: {}", raw);
-            planMapper.deleteById(plan.getId());
-            throw new BizException("学习计划生成失败，请重试");
-        }
+        });
         return plan;
     }
 

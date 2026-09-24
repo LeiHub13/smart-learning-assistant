@@ -24,17 +24,22 @@ class RagContext:
         return not self.hits
 
 
-def build_context(kb_id, question: str, history: list[dict] | None = None) -> RagContext:
-    """检索并组装知识库上下文。无命中时返回「暂无相关资料」，与原 Java 行为一致。"""
+def build_context(kb_id, question: str, history: list[dict] | None = None,
+                  kb_ids: list[int] | None = None) -> RagContext:
+    """检索并组装知识库上下文。无命中时返回「暂无相关资料」，与原 Java 行为一致。
+
+    kb_ids 为课程级检索范围（本课程全部知识库 id），缺省只搜 kb_id 单库。
+    """
     query = question
     if config.RAG_REWRITE_ENABLED and history:
         query = _rewrite(question, history) or question
 
     candidate_k = config.RAG_RERANK_CANDIDATES if config.RAG_RERANK_ENABLED else config.RAG_TOP_K
     try:
-        hits = retriever.search(query, kb_id=kb_id, top_k=config.RAG_TOP_K, candidate_k=candidate_k)
+        hits = retriever.search(query, kb_id=kb_id, kb_ids=kb_ids,
+                                top_k=config.RAG_TOP_K, candidate_k=candidate_k)
     except Exception as e:  # noqa: BLE001
-        logger.error("向量召回失败 kbId=%s: %s", kb_id, e)
+        logger.error("向量召回失败 kbId=%s kbIds=%s: %s", kb_id, kb_ids, e)
         return RagContext("暂无相关资料", "", [])
 
     if not hits:

@@ -20,6 +20,8 @@ public class ChatSession {
     private Long userId;
     private Long courseId;
     private Long kbId;
+    /** 检索范围：single=只搜 kbId 这个知识库（默认），course=搜本课程全部知识库。 */
+    private String kbScope;
     private String title;
     private LocalDateTime createdAt;
 }

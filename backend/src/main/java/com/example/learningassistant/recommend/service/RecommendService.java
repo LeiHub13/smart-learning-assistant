@@ -25,7 +25,7 @@ import java.util.Map;
  * 1. 新手引导：课程内从未练习 → 建议先做摸底练习；
  * 2. 待复习：有效掌握度（艾宾浩斯衰减）跌破 60% 的知识点；
  * 3. 专项练习：原始掌握度薄弱（<60%）的知识点 → 建议专项做题；
- * 4. 相关资料：薄弱知识点关联的知识库片段（向量检索）。
+ * 4. 相关资料：薄弱知识点关联的本课程知识库片段（向量检索，按课程 kbId 集合限定范围）。
  * 未来演进：协同过滤 + LLM 理由生成 + 点击率埋点回写（见类注释）。
  */
 @Slf4j
@@ -39,6 +39,7 @@ public class RecommendService {
     private final PythonRagClient ragClient;
     private final ChunkMapper chunkMapper;
     private final DocumentMapper documentMapper;
+    private final com.example.learningassistant.kb.service.KbService kbService;
 
     private static final double REVIEW_THRESHOLD = 60.0;
     private static final int MAX_ITEMS = 6;
@@ -92,11 +93,13 @@ public class RecommendService {
         }
 
         // 3. 相关资料（最薄弱知识点 → 向量检索知识库片段，最多 2 条）
+        List<Long> kbIds = kbService.kbList(courseId).stream()
+                .map(com.example.learningassistant.kb.entity.KnowledgeBase::getId).toList();
         List<KnowledgeMastery> weakest = masteries.stream()
                 .filter(m -> m.getAttempts() > 0 && m.getMastery() < 80)
                 .limit(2).toList();
         for (KnowledgeMastery m : weakest) {
-            String docText = relatedDoc(m.getKpName());
+            String docText = relatedDoc(m.getKpName(), kbIds);
             if (docText != null) {
                 items.add(item("document", "资料：与「" + m.getKpName() + "」相关的知识库片段",
                         docText, m.getMastery() + 0.5, m.getKpName()));
@@ -107,10 +110,16 @@ public class RecommendService {
         return items.subList(0, Math.min(items.size(), MAX_ITEMS));
     }
 
-    /** 按知识点名称走 ai-service 语义检索，返回最相关的知识库片段文本（含来源文档名）。 */
-    private String relatedDoc(String kpName) {
+    /**
+     * 按知识点名称走 ai-service 语义检索，返回最相关的知识库片段文本（含来源文档名）。
+     * 检索范围限定在本课程的知识库集合内——传空会退化成全库检索，把别的课程资料推荐进来。
+     */
+    private String relatedDoc(String kpName, List<Long> kbIds) {
+        if (kbIds.isEmpty()) {
+            return null;
+        }
         try {
-            List<PythonRagClient.Hit> hits = ragClient.retrieve(kpName, null, 1);
+            List<PythonRagClient.Hit> hits = ragClient.retrieveIn(kpName, kbIds, 1);
             if (hits.isEmpty()) {
                 return null;
             }

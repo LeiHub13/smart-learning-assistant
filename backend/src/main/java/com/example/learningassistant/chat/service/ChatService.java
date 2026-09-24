@@ -38,8 +38,18 @@ public class ChatService {
     private final ChatMessageMapper messageMapper;
     private final ChatModelFactory modelFactory;
     private final KnowledgeMasteryMapper masteryMapper;
+    private final com.example.learningassistant.kb.service.KbService kbService;
 
     private static final int HISTORY_ROUNDS = 5;
+
+    /** 检索范围：只搜会话选中的那个知识库（默认）。 */
+    public static final String SCOPE_SINGLE = "single";
+    /** 检索范围：搜本课程全部知识库（课程下有多个知识库时用）。 */
+    public static final String SCOPE_COURSE = "course";
+
+    private static String normalizeScope(String scope) {
+        return SCOPE_COURSE.equals(scope) ? SCOPE_COURSE : SCOPE_SINGLE;
+    }
 
     public List<ChatSession> sessions(Long userId) {
         return sessionMapper.selectList(new LambdaQueryWrapper<ChatSession>()
@@ -47,11 +57,12 @@ public class ChatService {
                 .orderByDesc(ChatSession::getCreatedAt));
     }
 
-    public ChatSession createSession(Long userId, Long courseId, Long kbId) {
+    public ChatSession createSession(Long userId, Long courseId, Long kbId, String kbScope) {
         ChatSession s = new ChatSession();
         s.setUserId(userId);
         s.setCourseId(courseId);
         s.setKbId(kbId);
+        s.setKbScope(kbId == null ? null : normalizeScope(kbScope));
         s.setTitle("新对话");
         s.setCreatedAt(LocalDateTime.now());
         sessionMapper.insert(s);
@@ -75,7 +86,7 @@ public class ChatService {
         return s;
     }
 
-    public ChatSession updateSession(Long id, Long userId, String title, Long courseId, Long kbId) {
+    public ChatSession updateSession(Long id, Long userId, String title, Long courseId, Long kbId, String kbScope) {
         ChatSession s = requireOwnedSession(id, userId);
         if (title != null && !title.isBlank()) {
             s.setTitle(title.trim());
@@ -86,6 +97,9 @@ public class ChatService {
         }
         if (kbId != null) {
             s.setKbId(kbId);
+        }
+        if (kbScope != null && s.getKbId() != null) {
+            s.setKbScope(normalizeScope(kbScope));
         }
         sessionMapper.updateById(s);
         return s;
@@ -134,6 +148,16 @@ public class ChatService {
         if (session.getKbId() != null) {
             system.append("RAG_QA\n你是智能学习助手，结合课程知识库资料回答学生问题，并标注引用编号[1][2]等。")
                     .append("\nKB_ID:").append(session.getKbId());
+            if (SCOPE_COURSE.equals(session.getKbScope()) && session.getCourseId() != null) {
+                // 检索范围=本课程全部知识库：由 Java 展开成 kbId 逗号串下发，
+                // 向量库元数据只有 kbId 没有 courseId，按课程展开只能发生在持有 t_knowledge_base 的一侧
+                String ids = kbService.kbList(session.getCourseId()).stream()
+                        .map(com.example.learningassistant.kb.entity.KnowledgeBase::getId)
+                        .map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+                if (!ids.isEmpty()) {
+                    system.append("\nKB_IDS:").append(ids);
+                }
+            }
         } else {
             system.append("FREE\n你是智能学习助手，用中文友好地解答学生的学习问题。");
         }

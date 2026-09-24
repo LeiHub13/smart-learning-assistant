@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 
 /**
  * 全局搜索：一次查询聚合四类内容（题目/笔记/考试/知识库文档片段）。
- * 文本类走 SQL LIKE；文档片段走向量语义检索（失败降级 LIKE），并按课程过滤。
+ * 文本类走 SQL LIKE；文档片段走向量语义检索（失败降级 LIKE），检索范围按课程知识库限定。
  */
 @Slf4j
 @Service
@@ -111,12 +111,23 @@ public class SearchService {
     }
 
     /**
-     * 文档片段：优先走 ai-service 向量语义检索（失败/无结果降级 SQL LIKE），再按课程过滤。
+     * 文档片段：优先走 ai-service 向量语义检索（失败/无结果降级 SQL LIKE）。
+     * 指定课程时，两条路径的范围都必须先限定在该课程的知识库集合内——全库 top-10 很可能被别的课程占满，
+     * 后置过滤会把本课程的命中清零（表面看像「搜不到」，实际是召回被挤掉）。
      */
     private List<Map<String, Object>> searchDocs(String keyword, Long courseId) {
+        List<Long> courseKbIds = courseId == null ? List.of()
+                : kbMapper.selectList(new LambdaQueryWrapper<KnowledgeBase>()
+                        .eq(KnowledgeBase::getCourseId, courseId))
+                        .stream().map(KnowledgeBase::getId).toList();
+        if (courseId != null && courseKbIds.isEmpty()) {
+            return List.of(); // 本课程没有知识库，全库命中的也都是别的课程
+        }
         List<Chunk> chunks = new ArrayList<>();
         try {
-            List<PythonRagClient.Hit> hits = ragClient.retrieve(keyword, null, 10);
+            List<PythonRagClient.Hit> hits = courseKbIds.isEmpty()
+                    ? ragClient.retrieve(keyword, null, 10)
+                    : ragClient.retrieveIn(keyword, courseKbIds, 10);
             if (!hits.isEmpty()) {
                 Map<Long, Chunk> byId = new HashMap<>();
                 for (Chunk c : chunkMapper.selectBatchIds(hits.stream()
@@ -137,6 +148,7 @@ public class SearchService {
         if (chunks.isEmpty()) {
             chunks = chunkMapper.selectList(new LambdaQueryWrapper<Chunk>()
                     .like(Chunk::getContent, "%" + keyword + "%")
+                    .in(!courseKbIds.isEmpty(), Chunk::getKbId, courseKbIds)
                     .last("LIMIT 5"));
         }
 

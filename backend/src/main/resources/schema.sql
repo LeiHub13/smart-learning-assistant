@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS t_chat_session (
     user_id    BIGINT,
     course_id  BIGINT,
     kb_id      BIGINT,
+    kb_scope   VARCHAR(10),
     title      VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

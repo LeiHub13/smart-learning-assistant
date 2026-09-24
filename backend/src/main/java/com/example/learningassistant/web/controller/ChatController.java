@@ -41,9 +41,10 @@ public class ChatController {
     }
 
     @PostMapping
-    public ApiResponse<ChatSession> create(HttpServletRequest request, @RequestBody Map<String, Long> body) {
+    public ApiResponse<ChatSession> create(HttpServletRequest request, @RequestBody Map<String, Object> body) {
         AuthUser u = CurrentUser.get(request);
-        return ApiResponse.ok(chatService.createSession(u.id(), body.get("courseId"), body.get("kbId")));
+        return ApiResponse.ok(chatService.createSession(u.id(), asLong(body.get("courseId")),
+                asLong(body.get("kbId")), (String) body.get("kbScope")));
     }
 
     @GetMapping("/{id}/messages")
@@ -56,10 +57,8 @@ public class ChatController {
     public ApiResponse<ChatSession> rename(HttpServletRequest request, @PathVariable Long id,
                                            @RequestBody Map<String, Object> body) {
         AuthUser u = CurrentUser.get(request);
-        String title = (String) body.get("title");
-        Long courseId = body.get("courseId") == null ? null : Long.valueOf(String.valueOf(body.get("courseId")));
-        Long kbId = body.get("kbId") == null ? null : Long.valueOf(String.valueOf(body.get("kbId")));
-        return ApiResponse.ok(chatService.updateSession(id, u.id(), title, courseId, kbId));
+        return ApiResponse.ok(chatService.updateSession(id, u.id(), (String) body.get("title"),
+                asLong(body.get("courseId")), asLong(body.get("kbId")), (String) body.get("kbScope")));
     }
 
     @DeleteMapping("/{id}")
@@ -95,6 +94,10 @@ public class ChatController {
                     emitter.complete();
                 });
         return emitter;
+    }
+
+    private static Long asLong(Object v) {
+        return v == null ? null : Long.valueOf(String.valueOf(v));
     }
 
     private void safeSend(SseEmitter emitter, Object data) {

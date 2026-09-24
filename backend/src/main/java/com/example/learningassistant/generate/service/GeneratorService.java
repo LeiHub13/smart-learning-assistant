@@ -35,6 +35,7 @@ public class GeneratorService {
     private final ObjectMapper objectMapper;
     private final com.example.learningassistant.course.mapper.CourseMapper courseMapper;
     private final com.example.learningassistant.kb.service.KbService kbService;
+    private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     /**
      * 讲义存入课程知识库：无知识库时自动创建，走文本索引链路（分块 + 向量化）。
@@ -90,6 +91,9 @@ public class GeneratorService {
 
     /**
      * 生成练习题：根据用户掌握度自适应难度 -> LLM 出题 -> JSON 解析入库（source=AI）。
+     *
+     * LLM 调用在事务外（耗时且不该持有连接），写库部分整体一个事务：
+     * 中途失败不能留下半批题目——否则重试会叠加重复题，练习记录也指向不存在的题目。
      */
     public List<Question> generateQuestions(Long userId, Long courseId, String kp, int count) {
         String difficulty = determineDifficulty(userId, courseId, kp);
@@ -99,40 +103,64 @@ public class GeneratorService {
                         "GEN_QUESTIONS\n你是出题老师，只输出 JSON 数组，字段: type(单选/多选/判断/问答), stem, options(数组[{k,v}]), answer, analysis, kpName, difficulty。难度要求：" + difficulty),
                 new AIChatMessage("user", "知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
                         + "\n数量:" + count + "\n难度:" + difficulty + "\n请生成练习题。")));
-        List<Question> saved = new java.util.ArrayList<>();
+        List<Map<String, Object>> parsed;
         try {
-            List<Map<String, Object>> list = objectMapper.readValue(raw, new TypeReference<List<Map<String, Object>>>() {
+            parsed = objectMapper.readValue(raw, new TypeReference<List<Map<String, Object>>>() {
             });
-            for (Map<String, Object> m : list) {
-                Question q = new Question();
-                q.setCourseId(courseId);
-                q.setType(String.valueOf(m.getOrDefault("type", "单选")));
-                q.setStem(String.valueOf(m.getOrDefault("stem", "")));
-                Object opts = m.get("options");
-                q.setOptions(opts == null ? null : objectMapper.writeValueAsString(opts));
-                q.setAnswer(m.get("answer") == null ? null : String.valueOf(m.get("answer")));
-                q.setAnalysis(m.get("analysis") == null ? null : String.valueOf(m.get("analysis")));
-                q.setKpName(String.valueOf(m.getOrDefault("kpName", kp)));
-                q.setDifficulty(String.valueOf(m.getOrDefault("difficulty", difficulty)));
-                q.setSource("AI");
-                q.setCreatedAt(LocalDateTime.now());
-                questionMapper.insert(q);
-                saved.add(q);
-            }
         } catch (Exception e) {
-            log.warn("AI 出题解析失败，题目未入库: {}", raw);
+            log.warn("AI 出题返回非 JSON 数组: {}", raw);
             throw new com.example.learningassistant.common.BizException("AI 出题解析失败，请重试");
         }
+        if (parsed.isEmpty()) {
+            throw new com.example.learningassistant.common.BizException("AI 未生成题目，请重试");
+        }
 
-        GeneratedContent g = new GeneratedContent();
-        g.setUserId(userId);
-        g.setCourseId(courseId);
-        g.setType("questions");
-        g.setTitle("AI 生成练习（" + saved.size() + " 题）");
-        g.setContent(raw);
-        g.setCreatedAt(LocalDateTime.now());
-        contentMapper.insert(g);
-        return saved;
+        List<Question> saved;
+        try {
+            saved = transactionTemplate.execute(status -> {
+                List<Question> rows = new java.util.ArrayList<>();
+                for (Map<String, Object> m : parsed) {
+                    Question q = new Question();
+                    q.setCourseId(courseId);
+                    q.setType(String.valueOf(m.getOrDefault("type", "单选")));
+                    q.setStem(String.valueOf(m.getOrDefault("stem", "")));
+                    Object opts = m.get("options");
+                    q.setOptions(opts == null ? null : writeOptions(opts));
+                    q.setAnswer(m.get("answer") == null ? null : String.valueOf(m.get("answer")));
+                    q.setAnalysis(m.get("analysis") == null ? null : String.valueOf(m.get("analysis")));
+                    q.setKpName(String.valueOf(m.getOrDefault("kpName", kp)));
+                    q.setDifficulty(String.valueOf(m.getOrDefault("difficulty", difficulty)));
+                    q.setSource("AI");
+                    q.setCreatedAt(LocalDateTime.now());
+                    questionMapper.insert(q);
+                    rows.add(q);
+                }
+                GeneratedContent g = new GeneratedContent();
+                g.setUserId(userId);
+                g.setCourseId(courseId);
+                g.setType("questions");
+                g.setTitle("AI 生成练习（" + rows.size() + " 题）");
+                g.setContent(raw);
+                g.setCreatedAt(LocalDateTime.now());
+                contentMapper.insert(g);
+                return rows;
+            });
+        } catch (com.example.learningassistant.common.BizException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("AI 出题入库失败，本次批量写入已回滚: {}", e.getMessage(), e);
+            throw new com.example.learningassistant.common.BizException("AI 出题保存失败，请重试");
+        }
+        return saved == null ? List.of() : saved;
+    }
+
+    /** options 由 LLM 给出，序列化不了说明该题格式非法：抛出后整批回滚，不写坏数据。 */
+    private String writeOptions(Object opts) {
+        try {
+            return objectMapper.writeValueAsString(opts);
+        } catch (Exception e) {
+            throw new com.example.learningassistant.common.BizException("AI 出题选项格式异常，请重试");
+        }
     }
 
     public List<GeneratedContent> history(Long userId) {

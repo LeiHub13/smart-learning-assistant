@@ -185,10 +185,11 @@ def complete_with(messages, scene: str = "rewrite") -> str:
     return _call_with_limit(lambda: get_model().invoke(messages).content, scene)
 
 
-def _prepare_rag(scene: str, question: str, chunks, session_id, kb_id, meta: dict):
+def _prepare_rag(scene: str, question: str, chunks, session_id, kb_id, meta: dict, kb_ids=None):
     """rag_qa 场景若未随请求携带 chunks，则由本服务自行完成向量检索。
 
     检索链路（查询改写 -> Chroma 召回 -> 重排）已自 Java 侧迁移至 app/rag.py；
+    kb_ids 为课程级检索范围（本课程全部知识库 id），缺省只搜 kb_id 单库；
     引用编号 sources 通过 meta 回传给调用方（Java 落库）。
     """
     if scene != "rag_qa" or chunks:
@@ -197,22 +198,23 @@ def _prepare_rag(scene: str, question: str, chunks, session_id, kb_id, meta: dic
         meta.setdefault("sources", "")
         return None
     from app import rag
-    ctx = rag.build_context(kb_id, question, memory.recent(session_id) if session_id else None)
+    ctx = rag.build_context(kb_id, question, memory.recent(session_id) if session_id else None,
+                            kb_ids=kb_ids)
     meta["sources"] = ctx.sources
     return ctx.context
 
 
 def complete(scene: str, question: str, chunks=None, session_id: str = None,
-             user_id=None, kb_id=None, note: str = None, meta: dict | None = None,
+             user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
              course_id=None) -> str:
     """非流式完整回答（生成/批改/建议），带记忆。"""
     meta = meta if meta is not None else {}
     if scene == "agent":
         from app import agent
         return agent.complete_agent(get_model(), question, chunks=chunks, session_id=session_id,
-                                    user_id=user_id, kb_id=kb_id, note=note, meta=meta,
+                                    user_id=user_id, kb_id=kb_id, kb_ids=kb_ids, note=note, meta=meta,
                                     course_id=course_id)
-    chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta)
+    chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta, kb_ids=kb_ids)
     msgs = _assemble(scene, question, chunks, session_id, note)
     answer = _call_with_limit(lambda: get_model().invoke(msgs).content, scene)
     if session_id and _memorable(scene):
@@ -227,17 +229,17 @@ def complete(scene: str, question: str, chunks=None, session_id: str = None,
 
 
 def stream(scene: str, question: str, chunks=None, session_id: str = None,
-           user_id=None, kb_id=None, note: str = None, meta: dict | None = None,
+           user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
            course_id=None):
     """流式生成，yield 增量文本；检索到的引用编号通过 meta["sources"] 传出。"""
     meta = meta if meta is not None else {}
     if scene == "agent":
         from app import agent
         yield from agent.stream_agent(get_model(), question, chunks=chunks, session_id=session_id,
-                                      user_id=user_id, kb_id=kb_id, note=note, meta=meta,
+                                      user_id=user_id, kb_id=kb_id, kb_ids=kb_ids, note=note, meta=meta,
                                       course_id=course_id)
         return
-    chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta)
+    chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta, kb_ids=kb_ids)
     msgs = _assemble(scene, question, chunks, session_id, note)
     model = get_model()
     full = ""

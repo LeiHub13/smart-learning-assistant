@@ -2,13 +2,13 @@
 
 接口约定（与 Java 端 PythonAIChatModel / PythonRagClient 对齐）：
 - GET  /ai/health          健康检查，返回模型配置摘要
-- POST /ai/complete        非流式生成 {scene, question, chunks?, sessionId?, kbId?, note?} -> {content, sources}
-- POST /ai/stream          流式生成（SSE）{scene, question, chunks?, sessionId?, kbId?, note?}
+- POST /ai/complete        非流式生成 {scene, question, chunks?, sessionId?, kbId?, kbIds?, note?} -> {content, sources}
+- POST /ai/stream          流式生成（SSE）{scene, question, chunks?, sessionId?, kbId?, kbIds?, note?}
                            -> data: {"delta": "..."} ... data: {"done": true, "sources": "1,2"}
 - GET  /ai/history/{id}    会话记忆
 - GET  /ai/stats           LLM 调用观测
 RAG 端点（需 X-Internal-Token 头，仅供 Java 内部调用）：
-- POST /ai/retrieve        向量召回 {query, kbId?, topK?} -> {hits:[{chunkId, content, score}]}
+- POST /ai/retrieve        向量召回 {query, kbId?, kbIds?, topK?} -> {hits:[{chunkId, content, score}]}
 - POST /ai/index           建索引 {kbId?, docId?, all?} -> {indexed}
 - POST /ai/index/delete    删索引 {chunkIds?|docId?}
 - GET  /ai/rag/stats       向量库状态
@@ -57,6 +57,7 @@ class CompleteRequest(BaseModel):
     sessionId: str | None = Field(default=None)
     userId: int | None = Field(default=None)
     kbId: int | None = Field(default=None)
+    kbIds: list[int] | None = Field(default=None)
     courseId: int | None = Field(default=None)
     note: str | None = Field(default=None)
 
@@ -83,6 +84,7 @@ class ChunkRequest(BaseModel):
 class RetrieveRequest(BaseModel):
     query: str
     kbId: int | None = Field(default=None)
+    kbIds: list[int] | None = Field(default=None)
     topK: int | None = Field(default=None)
 
 
@@ -112,7 +114,8 @@ def complete(req: CompleteRequest):
     meta: dict = {}
     try:
         content = chains.complete(req.scene, req.question, req.chunks, req.sessionId,
-                                  user_id=req.userId, kb_id=req.kbId, note=req.note, meta=meta,
+                                  user_id=req.userId, kb_id=req.kbId, kb_ids=req.kbIds or None,
+                                  note=req.note, meta=meta,
                                   course_id=req.courseId or None)
         return {"content": content, "sources": meta.get("sources", "")}
     except RuntimeError as e:
@@ -130,7 +133,8 @@ async def stream(req: StreamRequest):
     def gen():
         try:
             for delta in chains.stream(req.scene, req.question, req.chunks, req.sessionId,
-                                       user_id=req.userId, kb_id=req.kbId, note=req.note, meta=meta,
+                                       user_id=req.userId, kb_id=req.kbId, kb_ids=req.kbIds or None,
+                                       note=req.note, meta=meta,
                                        course_id=req.courseId or None):
                 yield {"event": "message", "data": json.dumps({"delta": delta}, ensure_ascii=False)}
             # sources：本服务自行检索时产出的引用编号，由 Java 落库
@@ -151,7 +155,7 @@ def retrieve(req: RetrieveRequest, x_internal_token: str | None = Header(default
     check_internal_token(x_internal_token)
     from app import retriever
     try:
-        hits = retriever.search(req.query, kb_id=req.kbId, top_k=req.topK)
+        hits = retriever.search(req.query, kb_id=req.kbId, kb_ids=req.kbIds, top_k=req.topK)
     except Exception as e:  # noqa: BLE001
         logger.error("retrieve 失败: %s", e)
         raise HTTPException(502, f"检索失败: {e}") from e

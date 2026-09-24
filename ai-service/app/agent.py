@@ -203,10 +203,11 @@ def _post_java_tool(path: str, payload: dict) -> str:
         return f"操作未能完成（{type(e).__name__}），请如实告知用户，不要重复尝试。"
 
 
-def _make_tools(chunks, user_id, kb_id=None, course_id=None):
-    """构建绑定本次请求上下文的工具集（闭包捕获 chunks / user_id / kb_id / course_id）。
+def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None):
+    """构建绑定本次请求上下文的工具集（闭包捕获 chunks / user_id / kb_id / kb_ids / course_id）。
 
-    带 kb_id 时 search_materials 走真正的向量检索器（全库范围）；
+    带 kb_id 时 search_materials 走真正的向量检索器（检索范围为会话绑定的知识库，
+    或按 kb_ids 扩展为该课程的全部知识库）；
     否则退回 Java 随请求下发的 chunks 集合做关键词匹配。
     course_id 由会话上下文绑定而非模型填写，避免跨课程取错数据。
     """
@@ -217,7 +218,7 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None):
         """列出当前可用的课程知识库资料清单（编号 + 内容摘要）。"""
         if not docs:
             if kb_id:
-                return f"已接入知识库（kbId={kb_id}），可直接用 search_materials 按关键词检索全库资料。"
+                return f"已接入知识库（kbId={kb_id}），可直接用 search_materials 按关键词检索该知识库（或本课程全部知识库）内的资料。"
             return "当前没有可用的课程资料，请基于自身知识回答并说明未检索到课程资料。"
         lines = []
         for i, d in enumerate(docs, start=1):
@@ -234,7 +235,7 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None):
         if kb_id:
             try:
                 from app import retriever
-                hits = retriever.search(kw, kb_id=kb_id, top_k=5)
+                hits = retriever.search(kw, kb_id=kb_id, kb_ids=kb_ids, top_k=5)
                 if hits:
                     return "\n".join(f"[{i}] {h['content']}" for i, h in enumerate(hits, start=1))
             except Exception as e:  # noqa: BLE001
@@ -340,13 +341,14 @@ def _remember(session_id: str, question: str, answer: str) -> None:
         memory.maybe_compress(session_id, _summarizer)
 
 
-def _seed_materials(chunks, session_id, kb_id, question, meta):
+def _seed_materials(chunks, session_id, kb_id, question, meta, kb_ids=None):
     """Agent 模式下若未携带资料，先用 RAG 流水线召回一轮，产出 sources 引用编号。"""
     if chunks or not kb_id:
         meta.setdefault("sources", "")
         return chunks
     from app import rag
-    ctx = rag.build_context(kb_id, question, memory.recent(session_id) if session_id else None)
+    ctx = rag.build_context(kb_id, question, memory.recent(session_id) if session_id else None,
+                            kb_ids=kb_ids)
     if meta is not None:
         meta["sources"] = ctx.sources
     return [h["content"] for h in ctx.hits]
@@ -361,13 +363,13 @@ def _system_prompt(mcp_tools: list, note: str = None) -> str:
 
 
 def complete_agent(model, question: str, chunks=None, session_id: str = None,
-                   user_id=None, kb_id=None, note: str = None, meta: dict | None = None,
+                   user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
                    course_id=None) -> str:
     """非流式：跑完整 ReAct 循环后返回最终回答。"""
     meta = meta if meta is not None else {}
-    chunks = _seed_materials(chunks, session_id, kb_id, question, meta)
+    chunks = _seed_materials(chunks, session_id, kb_id, question, meta, kb_ids=kb_ids)
     mcp_tools = get_mcp_tools()
-    tools = _make_tools(chunks, user_id, kb_id, course_id) + mcp_tools
+    tools = _make_tools(chunks, user_id, kb_id, course_id, kb_ids=kb_ids) + mcp_tools
     agent = create_agent(model, tools, system_prompt=_system_prompt(mcp_tools, note))
     result = agent.invoke(
         {"messages": _build_messages(question, session_id)},
@@ -379,13 +381,13 @@ def complete_agent(model, question: str, chunks=None, session_id: str = None,
 
 
 def stream_agent(model, question: str, chunks=None, session_id: str = None,
-                 user_id=None, kb_id=None, note: str = None, meta: dict | None = None,
+                 user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
                  course_id=None):
     """流式：逐块 yield 最终回答的 token。"""
     meta = meta if meta is not None else {}
-    chunks = _seed_materials(chunks, session_id, kb_id, question, meta)
+    chunks = _seed_materials(chunks, session_id, kb_id, question, meta, kb_ids=kb_ids)
     mcp_tools = get_mcp_tools()
-    tools = _make_tools(chunks, user_id, kb_id, course_id) + mcp_tools
+    tools = _make_tools(chunks, user_id, kb_id, course_id, kb_ids=kb_ids) + mcp_tools
     agent = create_agent(model, tools, system_prompt=_system_prompt(mcp_tools, note))
     full = ""
     try:

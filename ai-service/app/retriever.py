@@ -119,7 +119,26 @@ def remove_document(doc_id: int) -> int:
     return 1
 
 
-def search(query: str, kb_id=None, top_k: int = None, candidate_k: int = None):
+def _kb_filter(kb_id=None, kb_ids=None):
+    """把单库/多库限定条件合成一个 Chroma where；均为空表示全库检索。
+
+    kb_ids 用于按课程隔离（一个课程可有多个知识库），避免推荐/检索串到别的课程。
+    """
+    ids: list[int] = []
+    if kb_id is not None:
+        ids.append(int(kb_id))
+    for v in kb_ids or []:
+        v = int(v)
+        if v not in ids:
+            ids.append(v)
+    if not ids:
+        return None
+    if len(ids) == 1:
+        return {"kbId": {"$eq": ids[0]}}
+    return {"kbId": {"$in": ids}}
+
+
+def search(query: str, kb_id=None, top_k: int = None, candidate_k: int = None, kb_ids=None):
     """向量召回。返回 [{chunkId, docId, kbId, content, score}]，score 越大越相关。"""
     if not query or not query.strip():
         return []
@@ -128,7 +147,7 @@ def search(query: str, kb_id=None, top_k: int = None, candidate_k: int = None):
     if total == 0:
         return []
     k = min(candidate_k or top_k or config.RAG_TOP_K, total)
-    where = {"kbId": {"$eq": int(kb_id)}} if kb_id is not None else None
+    where = _kb_filter(kb_id, kb_ids)
     res = col.query(
         query_embeddings=[embeddings.embed(query)],
         n_results=k,

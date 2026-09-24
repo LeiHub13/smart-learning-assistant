@@ -89,6 +89,20 @@ def test_search_filters_by_kb(java_stub):
     assert hits2 and hits2[0]["chunkId"] == 4
 
 
+def test_search_scopes_to_multiple_kbs(java_stub):
+    """一个课程可有多个知识库：检索按 kbIds 限定时不得命中集合外的片段（资料推荐串课程的根因）。"""
+    retriever.index_document()
+    assert retriever._kb_filter() is None
+    assert retriever._kb_filter(kb_id=7) == {"kbId": {"$eq": 7}}
+    assert retriever._kb_filter(kb_ids=[7, 7, 8]) == {"kbId": {"$in": [7, 8]}}
+    assert retriever._kb_filter(kb_id=7, kb_ids=[8]) == {"kbId": {"$in": [7, 8]}}
+
+    hits = retriever.search("TCP 三次握手", kb_ids=[100, 200], top_k=5)
+    assert {h["kbId"] for h in hits} <= {100, 200}
+    assert hits and hits[0]["chunkId"] == 4, hits
+    assert {h["chunkId"] for h in retriever.search("TCP 三次握手", kb_ids=[200], top_k=5)} == {4}
+
+
 def test_remove_chunks_and_document(java_stub):
     retriever.index_document()
     retriever.remove_chunks([1])
@@ -125,6 +139,11 @@ def test_retrieve_endpoint_contract(java_stub):
 
     stats = client.get("/ai/rag/stats", headers=token).json()
     assert stats["vectors"] == 4 and stats["provider"] == "hash"
+
+    # 课程级隔离：Java 传 kbIds（课程下多个知识库）时的字段名与过滤行为是两侧契约
+    scoped = client.post("/ai/retrieve", json={"query": "TCP", "kbIds": [200]}, headers=token)
+    assert scoped.status_code == 200
+    assert {h["chunkId"] for h in scoped.json()["hits"]} == {4}
 
     deleted = client.post("/ai/index/delete", json={"docId": 11}, headers=token)
     assert deleted.status_code == 200

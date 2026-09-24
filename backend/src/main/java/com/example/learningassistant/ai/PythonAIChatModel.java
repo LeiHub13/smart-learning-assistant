@@ -26,6 +26,7 @@ import java.util.function.Consumer;
  *   GEN_LECTURE / GEN_QUESTIONS / REVIEW_SUBJECTIVE / ADVICE -> /ai/complete
  * 知识库答疑：system 中的 KB_ID 随请求传给 Python，检索链路（查询改写 -> 向量召回 -> 重排）
  * 全在 ai-service 内完成，引用编号 sources 由流式 done 事件回传（Java 落库）。
+ * 检索范围：system 中的 KB_IDS（本课程全部知识库 id 逗号串）随请求下发，缺省表示只搜 KB_ID 单库。
  * 学情说明：system 中的 NOTE（如薄弱知识点）拼进 Python 侧系统提示。
  * 会话标识：system 中的 SESSION_ID:xxx 用于 Python 端按会话持久化记忆。
  *
@@ -171,7 +172,7 @@ public class PythonAIChatModel implements ChatModel {
         }
         return new RequestPayload(scene, lastUser, extractMarker(system, "SESSION_ID"),
                 extractMarker(system, "USER_ID"), extractMarker(system, "COURSE_ID"),
-                extractMarker(system, "KB_ID"), extractMarker(system, "NOTE"));
+                extractMarker(system, "KB_ID"), extractMarker(system, "KB_IDS"), extractMarker(system, "NOTE"));
     }
 
     private String extractMarker(String system, String key) {
@@ -187,7 +188,7 @@ public class PythonAIChatModel implements ChatModel {
     }
 
     private record RequestPayload(String scene, String question, String sessionId,
-                                  String userId, String courseId, String kbId, String note) {
+                                  String userId, String courseId, String kbId, String kbIds, String note) {
         Map<String, Object> toMap() {
             Map<String, Object> m = new java.util.LinkedHashMap<>();
             m.put("scene", scene);
@@ -198,6 +199,7 @@ public class PythonAIChatModel implements ChatModel {
             putInt(m, "userId", userId);
             putInt(m, "courseId", courseId);
             putInt(m, "kbId", kbId);
+            putIntList(m, "kbIds", kbIds);
             if (note != null && !note.isBlank()) {
                 m.put("note", note);
             }
@@ -212,6 +214,27 @@ public class PythonAIChatModel implements ChatModel {
                 m.put(key, Integer.parseInt(raw.trim()));
             } catch (NumberFormatException e) {
                 log.warn("system 标记 {} 非数字，已忽略: {}", key, raw);
+            }
+        }
+
+        private static void putIntList(Map<String, Object> m, String key, String raw) {
+            if (raw == null) {
+                return;
+            }
+            List<Integer> ids = new java.util.ArrayList<>();
+            for (String part : raw.split(",")) {
+                String s = part.trim();
+                if (s.isEmpty()) {
+                    continue;
+                }
+                try {
+                    ids.add(Integer.parseInt(s));
+                } catch (NumberFormatException e) {
+                    log.warn("system 标记 {} 含非数字片段，已忽略: {}", key, s);
+                }
+            }
+            if (!ids.isEmpty()) {
+                m.put(key, ids);
             }
         }
     }
