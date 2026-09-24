@@ -46,7 +46,8 @@ export function resetApiCache() {
   coursesCache = null
 }
 
-/** 解析 SSE 流：onDelta(chunk) onDone(sources|done) */
+/** 解析 SSE 流：onDelta(chunk) onDone(finalEvent) —— 结束回调收到整条最终事件对象
+ *  （答疑流为 {sources, actions}，讲义流为 {saved}），调用方按需取字段。 */
 export async function sseStream(path, body, onDelta, onDone) {
   const res = await fetch(path, {
     method: 'POST',
@@ -70,9 +71,7 @@ export async function sseStream(path, body, onDelta, onDone) {
       try {
         const d = JSON.parse(line.slice(5).trim())
         if (d.delta !== undefined) onDelta(d.delta)
-        if (d.sources !== undefined) onDone(d.sources || '')
-        if (d.saved !== undefined) onDone(d.saved)
-        if (d.done) onDone('')
+        else if (d.sources !== undefined || d.saved !== undefined || d.actions !== undefined || d.done) onDone(d)
       } catch (e) { /* ignore */ }
     }
   }
@@ -112,7 +111,7 @@ export async function unreadCount() { return api('/api/notifications/unread-coun
 export async function markRead(id) { return api(`/api/notifications/${id}/read`, { method: 'POST' }) }
 export async function markAllRead() { return api('/api/notifications/read-all', { method: 'POST' }) }
 
-/** 流式讲义 */
+/** 流式讲义：onDone 仍收 savedId（从最终事件对象中取） */
 export async function streamLecture(body, onDelta, onDone) {
-  return sseStream('/api/generate/lecture/stream', body, onDelta, onDone)
+  return sseStream('/api/generate/lecture/stream', body, onDelta, (d) => onDone(d && d.saved))
 }

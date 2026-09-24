@@ -46,12 +46,15 @@ MCP_PROMPT_SUFFIX = (
 
 RECURSION_LIMIT = 20
 
-# 开启写动作工具后追加的提示：先查再改，改完要如实汇报
+# 开启写动作工具后追加的提示：先查再改；只有存资料走待确认动作，另两个工具是即时生效的
 WRITE_PROMPT_SUFFIX = (
     "\n你还可以为学生做出实际动作：schedule_review 安排复习提醒、"
-    "finish_plan_task 给学习任务打卡。做这类动作前先确认信息（打卡前必须先用 query_plan_tasks 拿到 taskId），"
-    "一次对话里不要重复安排同一条提醒，也不要在未经学生同意的情况下反复打卡；"
-    "动作完成后在回答里简述你做了什么、什么时候生效。"
+    "finish_plan_task 给学习任务打卡、save_material_to_kb 把答疑中值得留存的一段资料存进本课程知识库。"
+    "注意：save_material_to_kb 不会直接写入，它只生成「待确认动作」，必须由用户在消息下方点击『确认执行』后才真正生效；"
+    "因此调用它时绝不能声称资料已保存，而应提醒用户去点『确认执行』。"
+    "schedule_review 与 finish_plan_task 则是调用后立刻生效的，须在学生明确同意后才用，并在回答里如实说明做了什么。"
+    "做这类动作前先确认信息（打卡前必须先用 query_plan_tasks 拿到 taskId），"
+    "一次对话里不要重复安排同一条提醒，也不要在未经学生同意的情况下反复打卡。"
 )
 
 # ===== MCP 工具懒加载（全局缓存 + 失败冷却） =====
@@ -203,13 +206,13 @@ def _post_java_tool(path: str, payload: dict) -> str:
         return f"操作未能完成（{type(e).__name__}），请如实告知用户，不要重复尝试。"
 
 
-def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None):
-    """构建绑定本次请求上下文的工具集（闭包捕获 chunks / user_id / kb_id / kb_ids / course_id）。
+def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, session_id=None):
+    """构建绑定本次请求上下文的工具集（闭包捕获 chunks / user_id / kb_id / kb_ids / course_id / session_id）。
 
     带 kb_id 时 search_materials 走真正的向量检索器（检索范围为会话绑定的知识库，
     或按 kb_ids 扩展为该课程的全部知识库）；
     否则退回 Java 随请求下发的 chunks 集合做关键词匹配。
-    course_id 由会话上下文绑定而非模型填写，避免跨课程取错数据。
+    course_id/session_id 由会话上下文绑定而非模型填写，避免跨课程取错数据。
     """
     docs = [str(c).strip() for c in (chunks or []) if str(c).strip()]
 
@@ -308,7 +311,35 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None):
         return _post_java_tool("/internal/tools/actions/plan-task-check",
                                {"userId": user_id, "taskId": int(task_id)})
 
-    return read_tools + ([query_plan_tasks, schedule_review, finish_plan_task]
+    @tool
+    def save_material_to_kb(title: str, content: str) -> str:
+        """把答疑中值得留存的一段资料登记为「待确认动作」，由用户确认后才存入当前课程的知识库。
+        该工具不会直接写入任何数据；kbId/courseId 由会话上下文绑定，不由模型填写。"""
+        if not user_id:
+            return "未提供用户信息，无法登记资料。"
+        if not (title or "").strip() or not (content or "").strip():
+            return "请提供资料标题与正文内容。"
+        inner = {"title": title.strip(), "content": content.strip()}
+        if kb_id:
+            inner["kbId"] = kb_id
+        payload = {"userId": user_id, "courseId": course_id,
+                   "kind": "add_material", "payload": inner}
+        if session_id:
+            try:
+                payload["sessionId"] = int(session_id)
+            except (TypeError, ValueError):
+                payload["sessionId"] = session_id
+        result = _post_java_tool("/internal/tools/actions/propose", payload)
+        if result.startswith("操作失败") or result.startswith("操作未能完成"):
+            return result
+        try:
+            summary = (json.loads(result) or {}).get("summary") or ""
+        except (ValueError, TypeError):
+            summary = ""
+        return (f"已生成待确认动作：{summary}。资料不会自动写入，"
+                "请告诉用户在消息下方点击『确认执行』。")
+
+    return read_tools + ([query_plan_tasks, schedule_review, finish_plan_task, save_material_to_kb]
                          if config.AGENT_WRITE_TOOLS else [])
 
 
@@ -369,7 +400,8 @@ def complete_agent(model, question: str, chunks=None, session_id: str = None,
     meta = meta if meta is not None else {}
     chunks = _seed_materials(chunks, session_id, kb_id, question, meta, kb_ids=kb_ids)
     mcp_tools = get_mcp_tools()
-    tools = _make_tools(chunks, user_id, kb_id, course_id, kb_ids=kb_ids) + mcp_tools
+    tools = _make_tools(chunks, user_id, kb_id, course_id, kb_ids=kb_ids,
+                        session_id=session_id) + mcp_tools
     agent = create_agent(model, tools, system_prompt=_system_prompt(mcp_tools, note))
     result = agent.invoke(
         {"messages": _build_messages(question, session_id)},
@@ -387,7 +419,8 @@ def stream_agent(model, question: str, chunks=None, session_id: str = None,
     meta = meta if meta is not None else {}
     chunks = _seed_materials(chunks, session_id, kb_id, question, meta, kb_ids=kb_ids)
     mcp_tools = get_mcp_tools()
-    tools = _make_tools(chunks, user_id, kb_id, course_id, kb_ids=kb_ids) + mcp_tools
+    tools = _make_tools(chunks, user_id, kb_id, course_id, kb_ids=kb_ids,
+                        session_id=session_id) + mcp_tools
     agent = create_agent(model, tools, system_prompt=_system_prompt(mcp_tools, note))
     full = ""
     try:

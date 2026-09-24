@@ -1,5 +1,6 @@
 package com.example.learningassistant.web.controller;
 
+import com.example.learningassistant.agent.service.AgentActionService;
 import com.example.learningassistant.chat.entity.ChatMessage;
 import com.example.learningassistant.chat.entity.ChatSession;
 import com.example.learningassistant.chat.service.ChatService;
@@ -33,6 +34,7 @@ import java.util.Map;
 public class ChatController {
 
     private final ChatService chatService;
+    private final AgentActionService agentActionService;
 
     @GetMapping
     public ApiResponse<List<ChatSession>> sessions(HttpServletRequest request) {
@@ -82,11 +84,25 @@ public class ChatController {
             }
             return emitter;
         }
+        // 本轮起点：只把本轮新登记的动作挂到这条回复上，否则上一轮未确认的动作会在每条消息下重复出现
+        java.time.LocalDateTime turnStart = java.time.LocalDateTime.now();
         chatService.streamMessage(id, question, u.id(),
                 delta -> safeSend(emitter, Map.of("delta", delta)),
                 sources -> {
+                    // 同一条 done 事件里附带本轮登记的待确认动作（写操作只 proposal，不自动落库）
+                    List<Map<String, Object>> actions;
                     try {
-                        emitter.send(SseEmitter.event().data(Map.of("sources", sources == null ? "" : sources)));
+                        actions = agentActionService.pendingFor(u.id(), id).stream()
+                                .filter(a -> a.getCreatedAt() == null || !a.getCreatedAt().isBefore(turnStart))
+                                .map(AgentActionService::toView)
+                                .toList();
+                    } catch (RuntimeException e) {
+                        log.warn("查询待确认动作失败: {}", e.getMessage());
+                        actions = List.of();
+                    }
+                    try {
+                        emitter.send(SseEmitter.event().data(
+                                Map.of("sources", sources == null ? "" : sources, "actions", actions)));
                     } catch (IOException e) {
                         emitter.completeWithError(e);
                         return;

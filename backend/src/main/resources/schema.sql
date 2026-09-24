@@ -297,5 +297,22 @@ CREATE TABLE IF NOT EXISTS t_report (
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ========== 新增：Agent 待确认动作（写操作先登记 proposal，用户点确认后才真正落库） ==========
+
+CREATE TABLE IF NOT EXISTS t_agent_action (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   BIGINT DEFAULT 1,
+    user_id     BIGINT NOT NULL,
+    course_id   BIGINT,
+    session_id  BIGINT,
+    kind        VARCHAR(40) NOT NULL,
+    payload     TEXT NOT NULL,
+    summary     VARCHAR(300),
+    status      VARCHAR(20) DEFAULT 'pending',
+    result      VARCHAR(300),
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at  TIMESTAMP NULL
+);
+
 -- 注：last_practice_at（间隔重复复习提醒）已并入上方 t_knowledge_mastery 建表语句。
 -- 旧 H2 库无需处理：历史上通过 ALTER 添加的列仍在；新建库直接由 CREATE TABLE 带出。

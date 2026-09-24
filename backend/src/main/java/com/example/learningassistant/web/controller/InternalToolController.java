@@ -1,6 +1,8 @@
 package com.example.learningassistant.web.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.learningassistant.agent.entity.AgentAction;
+import com.example.learningassistant.agent.service.AgentActionService;
 import com.example.learningassistant.common.ApiResponse;
 import com.example.learningassistant.common.BizException;
 import com.example.learningassistant.kb.entity.Chunk;
@@ -55,6 +57,7 @@ public class InternalToolController {
     private final ChunkMapper chunkMapper;
     private final NotifyService notifyService;
     private final PlanService planService;
+    private final AgentActionService agentActionService;
 
     @Value("${app.internal-tool-token:internal-tool-token}")
     private String internalToken;
@@ -272,6 +275,32 @@ public class InternalToolController {
         data.put("done", true);
         data.put("changed", true);
         data.put("message", "打卡成功");
+        return ApiResponse.ok(data);
+    }
+
+    /**
+     * 登记待确认动作（add_material）：Agent 只能创建 proposal，真正入库发生在用户点击确认后。
+     * 校验失败按 BizException 抛出（ApiResponse code!=0），由 Python 侧转成可读文案。
+     */
+    @PostMapping("/actions/propose")
+    public ApiResponse<Map<String, Object>> proposeAction(HttpServletRequest request,
+                                                          @RequestBody Map<String, Object> body) {
+        checkToken(request);
+        Long userId = asLong(body.get("userId"));
+        if (userId == null) {
+            throw new BizException("缺少 userId");
+        }
+        String kind = clip(body.get("kind"), 40);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = body.get("payload") instanceof Map<?, ?> m
+                ? (Map<String, Object>) m : Map.of();
+        AgentAction action = agentActionService.propose(userId, asLong(body.get("courseId")),
+                asLong(body.get("sessionId")), kind, payload);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("actionId", action.getId());
+        data.put("summary", action.getSummary());
+        data.put("kind", action.getKind());
+        data.put("expiresAt", action.getExpiresAt() == null ? null : action.getExpiresAt().format(FMT));
         return ApiResponse.ok(data);
     }
 

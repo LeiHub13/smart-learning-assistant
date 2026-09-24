@@ -62,6 +62,17 @@
             <div v-if="m.sources && m.role === 'assistant' && !(streaming && i === messages.length - 1)" class="sources">
               引用来源：知识库片段 {{ m.sources.split(',').join('、') }}
             </div>
+            <!-- Agent 待确认动作：只有点击「确认执行」后 Java 侧才真正写库 -->
+            <div v-for="a in m.actions || []" :key="a.id" class="agent-action">
+              <div v-if="a.state === 'done'" class="sources">{{ a.result }}</div>
+              <template v-else>
+                <div class="agent-action-summary">{{ a.summary }}</div>
+                <div class="agent-action-ops">
+                  <button class="btn small" :disabled="a.busy" @click="confirmAction(m, a)">确认执行</button>
+                  <button class="btn ghost small" :disabled="a.busy" @click="cancelAction(m, a)">取消</button>
+                </div>
+              </template>
+            </div>
           </div>
         </div>
       </div>
@@ -291,8 +302,10 @@ const send = async () => {
         messages.value[messages.value.length - 1].content += delta
         scrollDown()
       },
-      (sources) => {
-        messages.value[messages.value.length - 1].sources = sources
+      (done) => {
+        const last = messages.value[messages.value.length - 1]
+        last.sources = (done && done.sources) || ''
+        last.actions = (done && done.actions) || []
       })
   } catch (e) {
     messages.value[messages.value.length - 1].content = '（请求失败：' + e.message + '）'
@@ -302,4 +315,43 @@ const send = async () => {
     scrollDown()
   }
 }
+
+const confirmAction = async (m, a) => {
+  if (a.busy) return
+  a.busy = true
+  try {
+    const r = await api('/api/agent/actions/' + a.id + '/confirm', { method: 'POST' })
+    a.state = 'done'
+    a.result = r.result || '已执行'
+  } catch (e) {
+    showHint(e.message)
+  } finally {
+    a.busy = false
+  }
+}
+
+const cancelAction = async (m, a) => {
+  if (a.busy) return
+  a.busy = true
+  try {
+    await api('/api/agent/actions/' + a.id + '/cancel', { method: 'POST' })
+    m.actions.splice(m.actions.indexOf(a), 1)
+  } catch (e) {
+    showHint(e.message)
+    a.busy = false
+  }
+}
 </script>
+
+<style scoped>
+/* 待确认动作卡片：沿用 .sources 配色，仅补两条布局规则 */
+.agent-action { margin-top: 8px; }
+.agent-action-summary {
+  font-size: 12px; color: #8c6844; background: #f6efe5;
+  border-radius: 8px 8px 0 0; padding: 6px 10px; line-height: 1.7;
+}
+.agent-action-ops {
+  display: flex; gap: 8px; background: #f6efe5;
+  border-radius: 0 0 8px 8px; padding: 6px 10px;
+}
+</style>

@@ -9,15 +9,18 @@ def _names(tools):
 def test_write_tools_hidden_by_default(monkeypatch):
     monkeypatch.setattr(config, "AGENT_WRITE_TOOLS", False)
     names = _names(agent._make_tools(["资料A"], user_id=1, course_id=9))
+    # 默认仍为 6 个只读工具：save_material_to_kb 属写工具，开关关闭时不得出现
     assert names == {"list_material_topics", "search_materials", "query_wrong_book",
                      "query_mastery", "query_recent_practices", "query_kb_documents"}
+    assert "save_material_to_kb" not in names
     assert "做出实际动作" not in agent._system_prompt([])
 
 
 def test_write_tools_mounted_when_enabled(monkeypatch):
     monkeypatch.setattr(config, "AGENT_WRITE_TOOLS", True)
     names = _names(agent._make_tools([], user_id=1, course_id=9))
-    assert {"query_plan_tasks", "schedule_review", "finish_plan_task"} <= names
+    assert {"query_plan_tasks", "schedule_review", "finish_plan_task",
+            "save_material_to_kb"} <= names
     assert "schedule_review" in agent._system_prompt([])
 
 
@@ -39,6 +42,37 @@ def test_course_id_comes_from_request_not_the_model():
 
 def test_write_tools_require_user_context(monkeypatch):
     monkeypatch.setattr(config, "AGENT_WRITE_TOOLS", True)
+    calls = []
+    monkeypatch.setattr(agent, "_post_java_tool",
+                        lambda path, payload: calls.append(path) or "不应被调用")
     tools = {t.name: t for t in agent._make_tools([], user_id=None, course_id=None)}
     assert "未提供用户信息" in tools["schedule_review"].invoke({"kp_name": "索引"})
     assert "未提供用户信息" in tools["finish_plan_task"].invoke({"task_id": 1})
+    assert "未提供用户信息" in tools["save_material_to_kb"].invoke({"title": "T", "content": "C"})
+    # 无用户上下文时只能原地拒绝，不得发起任何 HTTP 回调
+    assert calls == []
+
+
+def test_save_material_proposes_with_closure_context(monkeypatch):
+    """写动作改为 proposal：工具只登记待确认动作，上下文 ID 来自闭包而非模型。"""
+    monkeypatch.setattr(config, "AGENT_WRITE_TOOLS", True)
+    calls = []
+
+    def fake_post(path, payload):
+        calls.append((path, payload))
+        return '{"actionId": 7, "summary": "存资料进知识库：《T》→ 课程资料"}'
+
+    monkeypatch.setattr(agent, "_post_java_tool", fake_post)
+    tools = {t.name: t for t in agent._make_tools(
+        [], user_id=3, kb_id=5, course_id=9, session_id="12")}
+    out = tools["save_material_to_kb"].invoke({"title": "T", "content": "C"})
+
+    assert len(calls) == 1
+    path, payload = calls[0]
+    assert path == "/internal/tools/actions/propose"
+    assert payload["userId"] == 3 and payload["courseId"] == 9
+    assert payload["sessionId"] == 12
+    assert payload["kind"] == "add_material"
+    assert payload["payload"] == {"title": "T", "content": "C", "kbId": 5}
+    assert "待确认动作" in out and "确认执行" in out
+    assert "已保存" not in out
