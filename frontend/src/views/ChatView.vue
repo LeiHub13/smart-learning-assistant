@@ -259,6 +259,15 @@ const doDelete = async () => {
 const openSession = async (id) => {
   sessionId.value = id
   messages.value = await api('/api/chat/sessions/' + id + '/messages')
+  // 服务端仍在有效期内的待确认动作要在重进会话时重现：否则卡片一刷新就"消失"，
+  // 但动作还在，用户既确认不了也取消不了。挂在最后一条 assistant 消息下作为锚点。
+  try {
+    const pending = await api('/api/agent/actions?sessionId=' + id)
+    if (pending && pending.length) {
+      const last = [...messages.value].reverse().find((m) => m.role === 'assistant')
+      if (last) last.actions = [...(last.actions || []), ...pending]
+    }
+  } catch (e) { /* 待确认列表拉不到不影响读历史 */ }
   const s = sessions.value.find((x) => x.id === id)
   if (s) {
     mode.value = sessionMode(s)
