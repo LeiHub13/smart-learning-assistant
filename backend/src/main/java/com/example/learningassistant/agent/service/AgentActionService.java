@@ -4,11 +4,17 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.learningassistant.agent.entity.AgentAction;
 import com.example.learningassistant.agent.mapper.AgentActionMapper;
 import com.example.learningassistant.common.BizException;
+import com.example.learningassistant.favorite.service.FavoriteService;
+import com.example.learningassistant.generate.service.GeneratorService;
 import com.example.learningassistant.kb.entity.Document;
 import com.example.learningassistant.kb.entity.KnowledgeBase;
 import com.example.learningassistant.kb.service.KbService;
+import com.example.learningassistant.note.entity.Note;
+import com.example.learningassistant.note.service.NoteService;
 import com.example.learningassistant.notify.service.NotifyService;
 import com.example.learningassistant.plan.service.PlanService;
+import com.example.learningassistant.practice.entity.Question;
+import com.example.learningassistant.practice.mapper.QuestionMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -39,21 +45,46 @@ public class AgentActionService {
 
     /** 动作类型白名单：全部是「先登记、用户确认后才生效」的写动作。 */
     private static final Set<String> ALLOWED_KINDS =
-            Set.of("add_material", "schedule_review", "finish_plan_task");
+            Set.of("add_material", "schedule_review", "finish_plan_task",
+                    "add_note", "favorite_question", "generate_questions", "open_page");
     private static final int TITLE_MAX = 100;
     private static final int CONTENT_MAX = 20000;
+    private static final int NOTE_CONTENT_MAX = 5000;
     private static final int SUMMARY_MAX = 300;
     private static final int RESULT_MAX = 300;
     private static final int FILE_NAME_MAX = 200;
     private static final int KP_MAX = 50;
+    private static final int STEM_MAX = 60;
     private static final int NOTE_MAX = 100;
     private static final long TTL_MINUTES = 30;
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+    /** open_page 白名单：页面标识 → {前端路由, 中文名}，服务端持有，模型只能从白名单里挑。 */
+    private static final Map<String, String[]> PAGE_ROUTES = Map.ofEntries(
+            Map.entry("home", new String[]{"/home", "首页"}),
+            Map.entry("chat", new String[]{"/chat", "智能答疑"}),
+            Map.entry("generate", new String[]{"/generate", "AI 内容生成"}),
+            Map.entry("practice", new String[]{"/practice", "题库练习"}),
+            Map.entry("mistakes", new String[]{"/mistakes", "错题本"}),
+            Map.entry("favorites", new String[]{"/favorites", "收藏夹"}),
+            Map.entry("exam", new String[]{"/exam", "在线考试"}),
+            Map.entry("bank", new String[]{"/bank", "题库管理"}),
+            Map.entry("progress", new String[]{"/progress", "学情分析"}),
+            Map.entry("manage", new String[]{"/manage", "我的课程"}),
+            Map.entry("hub", new String[]{"/hub", "课程广场"}),
+            Map.entry("plans", new String[]{"/plans", "学习计划"}),
+            Map.entry("reports", new String[]{"/reports", "学习报告"}),
+            Map.entry("notes", new String[]{"/notes", "学习笔记"}),
+            Map.entry("search", new String[]{"/search", "搜索"}));
 
     private final AgentActionMapper actionMapper;
     private final KbService kbService;
     private final NotifyService notifyService;
     private final PlanService planService;
+    private final NoteService noteService;
+    private final FavoriteService favoriteService;
+    private final GeneratorService generatorService;
+    private final QuestionMapper questionMapper;
     private final ObjectMapper objectMapper;
 
     /**
@@ -73,6 +104,10 @@ public class AgentActionService {
             case "add_material" -> proposeAddMaterial(userId, courseId, sessionId, src);
             case "schedule_review" -> proposeReview(userId, sessionId, src);
             case "finish_plan_task" -> proposeCheckIn(userId, sessionId, src);
+            case "add_note" -> proposeAddNote(userId, courseId, sessionId, src);
+            case "favorite_question" -> proposeFavorite(userId, courseId, sessionId, src);
+            case "generate_questions" -> proposeGenerateQuestions(userId, courseId, sessionId, src);
+            case "open_page" -> proposeOpenPage(userId, sessionId, src);
             default -> throw new BizException("不支持的动作类型");
         };
     }
@@ -172,6 +207,117 @@ public class AgentActionService {
         return a;
     }
 
+    private AgentAction proposeAddNote(Long userId, Long courseId, Long sessionId,
+                                       Map<String, Object> src) {
+        if (courseId == null) {
+            throw new BizException("当前会话未绑定课程，无法记录笔记");
+        }
+        String title = src.get("title") == null ? "" : String.valueOf(src.get("title")).trim();
+        String content = src.get("content") == null ? "" : String.valueOf(src.get("content")).trim();
+        if (title.isEmpty()) {
+            throw new BizException("缺少笔记标题");
+        }
+        if (content.isEmpty()) {
+            throw new BizException("缺少笔记内容");
+        }
+        if (title.length() > TITLE_MAX) {
+            title = title.substring(0, TITLE_MAX);
+        }
+        if (content.length() > NOTE_CONTENT_MAX) {
+            content = content.substring(0, NOTE_CONTENT_MAX);
+        }
+        String kp = clip(src.get("kpName"), KP_MAX);
+
+        Map<String, Object> stored = new LinkedHashMap<>();
+        stored.put("title", title);
+        stored.put("content", content);
+        stored.put("kpName", kp == null || kp.isBlank() ? null : kp);
+
+        AgentAction a = newAction(userId, courseId, sessionId, "add_note", stored,
+                "记学习笔记：《" + title + "》");
+        log.info("用户 {} 登记待确认动作 {}（kind=add_note）", userId, a.getId());
+        return a;
+    }
+
+    private AgentAction proposeFavorite(Long userId, Long courseId, Long sessionId,
+                                        Map<String, Object> src) {
+        Long questionId = asLong(src.get("questionId"));
+        if (questionId == null) {
+            throw new BizException("缺少题目 id");
+        }
+        if (courseId == null) {
+            throw new BizException("当前会话未绑定课程，无法收藏题目");
+        }
+        // 题目归属在登记阶段就校验：模型给不出跨课程题库的合法 questionId
+        Question q = questionMapper.selectById(questionId);
+        if (q == null) {
+            throw new BizException("题目不存在");
+        }
+        if (!Objects.equals(q.getCourseId(), courseId)) {
+            throw new BizException("题目不属于当前课程");
+        }
+        String stem = clip(q.getStem(), STEM_MAX);
+
+        Map<String, Object> stored = new LinkedHashMap<>();
+        stored.put("questionId", questionId);
+        stored.put("stem", stem);
+
+        AgentAction a = newAction(userId, courseId, sessionId, "favorite_question", stored,
+                "收藏题目：「" + (stem == null || stem.isBlank() ? "题 #" + questionId : stem) + "」");
+        log.info("用户 {} 登记待确认动作 {}（kind=favorite_question，question={}）", userId, a.getId(), questionId);
+        return a;
+    }
+
+    private AgentAction proposeGenerateQuestions(Long userId, Long courseId, Long sessionId,
+                                                 Map<String, Object> src) {
+        if (courseId == null) {
+            throw new BizException("当前会话未绑定课程，无法出题");
+        }
+        String kp = clip(src.get("kp"), KP_MAX);
+        int count = 5;
+        Object raw = src.get("count");
+        if (raw instanceof Number n) {
+            count = n.intValue();
+        } else if (raw != null && !String.valueOf(raw).isBlank()) {
+            try {
+                count = Integer.parseInt(String.valueOf(raw).trim());
+            } catch (NumberFormatException e) {
+                throw new BizException("出题数量格式错误");
+            }
+        }
+        if (count < 1 || count > 10) {
+            throw new BizException("出题数量需在 1-10 之间");
+        }
+
+        Map<String, Object> stored = new LinkedHashMap<>();
+        stored.put("kp", kp == null || kp.isBlank() ? null : kp);
+        stored.put("count", count);
+
+        AgentAction a = newAction(userId, courseId, sessionId, "generate_questions", stored,
+                "AI 出题：" + count + " 道题"
+                        + (kp == null || kp.isBlank() ? "" : "（知识点：" + kp + "）"));
+        log.info("用户 {} 登记待确认动作 {}（kind=generate_questions，count={}）", userId, a.getId(), count);
+        return a;
+    }
+
+    private AgentAction proposeOpenPage(Long userId, Long sessionId, Map<String, Object> src) {
+        String page = src.get("page") == null ? "" : String.valueOf(src.get("page")).trim().toLowerCase();
+        String[] route = PAGE_ROUTES.get(page);
+        if (route == null) {
+            throw new BizException("不支持打开该页面");
+        }
+
+        Map<String, Object> stored = new LinkedHashMap<>();
+        stored.put("page", page);
+        stored.put("path", route[0]);
+        stored.put("label", route[1]);
+
+        AgentAction a = newAction(userId, null, sessionId, "open_page", stored,
+                "打开页面：" + route[1]);
+        log.info("用户 {} 登记待确认动作 {}（kind=open_page，page={}）", userId, a.getId(), page);
+        return a;
+    }
+
     /** 三种动作共用：pending + 30 分钟有效期，摘要由服务端模板生成。 */
     private AgentAction newAction(Long userId, Long courseId, Long sessionId, String kind,
                                   Map<String, Object> storedPayload, String summary) {
@@ -245,6 +391,10 @@ public class AgentActionService {
                 case "add_material" -> executeAddMaterial(a, payload);
                 case "schedule_review" -> executeReview(a, payload);
                 case "finish_plan_task" -> executeCheckIn(a, payload);
+                case "add_note" -> executeAddNote(a, payload);
+                case "favorite_question" -> executeFavorite(a, payload);
+                case "generate_questions" -> executeGenerateQuestions(a, payload);
+                case "open_page" -> executeOpenPage(a, payload);
                 default -> throw new BizException("不支持的动作类型");
             }
         } catch (Exception e) {
@@ -311,6 +461,67 @@ public class AgentActionService {
         log.info("待确认动作 {} 已执行，任务 {} 打卡（此前已完成={}）", a.getId(), taskId, already);
     }
 
+    private void executeAddNote(AgentAction a, Map<String, Object> payload) {
+        Note note = noteService.create(a.getUserId(), a.getCourseId(),
+                payload.get("kpName") == null ? null : String.valueOf(payload.get("kpName")),
+                String.valueOf(payload.getOrDefault("title", "")),
+                String.valueOf(payload.getOrDefault("content", "")));
+        payload.put("noteId", note.getId());
+        a.setPayload(writeJson(payload));
+        a.setStatus("executed");
+        a.setResult(clip("已创建学习笔记：《" + payload.getOrDefault("title", "") + "》", RESULT_MAX));
+        actionMapper.updateById(a);
+        log.info("待确认动作 {} 已执行，笔记 {} 入库", a.getId(), note.getId());
+    }
+
+    private void executeFavorite(AgentAction a, Map<String, Object> payload) {
+        Long questionId = asLong(payload.get("questionId"));
+        if (questionId == null) {
+            throw new BizException("动作数据缺少 questionId");
+        }
+        // 登记到确认之间题目可能已被删除；课程归属再核验一次
+        Question q = questionMapper.selectById(questionId);
+        if (q == null) {
+            throw new BizException("题目已不存在，可能已被删除");
+        }
+        if (!Objects.equals(q.getCourseId(), a.getCourseId())) {
+            throw new BizException("题目不属于当前课程");
+        }
+        boolean already = favoriteService.favoritedIds(a.getUserId(), List.of(questionId)).contains(questionId);
+        if (!already) {
+            favoriteService.toggle(a.getUserId(), questionId);
+        }
+        a.setStatus("executed");
+        a.setResult(clip(already ? "该题此前已收藏，未重复操作"
+                : "已收藏题目：「" + payload.getOrDefault("stem", "题 #" + questionId) + "」", RESULT_MAX));
+        actionMapper.updateById(a);
+        log.info("待确认动作 {} 已执行，收藏题目 {}（此前已收藏={}）", a.getId(), questionId, already);
+    }
+
+    private void executeGenerateQuestions(AgentAction a, Map<String, Object> payload) {
+        int count = payload.get("count") instanceof Number n ? n.intValue() : 5;
+        // LLM 出题耗时较长（确认后前端会转圈等待）；事务边界由 GeneratorService 自己保证
+        List<Question> questions = generatorService.generateQuestions(a.getUserId(), a.getCourseId(),
+                payload.get("kp") == null ? null : String.valueOf(payload.get("kp")), count);
+        payload.put("questionIds", questions.stream().map(Question::getId).toList());
+        payload.put("generated", questions.size());
+        // 出完题直接引导进练习页（auto=1 让练习页自动抽题开练）
+        payload.put("navigate", "/practice?courseId=" + a.getCourseId() + "&auto=1");
+        a.setPayload(writeJson(payload));
+        a.setStatus("executed");
+        a.setResult(clip("已生成 " + questions.size() + " 道题并加入课程题库，正在前往练习", RESULT_MAX));
+        actionMapper.updateById(a);
+        log.info("待确认动作 {} 已执行，生成题目 {} 道", a.getId(), questions.size());
+    }
+
+    private void executeOpenPage(AgentAction a, Map<String, Object> payload) {
+        // 导航动作没有服务端写入：path 在登记时就由白名单生成，确认后由前端跳转
+        a.setStatus("executed");
+        a.setResult(clip("已打开「" + payload.getOrDefault("label", "") + "」页面", RESULT_MAX));
+        actionMapper.updateById(a);
+        log.info("待确认动作 {} 已执行，跳转 {}", a.getId(), payload.get("path"));
+    }
+
     /** 提醒时间：yyyy-MM-dd 视为当天 09:00，ISO 日期时间原样解析，解析不了视为「立即」。 */
     private static LocalDateTime parseRemindAt(Object raw) {
         if (raw == null || String.valueOf(raw).isBlank()) {
@@ -364,6 +575,8 @@ public class AgentActionService {
         Map<String, Object> payload = readPayload(a);
         data.put("kbId", asLong(payload.get("kbId")));
         data.put("docId", asLong(payload.get("docId")));
+        // 导航类动作（open_page / generate_questions 出完题）确认后前端按此跳转
+        data.put("navigate", payload.get("navigate") == null ? null : String.valueOf(payload.get("navigate")));
         return data;
     }
 
@@ -408,7 +621,7 @@ public class AgentActionService {
         try {
             return Long.valueOf(String.valueOf(raw).trim());
         } catch (NumberFormatException e) {
-            throw new BizException("参数格式错误：kbId");
+            throw new BizException("参数格式错误");
         }
     }
 }

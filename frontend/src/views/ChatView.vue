@@ -100,10 +100,13 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { api, sseStream, getCourses } from '../api'
 import { mdToHtml } from '../utils'
 
 defineOptions({ name: 'ChatView' })
+
+const router = useRouter()
 
 const courses = ref([])
 const kbs = ref([])
@@ -332,6 +335,8 @@ const confirmAction = async (m, a) => {
     const r = await api('/api/agent/actions/' + a.id + '/confirm', { method: 'POST' })
     a.state = 'done'
     a.result = r.result || '已执行'
+    // 导航类动作（打开页面 / 出题后去练习）：服务端校验白名单后下发路径，前端执行跳转
+    if (r.navigate) router.push(r.navigate)
   } catch (e) {
     showHint(e.message)
   } finally {

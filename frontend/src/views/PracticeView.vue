@@ -177,6 +177,11 @@ onMounted(async () => {
   // 从收藏夹跳转：自动开始收藏题重练
   if (route.query.favorite) {
     start(true)
+    return
+  }
+  // 从答疑 Agent 跳转（如 AI 出题完成后）：自动开始练习
+  if (route.query.auto) {
+    start()
   }
 })
 

@@ -7,6 +7,15 @@
 - query_mastery           查当前用户各知识点掌握度明细（回调 Java）
 - query_recent_practices  查当前用户最近练习记录（回调 Java）
 - query_kb_documents      查课程知识库文档清单（回调 Java）
+- query_notes             查当前用户的学习笔记（回调 Java）
+- query_favorites         查当前用户的收藏夹题目（回调 Java）
+- query_question_bank     按关键词检索本课程题库（回调 Java）
+- 写动作（AGENT_WRITE_TOOLS 开关）：
+  - query_plan_tasks / schedule_review / finish_plan_task   学习计划打卡与复习提醒
+  - save_material_to_kb                                     存资料进知识库
+  - add_note / favorite_question / generate_questions       记笔记、收藏题目、AI 出题
+  - open_page                                               打开系统页面（前端跳转）
+  全部只登记「待确认动作」，用户在前端点确认后才生效
 - MCP 外部工具            通过 AI_MCP_CONFIG 接入（如联网搜索 tavily-mcp），
                           与内置工具平权合并进 Agent，加载失败自动降级为仅内置工具
 
@@ -32,7 +41,8 @@ SYSTEM_PROMPT = (
     "你是智能学习助手的答疑 Agent。收到学生问题后先思考需要哪些信息，再决定调用工具：\n"
     "- 需要课程资料：先 list_material_topics 查看资料清单，再 search_materials 按关键词检索；\n"
     "- 需要了解学生的学习情况：query_mastery（掌握度）、query_wrong_book（错题）、"
-    "query_recent_practices（最近练习）、query_kb_documents（知识库文档清单）。\n"
+    "query_recent_practices（最近练习）、query_kb_documents（知识库文档清单）、"
+    "query_notes（学习笔记）、query_favorites（收藏夹）、query_question_bank（题库检索）。\n"
     "最后结合收集到的信息回答，引用资料时标注编号[n]。查不到的内容如实说明，不要编造。"
     "回答保持简洁、准确、有针对性。"
 )
@@ -46,14 +56,19 @@ MCP_PROMPT_SUFFIX = (
 
 RECURSION_LIMIT = 20
 
-# 开启写动作工具后追加的提示：先查再改；三个写工具都只登记待确认动作，人点确认后才生效
+# 开启写动作工具后追加的提示：先查再改；全部写工具都只登记待确认动作，人点确认后才生效
 WRITE_PROMPT_SUFFIX = (
-    "\n你还可以为学生登记三类动作：schedule_review 安排复习提醒、"
-    "finish_plan_task 给学习任务打卡、save_material_to_kb 把答疑中值得留存的一段资料存进本课程知识库。"
-    "注意：这些写工具都不会直接写入，它们只生成「待确认动作」，必须由用户在消息下方点击『确认执行』后才真正生效；"
-    "因此你绝不能声称提醒已安排、打卡已完成或资料已保存，调用后应提醒用户在消息下方点击『确认执行』。"
-    "登记前先确认信息（打卡前必须先用 query_plan_tasks 拿到 taskId），"
-    "一次对话里不要重复登记同一条动作，也不要在学生没提出意图时擅自登记。"
+    "\n你还可以代学生操作系统功能。以下动作工具全部只生成「待确认动作」，"
+    "必须由用户在消息下方点击『确认执行』后才真正生效：\n"
+    "- add_note 记学习笔记、favorite_question 收藏题库题目（先用 query_question_bank 拿 questionId）、"
+    "save_material_to_kb 存资料进本课程知识库——这三个要求会话已绑定课程；\n"
+    "- generate_questions AI 出题（默认 5 道、1-10 道，生成需要等待，完成后页面会引导去练习）；\n"
+    "- open_page 打开系统页面，page 从白名单里选（home/chat/generate/practice/mistakes/favorites/"
+    "exam/bank/progress/manage/hub/plans/reports/notes/search）；\n"
+    "- schedule_review 安排复习提醒、finish_plan_task 学习任务打卡（先用 query_plan_tasks 拿 taskId）。\n"
+    "注意：这些工具都不会直接写入或跳转，你绝不能声称笔记已记好、题目已收藏、出题已完成或页面已打开，"
+    "调用后应提醒用户在消息下方点击『确认执行』。"
+    "登记前先确认信息，一次对话里不要重复登记同一条动作，也不要在学生没提出意图时擅自登记。"
 )
 
 # ===== MCP 工具懒加载（全局缓存 + 失败冷却） =====
@@ -279,8 +294,36 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
             return "当前会话未绑定课程，无法查询知识库清单。"
         return _call_java_tool(f"/internal/tools/kb-documents?courseId={course_id}")
 
+    @tool
+    def query_notes() -> str:
+        """查询当前学生的学习笔记（标题、知识点、正文摘要），会话绑定课程时只看该课程的笔记。"""
+        if not user_id:
+            return "未提供用户信息，无法查询笔记。"
+        extra = f"&courseId={course_id}" if course_id else ""
+        return _call_java_tool(f"/internal/tools/notes?userId={user_id}{extra}")
+
+    @tool
+    def query_favorites() -> str:
+        """查询当前学生的收藏夹题目概览（题干、类型、知识点，不含答案）。"""
+        if not user_id:
+            return "未提供用户信息，无法查询收藏夹。"
+        extra = f"&courseId={course_id}" if course_id else ""
+        return _call_java_tool(f"/internal/tools/favorites?userId={user_id}{extra}")
+
+    @tool
+    def query_question_bank(keyword: str = "") -> str:
+        """按关键词检索当前课程题库（匹配题干/知识点），返回题目概览与 questionId。
+        要收藏某道题或围绕已有题目答疑时先调用它；keyword 留空则返回题库最近题目。"""
+        if not course_id:
+            return "当前会话未绑定课程，无法检索题库。"
+        from urllib.parse import quote
+        kw = quote((keyword or "").strip())
+        return _call_java_tool(
+            f"/internal/tools/questions?courseId={course_id}&keyword={kw}&limit=10")
+
     read_tools = [list_material_topics, search_materials,
-                  query_wrong_book, query_mastery, query_recent_practices, query_kb_documents]
+                  query_wrong_book, query_mastery, query_recent_practices, query_kb_documents,
+                  query_notes, query_favorites, query_question_bank]
 
     @tool
     def query_plan_tasks(only_pending: bool = True) -> str:
@@ -345,7 +388,52 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
             inner["kbId"] = kb_id
         return _propose_action("add_material", inner)
 
-    return read_tools + ([query_plan_tasks, schedule_review, finish_plan_task, save_material_to_kb]
+    @tool
+    def add_note(title: str, content: str, kp_name: str = "") -> str:
+        """把答疑中的要点登记为一条学习笔记（待确认动作，用户确认后才真正创建）。
+        需要会话已绑定课程；kp_name 是可选的知识点标签。"""
+        if not user_id:
+            return "未提供用户信息，无法登记笔记。"
+        if not course_id:
+            return "当前会话未绑定课程，无法记录笔记，请让学生在知识库答疑中提问。"
+        if not (title or "").strip() or not (content or "").strip():
+            return "请提供笔记标题与正文内容。"
+        return _propose_action("add_note", {
+            "title": title.strip(), "content": content.strip(),
+            "kpName": (kp_name or "").strip()})
+
+    @tool
+    def favorite_question(question_id: int) -> str:
+        """收藏题库中的一道题（待确认动作，用户确认后才真正收藏）。
+        questionId 必须先用 query_question_bank 查到，不能凭空编造；需会话已绑定课程。"""
+        if not user_id:
+            return "未提供用户信息，无法收藏题目。"
+        if not course_id:
+            return "当前会话未绑定课程，无法收藏题目，请让学生在知识库答疑中提问。"
+        return _propose_action("favorite_question", {"questionId": int(question_id)})
+
+    @tool
+    def generate_questions(kp: str = "", count: int = 5) -> str:
+        """为学生出一套练习题（待确认动作，用户确认后才调用 AI 出题，生成需要等待）。
+        kp 是知识点（留空表示核心概念），count 为题量（1-10，默认 5）；需会话已绑定课程。"""
+        if not user_id:
+            return "未提供用户信息，无法登记出题。"
+        if not course_id:
+            return "当前会话未绑定课程，无法出题，请让学生在知识库答疑中提问。"
+        return _propose_action("generate_questions", {"kp": (kp or "").strip(), "count": int(count)})
+
+    @tool
+    def open_page(page: str) -> str:
+        """打开系统中的某个功能页面（待确认动作，用户确认后前端才会跳转）。
+        page 取以下白名单之一：home(首页) chat(智能答疑) generate(AI内容生成) practice(题库练习)
+        mistakes(错题本) favorites(收藏夹) exam(在线考试) bank(题库管理) progress(学情分析)
+        manage(我的课程) hub(课程广场) plans(学习计划) reports(学习报告) notes(学习笔记) search(搜索)。"""
+        if not user_id:
+            return "未提供用户信息，无法打开页面。"
+        return _propose_action("open_page", {"page": (page or "").strip()})
+
+    return read_tools + ([query_plan_tasks, schedule_review, finish_plan_task, save_material_to_kb,
+                          add_note, favorite_question, generate_questions, open_page]
                          if config.AGENT_WRITE_TOOLS else [])
 
 

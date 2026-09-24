@@ -8,9 +8,11 @@ import com.example.learningassistant.common.BizException;
 import com.example.learningassistant.kb.entity.Chunk;
 import com.example.learningassistant.kb.entity.Document;
 import com.example.learningassistant.kb.entity.KnowledgeBase;
+import com.example.learningassistant.favorite.service.FavoriteService;
 import com.example.learningassistant.kb.mapper.ChunkMapper;
 import com.example.learningassistant.kb.mapper.DocumentMapper;
 import com.example.learningassistant.kb.mapper.KnowledgeBaseMapper;
+import com.example.learningassistant.note.service.NoteService;
 import com.example.learningassistant.plan.service.PlanService;
 import com.example.learningassistant.practice.entity.Practice;
 import com.example.learningassistant.practice.entity.PracticeQuestion;
@@ -53,6 +55,8 @@ public class InternalToolController {
     private final DocumentMapper documentMapper;
     private final ChunkMapper chunkMapper;
     private final PlanService planService;
+    private final NoteService noteService;
+    private final FavoriteService favoriteService;
     private final AgentActionService agentActionService;
 
     @Value("${app.internal-tool-token:internal-tool-token}")
@@ -165,6 +169,74 @@ public class InternalToolController {
         return ApiResponse.ok(result);
     }
 
+    /** 学习笔记清单（Agent 读工具）：courseId 可选过滤，正文截断供引用。 */
+    @GetMapping("/notes")
+    public ApiResponse<List<Map<String, Object>>> notes(HttpServletRequest request,
+                                                        @RequestParam Long userId,
+                                                        @RequestParam(required = false) Long courseId) {
+        checkToken(request);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (var n : noteService.list(userId, courseId)) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("noteId", n.getId());
+            row.put("courseId", n.getCourseId());
+            row.put("kpName", n.getKpName());
+            row.put("title", n.getTitle());
+            row.put("content", clip(n.getContent(), 300));
+            row.put("updatedAt", n.getUpdatedAt() == null ? null : n.getUpdatedAt().toString());
+            result.add(row);
+        }
+        return ApiResponse.ok(result);
+    }
+
+    /** 收藏夹概览（Agent 读工具）：题目概览不含答案，courseId 可选过滤。 */
+    @GetMapping("/favorites")
+    public ApiResponse<List<Map<String, Object>>> favorites(HttpServletRequest request,
+                                                            @RequestParam Long userId,
+                                                            @RequestParam(required = false) Long courseId) {
+        checkToken(request);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Map<String, Object> f : favoriteService.list(userId, courseId)) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("questionId", asLong(f.get("questionId")));
+            row.put("courseName", f.get("courseName"));
+            row.put("type", f.get("type"));
+            row.put("stem", clip(f.get("stem"), 150));
+            row.put("kpName", f.get("kpName"));
+            row.put("difficulty", f.get("difficulty"));
+            result.add(row);
+        }
+        return ApiResponse.ok(result);
+    }
+
+    /** 课程题库检索（Agent 读工具）：按关键词匹配题干/知识点，返回题目概览与 questionId。 */
+    @GetMapping("/questions")
+    public ApiResponse<List<Map<String, Object>>> questions(HttpServletRequest request,
+                                                            @RequestParam Long courseId,
+                                                            @RequestParam(required = false) String keyword,
+                                                            @RequestParam(defaultValue = "10") Integer limit) {
+        checkToken(request);
+        int size = Math.min(Math.max(limit == null ? 10 : limit, 1), 20);
+        String kw = keyword == null || keyword.isBlank() ? null : keyword.trim();
+        List<Question> list = questionMapper.selectList(new LambdaQueryWrapper<Question>()
+                .eq(Question::getCourseId, courseId)
+                .and(kw != null, w -> w.like(Question::getStem, kw).or().like(Question::getKpName, kw))
+                .orderByDesc(Question::getId)
+                .last("LIMIT " + size));
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Question q : list) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("questionId", q.getId());
+            row.put("type", q.getType());
+            row.put("stem", clip(q.getStem(), 200));
+            row.put("kpName", q.getKpName());
+            row.put("difficulty", q.getDifficulty());
+            row.put("source", q.getSource());
+            result.add(row);
+        }
+        return ApiResponse.ok(result);
+    }
+
     /**
      * chunk 正文下发：ai-service 建向量索引时按游标分页拉取（RAG 检索链路已迁移到 Python，
      * t_chunk 仍是正文的唯一数据源，向量库只是它的派生索引）。
@@ -212,7 +284,8 @@ public class InternalToolController {
 
     /**
      * 登记 Agent 待确认动作：Agent 侧所有写动作的唯一入口（add_material / schedule_review /
-     * finish_plan_task），只落 proposal，真正写入发生在用户点「确认执行」之后。
+     * finish_plan_task / add_note / favorite_question / generate_questions / open_page），
+     * 只落 proposal，真正写入（或页面跳转）发生在用户点「确认执行」之后。
      */
     @PostMapping("/actions/propose")
     public ApiResponse<Map<String, Object>> proposeAction(HttpServletRequest request,
