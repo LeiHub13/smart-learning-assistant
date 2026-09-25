@@ -1,3 +1,5 @@
+from langchain_core.messages import SystemMessage
+
 from app import chains
 
 
@@ -42,3 +44,21 @@ def test_prepare_rag_passes_course_kb_ids(monkeypatch):
     assert result == ctx.context
     assert meta["sources"] == ctx.sources
     assert recorded == {"kb_id": 7, "kb_ids": [7, 9]}
+
+
+def test_assemble_injects_user_profile(monkeypatch, tmp_path):
+    """跨会话学生画像须以 system 消息注入答疑上下文。"""
+    monkeypatch.setattr(chains.memory.config, "MEMORY_DIR", str(tmp_path))
+    monkeypatch.setattr(chains.memory, "user_profile", lambda uid: "学生喜欢先看例子再听原理")
+
+    msgs = chains._assemble("free", "怎么学递归？", None, "sess-p", user_id=9)
+    profile = [m for m in msgs
+               if isinstance(m, SystemMessage) and "学生长期画像" in m.content]
+    assert profile and "先看例子" in profile[0].content
+
+
+def test_assemble_no_profile_when_absent(monkeypatch, tmp_path):
+    monkeypatch.setattr(chains.memory.config, "MEMORY_DIR", str(tmp_path))
+
+    msgs = chains._assemble("free", "怎么学递归？", None, "sess-q", user_id=9)
+    assert not any(isinstance(m, SystemMessage) and "学生长期画像" in m.content for m in msgs)

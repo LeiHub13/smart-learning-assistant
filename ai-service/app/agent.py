@@ -437,9 +437,14 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
                          if config.AGENT_WRITE_TOOLS else [])
 
 
-def _build_messages(question: str, session_id: str = None) -> list:
-    """系统提示 + 会话摘要 + 最近 N 轮 + 当前问题。"""
+def _build_messages(question: str, session_id: str = None, user_id=None) -> list:
+    """系统提示 + 学生画像 + 会话摘要 + 最近 N 轮 + 当前问题。"""
     msgs = [SystemMessage(content=SYSTEM_PROMPT)]
+    if user_id:
+        profile = memory.user_profile(user_id)
+        if profile:
+            msgs.append(SystemMessage(
+                content="【学生长期画像（跨会话记忆，供个性化参考）】\n" + profile))
     if session_id:
         s = memory.summary(session_id)
         if s:
@@ -454,16 +459,9 @@ def _build_messages(question: str, session_id: str = None) -> list:
     return msgs
 
 
-def _summarizer(old_summary: str, rows_text: str) -> str:
+def _remember(session_id: str, user_id, question: str, answer: str) -> None:
     from app import chains
-    return chains._summarizer(old_summary, rows_text)
-
-
-def _remember(session_id: str, question: str, answer: str) -> None:
-    if session_id:
-        memory.add(session_id, "user", question)
-        memory.add(session_id, "assistant", answer)
-        memory.maybe_compress(session_id, _summarizer)
+    chains._remember(session_id, user_id, question, answer)
 
 
 def _seed_materials(chunks, session_id, kb_id, question, meta, kb_ids=None):
@@ -500,11 +498,11 @@ def complete_agent(model, question: str, chunks=None, session_id: str = None,
     agent = create_agent(model, tools,
                          system_prompt=_system_prompt(mcp_tools, note, kb_name, kb_scope))
     result = agent.invoke(
-        {"messages": _build_messages(question, session_id)},
+        {"messages": _build_messages(question, session_id, user_id=user_id)},
         config={"recursion_limit": RECURSION_LIMIT},
     )
     answer = result["messages"][-1].content
-    _remember(session_id, question, answer)
+    _remember(session_id, user_id, question, answer)
     return answer
 
 
@@ -522,7 +520,7 @@ def stream_agent(model, question: str, chunks=None, session_id: str = None,
     full = ""
     try:
         for item in agent.stream(
-            {"messages": _build_messages(question, session_id)},
+            {"messages": _build_messages(question, session_id, user_id=user_id)},
             stream_mode="messages",
             config={"recursion_limit": RECURSION_LIMIT},
         ):
@@ -532,4 +530,4 @@ def stream_agent(model, question: str, chunks=None, session_id: str = None,
                 yield chunk.content
     except Exception as e:  # noqa: BLE001
         raise RuntimeError(f"Agent 调用失败: {e}") from e
-    _remember(session_id, question, full)
+    _remember(session_id, user_id, question, full)

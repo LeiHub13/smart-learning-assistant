@@ -6,6 +6,7 @@
 - POST /ai/stream          流式生成（SSE）{scene, question, chunks?, sessionId?, kbId?, kbIds?, note?}
                            -> data: {"delta": "..."} ... data: {"done": true, "sources": "1,2"}
 - GET  /ai/history/{id}    会话记忆
+- POST /ai/memory/clear    清空某会话记忆 {sessionId}（Java 删会话时联动调用，需内部 token）
 - GET  /ai/stats           LLM 调用观测
 RAG 端点（需 X-Internal-Token 头，仅供 Java 内部调用）：
 - POST /ai/retrieve        向量召回 {query, kbId?, kbIds?, topK?} -> {hits:[{chunkId, content, score}]}
@@ -88,6 +89,10 @@ class RetrieveRequest(BaseModel):
     kbId: int | None = Field(default=None)
     kbIds: list[int] | None = Field(default=None)
     topK: int | None = Field(default=None)
+
+
+class MemoryClearRequest(BaseModel):
+    sessionId: str
 
 
 def check_internal_token(x_internal_token: str | None) -> None:
@@ -231,6 +236,15 @@ def chunk_text(req: ChunkRequest, x_internal_token: str | None = Header(default=
 def history(session_id: str):
     from app import memory
     return {"messages": memory.recent(session_id, rounds=50)}
+
+
+@app.post("/ai/memory/clear")
+def memory_clear(req: MemoryClearRequest, x_internal_token: str | None = Header(default=None)):
+    """清空某会话的记忆（JSONL 历史 + 滚动摘要）；Java 删除会话时联动调用，避免孤儿文件。"""
+    check_internal_token(x_internal_token)
+    from app import memory
+    memory.clear(req.sessionId)
+    return {"ok": True}
 
 
 @app.get("/ai/stats")

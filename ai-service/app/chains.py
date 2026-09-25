@@ -175,12 +175,54 @@ def _summarizer(old_summary: str, rows_text: str) -> str:
     return get_model().invoke([HumanMessage(prompt)]).content.strip()
 
 
+# 进入画像提炼的单轮问答截断长度（防止长回答撑爆提炼提示词）
+PROFILE_TEXT_LIMIT = 500
+
+
+def _extract_profile(user_id, question: str, answer: str) -> None:
+    """后台线程：把本轮答疑中的长期有效信息合并进学生画像（跨会话记忆）。
+
+    失败只记日志；寒暄类过短轮次跳过，不值得花一次 LLM 调用。
+    """
+    try:
+        if len(question) + len(answer) < 40:
+            return
+        old = memory.user_profile(user_id)
+        prompt = (
+            "你是学生画像维护器。把下面这轮答疑反映的【长期有效】信息合并进学生画像："
+            "学习目标、学习偏好（如喜欢先看例子再听原理）、反复出现的薄弱知识点、已有基础。"
+            "不要记录一次性题目细节、具体答案本身或寒暄。若本轮没有新的长期信息，原样输出画像。\n"
+            "只输出画像本身，用短句分条，不超过 300 字。\n"
+            + (f"【当前画像】\n{old}\n" if old else "【当前画像】（暂空）\n")
+            + f"【本轮答疑】\n学生：{question[:PROFILE_TEXT_LIMIT]}\n助手：{answer[:PROFILE_TEXT_LIMIT]}"
+        )
+        updated = get_model().invoke([HumanMessage(prompt)]).content.strip()
+        if updated and updated != old:
+            memory.save_user_profile(user_id, updated)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("用户画像提炼失败（忽略，userId=%s）: %s", user_id, e)
+
+
+def _remember(session_id: str, user_id, question: str, answer: str) -> None:
+    """落会话记忆（成对追加 + 触发滚动压缩），并异步提炼用户长期画像。"""
+    if session_id:
+        memory.add(session_id, "user", question)
+        memory.add(session_id, "assistant", answer)
+        memory.maybe_compress(session_id, _summarizer)
+    if user_id:
+        threading.Thread(target=_extract_profile, args=(user_id, question, answer),
+                         daemon=True, name="profile-extract").start()
+
+
 def _assemble(scene: str, question: str, chunks, session_id: str, note: str = None,
-              kb_name: str = None, kb_scope: str = None) -> list:
-    """组装消息：系统提示 + （摘要）+ 最近 N 轮 + 当前问题。"""
+              kb_name: str = None, kb_scope: str = None, user_id=None) -> list:
+    """组装消息：系统提示 + （学生画像）+ （摘要）+ 最近 N 轮 + 当前问题。"""
     msgs = _build_messages(scene, question, chunks, note, kb_name=kb_name, kb_scope=kb_scope)
     if session_id and scene in ("rag_qa", "free"):
         head = [msgs[0]]
+        profile = memory.user_profile(user_id) if user_id else ""
+        if profile:
+            head.append(SystemMessage("【学生长期画像（跨会话记忆，供个性化参考）】\n" + profile))
         s = memory.summary(session_id)
         if s:
             head.append(SystemMessage("【此前对话摘要】\n" + s))
@@ -227,12 +269,11 @@ def complete(scene: str, question: str, chunks=None, session_id: str = None,
                                     user_id=user_id, kb_id=kb_id, kb_ids=kb_ids, note=note, meta=meta,
                                     course_id=course_id, kb_name=kb_name, kb_scope=kb_scope)
     chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta, kb_ids=kb_ids)
-    msgs = _assemble(scene, question, chunks, session_id, note, kb_name=kb_name, kb_scope=kb_scope)
+    msgs = _assemble(scene, question, chunks, session_id, note, kb_name=kb_name,
+                     kb_scope=kb_scope, user_id=user_id)
     answer = _call_with_limit(lambda: get_model().invoke(msgs).content, scene)
-    if session_id and _memorable(scene):
-        memory.add(session_id, "user", question)
-        memory.add(session_id, "assistant", answer)
-        memory.maybe_compress(session_id, _summarizer)
+    if _memorable(scene):
+        _remember(session_id, user_id, question, answer)
     if scene in ("questions", "plan"):
         return _ensure_json_array(answer)
     if scene in ("review", "rerank"):
@@ -252,7 +293,8 @@ def stream(scene: str, question: str, chunks=None, session_id: str = None,
                                       course_id=course_id, kb_name=kb_name, kb_scope=kb_scope)
         return
     chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta, kb_ids=kb_ids)
-    msgs = _assemble(scene, question, chunks, session_id, note, kb_name=kb_name, kb_scope=kb_scope)
+    msgs = _assemble(scene, question, chunks, session_id, note, kb_name=kb_name,
+                     kb_scope=kb_scope, user_id=user_id)
     model = get_model()
     full = ""
     start = time.time()
@@ -270,10 +312,8 @@ def stream(scene: str, question: str, chunks=None, session_id: str = None,
         raise RuntimeError(f"模型调用失败: {e}") from e
     finally:
         _SEMAPHORE.release()
-    if session_id and _memorable(scene):
-        memory.add(session_id, "user", question)
-        memory.add(session_id, "assistant", full)
-        memory.maybe_compress(session_id, _summarizer)
+    if _memorable(scene):
+        _remember(session_id, user_id, question, full)
 
 
 def _call_with_limit(fn, scene: str):

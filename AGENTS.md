@@ -7,7 +7,7 @@
 ## 架构
 
 - `backend/`：Java 业务骨架（Spring Boot 3 + MyBatis-Plus，8080 端口），默认 MySQL（localhost:3306/learning_assistant，连接参数可用 DB_* 环境变量覆盖；H2 已移除），Redis 为可选 profile（`--spring.profiles.active=redis`，配置见 `application-redis.yml`）
-- `ai-service/`：Python AI 服务（FastAPI + langchain + DeepSeek，8000 端口），负责生成/批改/答疑、会话记忆（JSONL 持久化，按 sessionId）与 **RAG 全链路**（embedding + Chroma 向量索引 + 改写/召回/重排，见 `app/rag.py`、`app/retriever.py`）
+- `ai-service/`：Python AI 服务（FastAPI + langchain + DeepSeek，8000 端口），负责生成/批改/答疑、记忆（会话级 JSONL + 滚动摘要按 sessionId 持久化、跨会话学生画像按 userId 持久化，见 `app/memory.py`；删会话时 Java 经 `/ai/memory/clear` 联动清空会话记忆）与 **RAG 全链路**（embedding + Chroma 向量索引 + 改写/召回/重排，见 `app/rag.py`、`app/retriever.py`）
 - `frontend/`：Vue3 前端（5173 dev / Nginx 生产）
 
 ## 关键约定

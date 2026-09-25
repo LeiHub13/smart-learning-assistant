@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.learningassistant.ai.AIChatMessage;
 import com.example.learningassistant.ai.ChatModel;
 import com.example.learningassistant.ai.ChatModelFactory;
+import com.example.learningassistant.ai.PythonRagClient;
 import com.example.learningassistant.chat.entity.ChatMessage;
 import com.example.learningassistant.chat.entity.ChatSession;
 import com.example.learningassistant.chat.mapper.ChatMessageMapper;
@@ -38,6 +39,7 @@ public class ChatService {
     private final ChatMessageMapper messageMapper;
     private final ChatModelFactory modelFactory;
     private final KnowledgeMasteryMapper masteryMapper;
+    private final PythonRagClient pythonRagClient;
     private final com.example.learningassistant.kb.service.KbService kbService;
 
     private static final int HISTORY_ROUNDS = 5;
@@ -110,6 +112,9 @@ public class ChatService {
         messageMapper.delete(new LambdaQueryWrapper<ChatMessage>()
                 .eq(ChatMessage::getSessionId, id));
         sessionMapper.deleteById(id);
+        // ai-service 侧按 sessionId 持久化的记忆（JSONL/摘要）联动清理，避免孤儿文件；
+        // 客户端内部已吞异常只告警，ai-service 不在线时不影响删除本身
+        pythonRagClient.clearSessionMemory(id);
     }
 
     public List<ChatMessage> messages(Long sessionId, Long userId) {

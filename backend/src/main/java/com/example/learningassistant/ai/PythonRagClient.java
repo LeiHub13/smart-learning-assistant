@@ -161,6 +161,21 @@ public class PythonRagClient {
         post("/ai/index/delete", body);
     }
 
+    /**
+     * 清空某会话在 ai-service 侧的记忆（JSONL 历史 + 滚动摘要），删会话时联动调用。
+     * 尽力而为：失败只告警，不阻塞会话删除（残留文件只是磁盘上的孤儿，不影响业务）。
+     */
+    public void clearSessionMemory(Long sessionId) {
+        if (sessionId == null) {
+            return;
+        }
+        try {
+            post("/ai/memory/clear", Map.of("sessionId", String.valueOf(sessionId)));
+        } catch (Exception e) {
+            log.warn("清空 ai-service 会话记忆失败（sessionId={}）: {}", sessionId, e.getMessage());
+        }
+    }
+
     /** 向量库观测信息（embedding provider / 向量条数 / 集合名）。 */
     public Map<String, Object> stats() {
         try {
