@@ -133,12 +133,13 @@ const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeVi
 
 const menus = [
   { key: 'home', title: '首页', path: '/home', icon: 'home' },
+  { key: 'chat', title: '智能答疑', path: '/chat', icon: 'chat' },
+  { key: 'generate', title: 'AI生成讲义/练习题', path: '/generate', icon: 'sparkles' },
   {
     key: 'course', title: '课程学习', icon: 'manage',
     children: [
       { key: 'manage', title: '我的课程', path: '/manage', icon: 'manage' },
       { key: 'hub', title: '课程 Hub', path: '/hub', icon: 'hub' },
-      { key: 'chat', title: '智能答疑', path: '/chat', icon: 'chat' },
       { key: 'notes', title: '学习笔记', path: '/notes', icon: 'notes' }
     ]
   },
@@ -146,13 +147,12 @@ const menus = [
     key: 'quiz', title: '练习与测验', icon: 'exam',
     children: [
       { key: 'practice', title: '题库练习', path: '/practice', icon: 'practice' },
-  { key: 'mistakes', title: '错题本', path: '/mistakes', icon: 'target' },
+      { key: 'mistakes', title: '错题本', path: '/mistakes', icon: 'target' },
       { key: 'favorites', title: '收藏夹', path: '/favorites', icon: 'star' },
       { key: 'bank', title: '题库管理', path: '/bank', icon: 'bank' },
       { key: 'exam', title: '在线考试', path: '/exam', icon: 'exam' }
     ]
   },
-  { key: 'generate', title: 'AI生成讲义/练习题', path: '/generate', icon: 'sparkles' },
   {
     key: 'stats', title: '学情与规划', icon: 'progress',
     children: [
