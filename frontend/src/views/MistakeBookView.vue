@@ -165,7 +165,7 @@ const goRetrain = () => {
 .mi-no {
   width: 22px; height: 22px; border-radius: 7px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  background: #eef2ff; color: var(--accent-deep);
+  background: #ddf4ff; color: var(--accent-deep);
   font-size: 12px; font-weight: 700; font-family: "SF Mono", Consolas, monospace;
 }
 .mi-meta { display: flex; align-items: center; gap: 8px; margin-left: auto; }
@@ -176,14 +176,14 @@ const goRetrain = () => {
 .opt-row {
   display: flex; align-items: center; gap: 9px;
   padding: 8px 12px; border-radius: 10px;
-  border: 1px solid #e8ebf3; background: #fbfcfe;
-  font-size: 13.5px; color: #565b6e; line-height: 1.6;
+  border: 1px solid var(--border); background: #fff;
+  font-size: 13.5px; color: #57606a; line-height: 1.6;
 }
 .opt-row i {
   flex-shrink: 0; width: 20px; height: 20px; border-radius: 6px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: #fff; border: 1px solid #dfe3ee;
-  font-style: normal; font-size: 11px; font-weight: 700; color: #4338ca;
+  background: #fff; border: 1px solid #d1d9e0;
+  font-style: normal; font-size: 11px; font-weight: 700; color: var(--primary);
 }
 .opt-v { flex: 1; min-width: 0; }
 .opt-flag {
@@ -200,10 +200,10 @@ const goRetrain = () => {
 /* 答案对比行 */
 .mi-cmp {
   border-radius: 10px; overflow: hidden;
-  border: 1px solid #e8ebf3; background: #fcfdff; margin-bottom: 10px;
+  border: 1px solid var(--border); background: #fff; margin-bottom: 10px;
 }
 .cmp-row { display: flex; gap: 12px; padding: 9px 14px; font-size: 13.5px; line-height: 1.7; }
-.cmp-row + .cmp-row { border-top: 1px solid #eef1f7; }
+.cmp-row + .cmp-row { border-top: 1px solid #eaeef2; }
 .cmp-lab { flex-shrink: 0; width: 62px; font-size: 12px; font-weight: 700; color: var(--muted); padding-top: 2px; }
 .cmp-val { flex: 1; min-width: 0; word-break: break-word; }
 .cmp-val.bad { color: #b3423a; font-weight: 600; }
@@ -214,17 +214,17 @@ const goRetrain = () => {
   display: inline-flex; align-items: center; gap: 5px;
   cursor: pointer; user-select: none; list-style: none;
   font-size: 12.5px; font-weight: 600; color: var(--accent-deep);
-  padding: 4px 10px; border-radius: 8px; background: #f5f7fc;
-  border: 1px solid #e5e9f2; transition: background .18s ease;
+  padding: 4px 10px; border-radius: 8px; background: var(--soft);
+  border: 1px solid var(--border); transition: background .18s ease;
 }
 .mi-analysis summary::-webkit-details-marker { display: none; }
-.mi-analysis summary:hover { background: #eceffb; }
+.mi-analysis summary:hover { background: #f3f4f6; }
 .mi-chev { transition: transform .2s ease; }
 .mi-analysis[open] summary { margin-bottom: 8px; }
 .mi-analysis[open] .mi-chev { transform: rotate(180deg); }
 .mi-ans-txt {
   font-size: 13.5px; line-height: 1.75; color: #565b6e;
-  background: #fbfcfe; border: 1px solid #e5e9f2; border-radius: 10px; padding: 10px 14px;
+  background: var(--soft); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px;
 }
 
 /* ===== 分页 / 空态 ===== */

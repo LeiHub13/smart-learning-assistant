@@ -193,11 +193,11 @@ const load = async () => {
 .md :deep(code) { background: #f4f1ea; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
 .heatmap { display: grid; grid-template-rows: repeat(7, 12px); grid-auto-flow: column; gap: 3px; margin: 12px 0 4px; width: fit-content; }
 .hm-cell { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
-.hm-0 { background: #e8eaf2; }
-.hm-1 { background: #c7d2fe; }
-.hm-2 { background: #a5b4fc; }
-.hm-3 { background: #818cf8; }
-.hm-4 { background: #4f46e5; }
+.hm-0 { background: #ebedf0; }
+.hm-1 { background: #9be9a8; }
+.hm-2 { background: #40c463; }
+.hm-3 { background: #30a14e; }
+.hm-4 { background: #216e39; }
 .hm-legend { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; margin-bottom: 10px; }
 
 .wb-list { display: flex; flex-direction: column; gap: 16px; }

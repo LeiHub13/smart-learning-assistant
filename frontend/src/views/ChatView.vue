@@ -361,11 +361,11 @@ const cancelAction = async (m, a) => {
 /* 待确认动作卡片：沿用 .sources 配色，仅补两条布局规则 */
 .agent-action { margin-top: 8px; }
 .agent-action-summary {
-  font-size: 12px; color: #4338ca; background: #eef2ff;
+  font-size: 12px; color: var(--primary); background: #ddf4ff;
   border-radius: 8px 8px 0 0; padding: 6px 10px; line-height: 1.7;
 }
 .agent-action-ops {
-  display: flex; gap: 8px; background: #eef2ff;
+  display: flex; gap: 8px; background: #ddf4ff;
   border-radius: 0 0 8px 8px; padding: 6px 10px;
 }
 </style>

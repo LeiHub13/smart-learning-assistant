@@ -162,7 +162,7 @@ const markOption = (q, k) => {
 .fi-no {
   width: 22px; height: 22px; border-radius: 7px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  background: #eef2ff; color: var(--accent-deep);
+  background: #ddf4ff; color: var(--accent-deep);
   font-size: 12px; font-weight: 700; font-family: "SF Mono", Consolas, monospace;
 }
 .fi-unfav { margin-left: auto; }
@@ -173,14 +173,14 @@ const markOption = (q, k) => {
 .opt-row {
   display: flex; align-items: center; gap: 9px;
   padding: 8px 12px; border-radius: 10px;
-  border: 1px solid #e8ebf3; background: #fbfcfe;
-  font-size: 13.5px; color: #565b6e; line-height: 1.6;
+  border: 1px solid var(--border); background: #fff;
+  font-size: 13.5px; color: #57606a; line-height: 1.6;
 }
 .opt-row i {
   flex-shrink: 0; width: 20px; height: 20px; border-radius: 6px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: #fff; border: 1px solid #dfe3ee;
-  font-style: normal; font-size: 11px; font-weight: 700; color: #4338ca;
+  background: #fff; border: 1px solid #d1d9e0;
+  font-style: normal; font-size: 11px; font-weight: 700; color: var(--primary);
 }
 .opt-v { flex: 1; min-width: 0; }
 .opt-flag { flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
@@ -192,9 +192,9 @@ const markOption = (q, k) => {
 .opt-flag.bad { background: #f9e2e0; color: #b3423a; }
 
 /* 答案对比 */
-.fi-cmp { border-radius: 10px; overflow: hidden; border: 1px solid #e8ebf3; background: #fcfdff; margin-bottom: 10px; }
+.fi-cmp { border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: #fff; margin-bottom: 10px; }
 .cmp-row { display: flex; gap: 12px; padding: 9px 14px; font-size: 13.5px; line-height: 1.7; }
-.cmp-row + .cmp-row { border-top: 1px solid #eef1f7; }
+.cmp-row + .cmp-row { border-top: 1px solid #eaeef2; }
 .cmp-lab { flex-shrink: 0; width: 62px; font-size: 12px; font-weight: 700; color: var(--muted); padding-top: 2px; }
 .cmp-val { flex: 1; min-width: 0; word-break: break-word; }
 .cmp-val.bad { color: #b3423a; font-weight: 600; }
@@ -205,17 +205,17 @@ const markOption = (q, k) => {
   display: inline-flex; align-items: center; gap: 5px;
   cursor: pointer; user-select: none; list-style: none;
   font-size: 12.5px; font-weight: 600; color: var(--accent-deep);
-  padding: 4px 10px; border-radius: 8px; background: #f5f7fc;
-  border: 1px solid #e5e9f2; transition: background .18s ease;
+  padding: 4px 10px; border-radius: 8px; background: var(--soft);
+  border: 1px solid var(--border); transition: background .18s ease;
 }
 .fi-analysis summary::-webkit-details-marker { display: none; }
-.fi-analysis summary:hover { background: #eceffb; }
+.fi-analysis summary:hover { background: #f3f4f6; }
 .fi-chev { transition: transform .2s ease; }
 .fi-analysis[open] summary { margin-bottom: 8px; }
 .fi-analysis[open] .fi-chev { transform: rotate(180deg); }
 .fi-ans-txt {
   font-size: 13.5px; line-height: 1.75; color: #5b5b57;
-  background: #fbfcfe; border: 1px solid #e5e9f2; border-radius: 10px; padding: 10px 14px;
+  background: var(--soft); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px;
 }
 
 /* 空态 */

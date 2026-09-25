@@ -55,12 +55,12 @@ const onCardClick = () => {
   flex-direction: column;
   transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
 }
-.pk:hover { transform: translateY(-2px); border-color: #d8dce8; }
+.pk:hover { transform: translateY(-2px); border-color: #d1d9e0; }
 .pk-click { cursor: pointer; }
-.pk-click:focus-visible { outline: 2px solid rgba(79, 70, 229, .6); outline-offset: 2px; }
+.pk-click:focus-visible { outline: 2px solid rgba(9, 105, 218, .6); outline-offset: 2px; }
 .pk-active, .pk-active:hover {
   border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent), 0 2px 4px rgba(31,35,60,.04), 0 16px 40px rgba(31,35,60,.08);
+  box-shadow: inset 0 0 0 1px var(--accent), 0 2px 4px rgba(31,35,40,.04), 0 16px 40px rgba(31,35,40,.08);
 }
 
 .pk-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }

@@ -135,7 +135,7 @@ const mistakeTotal = ref(0)
 const chartRef = ref(null)
 let chart = null
 
-const PALETTE = ['#4f46e5', '#4a6cf7', '#3aa675', '#c05a4d', '#8b6fc0', '#4bacc6', '#f59e0b']
+const PALETTE = ['#0969da', '#4a6cf7', '#3aa675', '#c05a4d', '#8b6fc0', '#4bacc6', '#f59e0b']
 
 const fmtHours = (m) => {
   if (!m) return '0h'
@@ -355,9 +355,9 @@ onBeforeUnmount(() => {
 .hm-legend { display: flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 11px; color: var(--muted); }
 .hm-legend .hm-cell { width: 11px; height: 11px; }
 .hm-unit { margin-left: 4px; }
-.hm-0 { background: #e8eaf2; }
-.hm-1 { background: #c7d2fe; }
-.hm-2 { background: #a5b4fc; }
-.hm-3 { background: #818cf8; }
-.hm-4 { background: #4f46e5; }
+.hm-0 { background: #ebedf0; }
+.hm-1 { background: #9be9a8; }
+.hm-2 { background: #40c463; }
+.hm-3 { background: #30a14e; }
+.hm-4 { background: #216e39; }
 </style>
