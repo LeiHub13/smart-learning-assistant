@@ -42,6 +42,7 @@ public class PracticeService {
     private final KnowledgeMasteryMapper masteryMapper;
     private final com.example.learningassistant.favorite.service.FavoriteService favoriteService;
     private final MistakeService mistakeService;
+    private final com.example.learningassistant.infra.cache.CacheService cacheService;
 
     public List<Map<String, Object>> paper(Long userId, Long courseId, int count, boolean favorite, boolean mistake) {
         if (count < 1) {
@@ -164,6 +165,8 @@ public class PracticeService {
         p.setScore(total);
         practiceMapper.updateById(p);
         gradingService.updateMastery(userId, courseId, kpStats);
+        // 掌握度/错题本已变化，失效学情 summary 聚合缓存
+        cacheService.delete(com.example.learningassistant.progress.service.ProgressService.summaryKey(userId, courseId));
         return p;
     }
 

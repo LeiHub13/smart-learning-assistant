@@ -13,6 +13,8 @@ import com.example.learningassistant.practice.mapper.PracticeQuestionMapper;
 import com.example.learningassistant.practice.mapper.QuestionMapper;
 import com.example.learningassistant.progress.entity.KnowledgeMastery;
 import com.example.learningassistant.progress.mapper.KnowledgeMasteryMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,8 @@ import java.util.Map;
 /**
  * 学情分析服务：掌握度聚合、错题本、AI 复习建议。
  * AI 建议走缓存：summary 优先读缓存（Redis/内存），仅用户显式「重新生成」时才调 LLM。
+ * summary 聚合（掌握度 + 错题本）整体缓存：错题本聚合是全量扫描+逐题回表，代价高；
+ * 练习/考试提交时按 key 失效（PracticeService/ExamService），重新生成建议时也失效。
  */
 @Slf4j
 @Service
@@ -39,14 +43,31 @@ public class ProgressService {
     private final QuestionMapper questionMapper;
     private final ChatModelFactory modelFactory;
     private final CacheService cacheService;
+    private final ObjectMapper objectMapper;
 
     private static final Duration ADVICE_TTL = Duration.ofDays(7);
+    private static final Duration SUMMARY_TTL = Duration.ofMinutes(10);
 
     private String adviceKey(Long userId, Long courseId) {
         return "progress:advice:" + userId + ":" + courseId;
     }
 
+    /** summary 聚合缓存 key（提交侧失效共用，公开静态避免各处拼字符串） */
+    public static String summaryKey(Long userId, Long courseId) {
+        return "progress:summary:" + userId + ":" + courseId;
+    }
+
     public Map<String, Object> summary(Long userId, Long courseId) {
+        // 聚合结果整体缓存：命中直接返回（JSON 反序列化，响应结构与实时计算一致）
+        String cached = cacheService.get(summaryKey(userId, courseId));
+        if (cached != null && !cached.isBlank()) {
+            try {
+                return objectMapper.readValue(cached, new TypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                log.warn("学情 summary 缓存反序列化失败，回退实时计算: {}", e.getMessage());
+            }
+        }
+
         List<KnowledgeMastery> masteries = masteryMapper.selectList(new LambdaQueryWrapper<KnowledgeMastery>()
                 .eq(KnowledgeMastery::getUserId, userId)
                 .eq(KnowledgeMastery::getCourseId, courseId)
@@ -63,23 +84,33 @@ public class ProgressService {
         summary.put("totalAttempts", totalAttempts);
         summary.put("wrongBook", wrongBook);
         // 建议优先取缓存，未命中才调 LLM（并写缓存）；空掌握度不缓存
-        String cached = cacheService.get(adviceKey(userId, courseId));
-        if (cached != null && !cached.isBlank()) {
-            summary.put("advice", cached);
+        String advice = cacheService.get(adviceKey(userId, courseId));
+        if (advice != null && !advice.isBlank()) {
+            summary.put("advice", advice);
             summary.put("adviceCached", true);
         } else {
-            String advice = generateAdvice(masteries);
+            advice = generateAdvice(masteries);
             summary.put("advice", advice);
             summary.put("adviceCached", false);
             if (!masteries.isEmpty()) {
                 cacheService.set(adviceKey(userId, courseId), advice, ADVICE_TTL);
             }
         }
+        writeSummaryCache(userId, courseId, summary);
         return summary;
     }
 
+    private void writeSummaryCache(Long userId, Long courseId, Map<String, Object> summary) {
+        try {
+            cacheService.set(summaryKey(userId, courseId), objectMapper.writeValueAsString(summary), SUMMARY_TTL);
+        } catch (Exception e) {
+            log.warn("学情 summary 缓存写入失败: {}", e.getMessage());
+        }
+    }
+
     /**
-     * 显式重新生成：无视缓存强制调 LLM，结果写回缓存。
+     * 显式重新生成：无视缓存强制调 LLM，结果写回缓存，并失效 summary 聚合缓存
+     * （否则旧 summary 里冻结的旧建议会继续返回最长 SUMMARY_TTL）。
      */
     public Map<String, Object> regenerateAdvice(Long userId, Long courseId) {
         List<KnowledgeMastery> masteries = masteryMapper.selectList(new LambdaQueryWrapper<KnowledgeMastery>()
@@ -90,6 +121,7 @@ public class ProgressService {
         if (!masteries.isEmpty()) {
             cacheService.set(adviceKey(userId, courseId), advice, ADVICE_TTL);
         }
+        cacheService.delete(summaryKey(userId, courseId));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("advice", advice);
         result.put("adviceCached", false);

@@ -44,6 +44,7 @@ public class ExamService {
     private final CourseMapper courseMapper;
     private final GradingService gradingService;
     private final com.example.learningassistant.favorite.service.FavoriteService favoriteService;
+    private final com.example.learningassistant.infra.cache.CacheService cacheService;
 
     /**
      * 手动组卷：明确指定题目清单。
@@ -273,6 +274,9 @@ public class ExamService {
         record.setTotalScore(exam.getTotalScore());
         examRecordMapper.updateById(record);
         gradingService.updateMastery(userId, exam.getCourseId(), kpStats);
+        // 掌握度已变化，失效学情 summary 聚合缓存
+        cacheService.delete(com.example.learningassistant.progress.service.ProgressService.summaryKey(
+                userId, exam.getCourseId()));
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("recordId", record.getId());
