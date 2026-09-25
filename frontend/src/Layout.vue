@@ -56,10 +56,8 @@
             </template>
             <template v-else>
               <div class="notify-head"><b>邮件发送记录</b></div>
-              <div v-if="!mailLogs.length" class="notify-empty">
-                {{ mailEnabled ? '暂无邮件记录' : '邮件通知未启用（个人中心绑定邮箱，服务器 .env 开启 MAIL_ENABLED）' }}
-              </div>
-              <div v-for="m in mailLogs" :key="m.id" class="notify-item">
+              <div v-if="!mailLogs.length" class="notify-empty">暂无邮件发送记录</div>
+              <div v-for="m in mailLogs" :key="m.id" class="notify-item" @click="openMail(m)">
                 <div class="notify-title">
                   {{ m.subject }}
                   <span class="mail-tag" :class="m.status === 'SENT' ? 'ok' : 'bad'">{{ m.status === 'SENT' ? '成功' : '失败' }}</span>
@@ -91,6 +89,24 @@
         </Transition>
       </router-view>
     </main>
+
+    <!-- 通知详情弹窗：列表里只显示单行摘要，点开看完整内容 -->
+    <div v-if="detail" class="notify-modal" @click.self="detail = null">
+      <div class="notify-modal-card">
+        <div class="nm-head">
+          <span class="nm-tag" :class="{ bad: detail.mailStatus && detail.mailStatus !== 'SENT' }">{{ typeLabel(detail.type) }}</span>
+          <div class="nm-title-wrap">
+            <b class="nm-title">{{ detail.title }}</b>
+            <span class="nm-meta">{{ detailMeta(detail) }}</span>
+          </div>
+          <button class="nm-close" title="关闭" @click="detail = null">×</button>
+        </div>
+        <div class="nm-body">{{ detail.content }}</div>
+        <div class="nm-foot">
+          <button class="nm-btn" @click="detail = null">知道了</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -234,10 +250,31 @@ const fmtShort = (t) => {
 }
 
 const readOne = async (n) => {
+  detail.value = n
   if (!n.readFlag) {
     await markRead(n.id)
     n.readFlag = true
     unread.value = Math.max(0, unread.value - 1)
+  }
+}
+
+const detail = ref(null)
+
+const TYPE_LABELS = { review: '复习提醒', plan: '学习计划', system: '系统通知', exam: '考试', practice: '练习' }
+const typeLabel = (t) => t === 'mail'
+  ? (detail.value?.mailStatus === 'SENT' ? '发送成功' : '发送失败')
+  : (TYPE_LABELS[t] || '通知')
+
+const detailMeta = (d) => d.mailEmail ? d.mailEmail + ' · ' + fmtShort(d.createdAt) : fmtShort(d.createdAt)
+
+const openMail = (m) => {
+  detail.value = {
+    type: 'mail',
+    title: m.subject,
+    content: m.content,
+    createdAt: m.createdAt,
+    mailEmail: m.email,
+    mailStatus: m.status,
   }
 }
 
@@ -325,6 +362,53 @@ img.avatar { object-fit: cover; padding: 0; }
 .notify-item:hover { background: #f5f2ec; }
 .notify-title { font-weight: 600; font-size: 13px; }
 .notify-content { font-size: 12px; color: #666; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== 通知详情弹窗 ===== */
+.notify-modal {
+  position: fixed; inset: 0; z-index: 400;
+  background: rgba(26, 22, 18, .42);
+  display: flex; align-items: center; justify-content: center;
+  animation: nm-fade .16s ease;
+}
+@keyframes nm-fade { from { opacity: 0; } }
+.notify-modal-card {
+  width: min(460px, calc(100vw - 48px));
+  max-height: 76vh; overflow: auto;
+  background: #fff; border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .22);
+  padding: 16px 20px 14px;
+  animation: nm-pop .18s ease;
+}
+@keyframes nm-pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+.nm-head { display: flex; align-items: flex-start; gap: 10px; }
+.nm-tag {
+  flex: none; margin-top: 2px; padding: 3px 10px; border-radius: 999px;
+  background: #faf6ef; color: #8c6844; border: 1px solid #ecdfc9;
+  font-size: 11px; font-weight: 600;
+}
+.nm-tag.bad { background: #fdf1f0; color: #b3261e; border-color: #f3c8c2; }
+.nm-title-wrap { flex: 1; min-width: 0; }
+.nm-title { display: block; font-size: 15px; font-weight: 700; letter-spacing: -.01em; line-height: 1.4; }
+.nm-meta { display: block; margin-top: 3px; font-size: 12px; color: #a39a8d; }
+.nm-close {
+  flex: none; width: 26px; height: 26px; border: none; border-radius: 8px;
+  background: transparent; color: #999; font-size: 18px; line-height: 1; cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.nm-close:hover { background: #f5f2ec; color: #333; }
+.nm-body {
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed #f0ece6;
+  font-size: 13.5px; line-height: 1.8; color: #444;
+  white-space: pre-wrap; word-break: break-word;
+}
+.nm-foot { margin-top: 14px; display: flex; justify-content: flex-end; }
+.nm-btn {
+  height: 32px; padding: 0 18px; border: none; border-radius: 999px;
+  background: linear-gradient(180deg, #262320, #121110); color: #fff;
+  font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer;
+  transition: background .15s ease;
+}
+.nm-btn:hover { background: #121110; }
 
 /* ===== 多级侧边栏 ===== */
 .grp-arrow { margin-left: auto; opacity: .55; transition: transform .2s ease; }
