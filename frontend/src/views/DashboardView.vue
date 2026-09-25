@@ -135,7 +135,7 @@ const mistakeTotal = ref(0)
 const chartRef = ref(null)
 let chart = null
 
-const PALETTE = ['#c98f4e', '#4a6cf7', '#3aa675', '#c05a4d', '#8b6fc0', '#4bacc6', '#d0a35c']
+const PALETTE = ['#4f46e5', '#4a6cf7', '#3aa675', '#c05a4d', '#8b6fc0', '#4bacc6', '#d0a35c']
 
 const fmtHours = (m) => {
   if (!m) return '0h'
@@ -333,7 +333,7 @@ onBeforeUnmount(() => {
 .quick-row { gap: 12px; flex-wrap: wrap; }
 .rc-item { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
 .rc-item:last-child { border-bottom: none; }
-.rc-icon { color: var(--accent, #b8956a); display: inline-flex; align-items: center; }
+.rc-icon { color: var(--accent); display: inline-flex; align-items: center; }
 .rc-title { font-weight: 700; font-size: 13px; }
 .rc-reason { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.6; }
 .heatmap { display: grid; grid-template-rows: repeat(7, 13px); grid-auto-flow: column; grid-auto-columns: 13px; gap: 3px; }
@@ -355,9 +355,9 @@ onBeforeUnmount(() => {
 .hm-legend { display: flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 11px; color: var(--muted); }
 .hm-legend .hm-cell { width: 11px; height: 11px; }
 .hm-unit { margin-left: 4px; }
-.hm-0 { background: #ece9e2; }
-.hm-1 { background: #ecd9be; }
-.hm-2 { background: #dcbc8a; }
-.hm-3 { background: #c08c4e; }
-.hm-4 { background: #8c6844; }
+.hm-0 { background: #e8eaf2; }
+.hm-1 { background: #c7d2fe; }
+.hm-2 { background: #a5b4fc; }
+.hm-3 { background: #818cf8; }
+.hm-4 { background: #4f46e5; }
 </style>

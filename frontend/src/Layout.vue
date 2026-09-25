@@ -328,9 +328,9 @@ img.avatar { object-fit: cover; padding: 0; }
 .global-search :deep(.el-input__wrapper.is-focus) { background: #fff; box-shadow: 0 0 0 1px var(--accent) inset; }
 .global-search :deep(.el-input__inner) { height: 32px; font-size: 13px; }
 .global-search :deep(.el-input__prefix-inner > :first-child) { margin-right: 4px; }
-.tab-bar { display: flex; border-bottom: 1px solid #f0ece6; }
+.tab-bar { display: flex; border-bottom: 1px solid #e9ecf3; }
 .tab-bar span { flex: 1; text-align: center; padding: 10px 0 9px; font-size: 13px; font-weight: 700; color: #999; cursor: pointer; }
-.tab-bar span.on { color: #1a1a1a; box-shadow: inset 0 -2px 0 #c98f4e; }
+.tab-bar span.on { color: var(--primary); box-shadow: inset 0 -2px 0 var(--primary); }
 .mail-tag { font-size: 10px; border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
 .mail-tag.ok { background: #eef7ee; color: #2e7d32; }
 .mail-tag.bad { background: #fdeeee; color: #c62828; }
@@ -351,22 +351,22 @@ img.avatar { object-fit: cover; padding: 0; }
   animation: pop-in .16s ease;
 }
 @keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
-.notify-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px 9px; border-bottom: 1px solid #f0ece6; }
+.notify-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px 9px; border-bottom: 1px solid #e9ecf3; }
 .notify-head b { font-size: 14px; letter-spacing: -.01em; }
-.notify-head a { color: #8c6844; font-size: 12px; cursor: pointer; }
+.notify-head a { color: #4338ca; font-size: 12px; cursor: pointer; }
 .notify-head a:hover { text-decoration: underline; }
 .notify-empty { padding: 24px; text-align: center; color: #999; font-size: 13px; }
-.notify-item { padding: 9px 14px; border-bottom: 1px solid #f7f4ef; cursor: pointer; transition: background .15s ease; }
-.notify-item.unread { background: #faf6ef; }
-.notify-item.unread .notify-title::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #c98f4e; margin-right: 6px; vertical-align: 1px; }
-.notify-item:hover { background: #f5f2ec; }
+.notify-item { padding: 9px 14px; border-bottom: 1px solid #f1f3f9; cursor: pointer; transition: background .15s ease; }
+.notify-item.unread { background: #f3f5fd; }
+.notify-item.unread .notify-title::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4f46e5; margin-right: 6px; vertical-align: 1px; }
+.notify-item:hover { background: #f2f4fa; }
 .notify-title { font-weight: 600; font-size: 13px; }
 .notify-content { font-size: 12px; color: #666; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ===== 通知详情弹窗 ===== */
 .notify-modal {
   position: fixed; inset: 0; z-index: 400;
-  background: rgba(26, 22, 18, .42);
+  background: rgba(16, 18, 32, .45);
   display: flex; align-items: center; justify-content: center;
   animation: nm-fade .16s ease;
 }
@@ -383,21 +383,21 @@ img.avatar { object-fit: cover; padding: 0; }
 .nm-head { display: flex; align-items: flex-start; gap: 10px; }
 .nm-tag {
   flex: none; margin-top: 2px; padding: 3px 10px; border-radius: 999px;
-  background: #faf6ef; color: #8c6844; border: 1px solid #ecdfc9;
+  background: #eef2ff; color: #4338ca; border: 1px solid #dfe4f5;
   font-size: 11px; font-weight: 600;
 }
 .nm-tag.bad { background: #fdf1f0; color: #b3261e; border-color: #f3c8c2; }
 .nm-title-wrap { flex: 1; min-width: 0; }
 .nm-title { display: block; font-size: 15px; font-weight: 700; letter-spacing: -.01em; line-height: 1.4; }
-.nm-meta { display: block; margin-top: 3px; font-size: 12px; color: #a39a8d; }
+.nm-meta { display: block; margin-top: 3px; font-size: 12px; color: #9aa1b5; }
 .nm-close {
   flex: none; width: 26px; height: 26px; border: none; border-radius: 8px;
   background: transparent; color: #999; font-size: 18px; line-height: 1; cursor: pointer;
   transition: background .15s ease, color .15s ease;
 }
-.nm-close:hover { background: #f5f2ec; color: #333; }
+.nm-close:hover { background: #f2f4fa; color: #333; }
 .nm-body {
-  margin-top: 12px; padding-top: 12px; border-top: 1px dashed #f0ece6;
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e9ecf3;
   font-size: 13.5px; line-height: 1.8; color: #444;
   white-space: pre-wrap; word-break: break-word;
 }
