@@ -78,8 +78,9 @@ app:
   # 内部工具 API 鉴权（ai-service 的 Agent 工具回调、chunk 下发与 RAG 端点共用这把 token）
   internal-tool-token: ${INTERNAL_TOOL_TOKEN:internal-tool-token}
   notify:
-    # 邮件渠道开关：true 时站内信同步外发邮件（用户已绑定邮箱才会发）
-    email-enabled: ${MAIL_ENABLED:false}
+    # 邮件渠道开关：true 时站内信同步外发邮件（仅发给已绑定邮箱的用户，发送失败只留痕不阻塞）
+    # 本地默认启用，SMTP 走上方 spring.mail 配置；Docker 部署由 compose 注入 MAIL_ENABLED 控制（.env 决定）
+    email-enabled: ${MAIL_ENABLED:true}
   email-code:
     # 邮箱验证码（注册验证邮箱 / 重置密码）：复用 spring.mail 的 SMTP 配置发信，
     # 与通知邮件开关 app.notify.email-enabled 相互独立，SMTP 配置好即可用

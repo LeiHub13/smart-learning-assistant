@@ -68,6 +68,8 @@ public class EmailCodeService {
         if (SCENE_RESET_PASSWORD.equals(scene) && bound.isEmpty()) {
             throw new BizException("该邮箱未绑定任何账号");
         }
+        // 重置密码场景邮箱必然已归属账号：留痕带上 userId，邮件记录才会出现在用户的「邮箱通知」页签
+        Long userId = SCENE_RESET_PASSWORD.equals(scene) && !bound.isEmpty() ? bound.get(0).getId() : null;
 
         EmailCode latest = latestCode(mail, scene, null);
         if (latest != null && latest.getCreatedAt() != null
@@ -76,7 +78,7 @@ public class EmailCodeService {
         }
 
         String code = String.format("%06d", RANDOM.nextInt(1_000_000));
-        sendMail(mail, label, code);
+        sendMail(userId, mail, label, code);
 
         emailCodeMapper.update(null, new LambdaUpdateWrapper<EmailCode>()
                 .set(EmailCode::getUsedFlag, true)
@@ -140,11 +142,12 @@ public class EmailCodeService {
         return mail;
     }
 
-    private void sendMail(String to, String sceneLabel, String code) {
+    private void sendMail(Long userId, String to, String sceneLabel, String code) {
         String content = "你正在进行「" + sceneLabel + "」操作，验证码为：" + code
                 + "，" + Math.max(1, ttlSeconds / 60) + " 分钟内有效。请勿泄露给他人，若非本人操作请忽略本邮件。";
         MailLog logRow = new MailLog();
         logRow.setTenantId(1L);
+        logRow.setUserId(userId);
         logRow.setEmail(to);
         logRow.setSubject("【智学助手】邮箱验证码");
         logRow.setContent(content);
@@ -160,7 +163,9 @@ public class EmailCodeService {
             log.info("验证码邮件已发送: to={}, scene={}", to, sceneLabel);
         } catch (Exception e) {
             logRow.setStatus("FAILED");
-            logRow.setError(e.getMessage());
+            // error 列 VARCHAR(500)，超长的 SMTP 异常信息截断，避免留痕插入本身报错
+            String err = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            logRow.setError(err.length() > 500 ? err.substring(0, 500) : err);
             log.warn("验证码邮件发送失败: to={}, err={}", to, e.getMessage());
             mailLogMapper.insert(logRow);
             throw new BizException("验证码邮件发送失败，请稍后重试");
