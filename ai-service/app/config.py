@@ -6,10 +6,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-PROVIDER = os.getenv("AI_PROVIDER", "deepseek").lower()
+PROVIDER = os.getenv("AI_PROVIDER", "agnes").lower()
 API_KEY = os.getenv("AI_API_KEY", "")
-BASE_URL = os.getenv("AI_BASE_URL", "https://api.deepseek.com")
-MODEL = os.getenv("AI_MODEL", "deepseek-chat")
+BASE_URL = os.getenv("AI_BASE_URL", "https://apihub.agnes-ai.com/v1")
+MODEL = os.getenv("AI_MODEL", "agnes-3.0-flash")
 HOST = os.getenv("AI_HOST", "0.0.0.0")
 PORT = int(os.getenv("AI_PORT", "8000"))
 

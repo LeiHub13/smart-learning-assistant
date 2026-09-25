@@ -52,8 +52,8 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 | 变量 | 默认                     | 说明 |
 |------|--------------------------|------|
-| AI_PROVIDER | deepseek                 | deepseek / dashscope / openai-compatible |
+| AI_PROVIDER | agnes                    | agnes / deepseek / dashscope 等（仅健康检查展示用） |
 | AI_API_KEY | -                        | 必填 |
-| AI_BASE_URL | https://api.deepseek.com | 通义：https://dashscope.aliyuncs.com/compatible-mode/v1 |
-| AI_MODEL | deepseek-v4-flash        | 通义示例：qwen-plus |
+| AI_BASE_URL | https://apihub.agnes-ai.com/v1 | DeepSeek：https://api.deepseek.com；通义：https://dashscope.aliyuncs.com/compatible-mode/v1 |
+| AI_MODEL | agnes-3.0-flash          | DeepSeek 示例：deepseek-chat；通义示例：qwen-plus |
 | AI_PORT | 8000                     | 服务端口（Java 端 `app.model.python-base-url` 需一致） |
