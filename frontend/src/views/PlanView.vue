@@ -3,6 +3,8 @@
     <div class="page-title">学习计划</div>
     <div class="page-sub">AI 根据你的目标与掌握度生成逐日计划，每日打卡跟踪进度</div>
 
+    <div v-if="error" class="err">{{ error }}</div>
+
     <div class="card">
       <div class="row" style="justify-content:space-between">
         <h3 style="margin:0">打卡日历 · {{ calMonth }}</h3>
@@ -68,13 +70,16 @@
 
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
-import { getCourses, listPlans, createPlan as createPlanApi, getPlan, checkInTask, deletePlan } from '../api'
+import { api, getCourses, listPlans, createPlan as createPlanApi, getPlan, checkInTask, deletePlan } from '../api'
 
 const courses = ref([])
 const plans = ref([])
+const error = ref('')
 
 // ===== 打卡日历 =====
-const calMonth = ref(new Date().toISOString().slice(0, 7))
+// 注意用本地时间拼月份：toISOString 是 UTC，月初清晨（UTC+8 的 0-8 点）会算成上个月
+const localMonth = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+const calMonth = ref(localMonth(new Date()))
 const calDays = ref([])
 const calFirstOffset = ref(0)
 
@@ -96,10 +101,13 @@ const loadCalendar = async () => {
   try {
     const days = await api('/api/plans/calendar?month=' + calMonth.value)
     calDays.value = days
-    const first = calMonth.value + '-01'
-    const dow = new Date(first).getDay() // 0=周日
+    // 按本地时区解析月初星期（new Date('yyyy-MM-01') 按 UTC 解析，负时区会偏一天）
+    const [y, m] = calMonth.value.split('-').map(Number)
+    const dow = new Date(y, m - 1, 1).getDay() // 0=周日
     calFirstOffset.value = (dow + 6) % 7 // 周一开头
-  } catch (e) { /* 忽略 */ }
+  } catch (e) {
+    error.value = '打卡日历加载失败：' + e.message
+  }
 }
 const details = reactive({})
 const open = reactive({})
