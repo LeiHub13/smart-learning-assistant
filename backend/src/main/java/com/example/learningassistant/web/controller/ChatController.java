@@ -20,9 +20,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 答疑接口：会话管理 + SSE 流式对话。
@@ -79,15 +79,16 @@ public class ChatController {
             try {
                 emitter.send(SseEmitter.event().data(Map.of("sources", "")));
                 emitter.complete();
-            } catch (IOException e) {
+            } catch (Exception e) {
                 emitter.completeWithError(e);
             }
             return emitter;
         }
         // 本轮起点：只把本轮新登记的动作挂到这条回复上，否则上一轮未确认的动作会在每条消息下重复出现
         java.time.LocalDateTime turnStart = java.time.LocalDateTime.now();
+        AtomicBoolean clientGone = new AtomicBoolean(false);
         chatService.streamMessage(id, question, u.id(),
-                delta -> safeSend(emitter, Map.of("delta", delta)),
+                delta -> safeSend(emitter, clientGone, Map.of("delta", delta)),
                 sources -> {
                     // 同一条 done 事件里附带本轮登记的待确认动作（写操作只 proposal，不自动落库）
                     List<Map<String, Object>> actions;
@@ -100,14 +101,9 @@ public class ChatController {
                         log.warn("查询待确认动作失败: {}", e.getMessage());
                         actions = List.of();
                     }
-                    try {
-                        emitter.send(SseEmitter.event().data(
-                                Map.of("sources", sources == null ? "" : sources, "actions", actions)));
-                    } catch (IOException e) {
-                        emitter.completeWithError(e);
-                        return;
-                    }
-                    emitter.complete();
+                    safeSend(emitter, clientGone, Map.of(
+                            "sources", sources == null ? "" : sources, "actions", actions));
+                    safeComplete(emitter, clientGone);
                 });
         return emitter;
     }
@@ -116,14 +112,32 @@ public class ChatController {
         return v == null ? null : Long.valueOf(String.valueOf(v));
     }
 
-    private void safeSend(SseEmitter emitter, Object data) {
+    /**
+     * 推送一条 SSE 事件。失败（典型为客户端生成中途刷新/离开页面导致断连）只标记失效并跳过后续推送，
+     * 绝不再触碰 emitter：断连后 async context 已处于 error 态，此时连 completeWithError 都会抛
+     * IllegalStateException——一旦从生成回调逃逸进生成线程，会把生成、落库、ai-service 记忆整条链路
+     * 中断掉（表现为用户回到会话后看不到这条回复）。断开只影响推送，不影响生成与持久化。
+     */
+    private void safeSend(SseEmitter emitter, AtomicBoolean clientGone, Object data) {
+        if (clientGone.get()) {
+            return;
+        }
         try {
             emitter.send(SseEmitter.event().data(data));
-        } catch (IOException e) {
-            log.warn("SSE send 失败: {}", e.getMessage());
-            emitter.completeWithError(e);
         } catch (Exception e) {
-            log.warn("SSE send 异常: {}", e.getMessage());
+            clientGone.set(true);
+            log.warn("SSE 推送失败，客户端可能已断开（生成与落库继续）: {}", e.getMessage());
+        }
+    }
+
+    private void safeComplete(SseEmitter emitter, AtomicBoolean clientGone) {
+        if (clientGone.get()) {
+            return;
+        }
+        try {
+            emitter.complete();
+        } catch (Exception e) {
+            log.debug("SSE complete 失败（忽略）: {}", e.getMessage());
         }
     }
 }

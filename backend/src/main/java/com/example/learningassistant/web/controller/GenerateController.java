@@ -22,6 +22,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * AI 内容生成接口：讲义 / 练习题 / 生成历史。
@@ -41,25 +42,48 @@ public class GenerateController {
         String topic = body.get("topic");
         String kp = body.get("kp");
         SseEmitter emitter = new SseEmitter(300_000L);
+        AtomicBoolean clientGone = new AtomicBoolean(false);
         generatorService.streamLecture(u.id(), courseId, topic, kp,
-                delta -> safeSend(emitter, Map.of("delta", delta)),
+                delta -> safeSend(emitter, clientGone, Map.of("delta", delta)),
                 g -> {
-                    safeSend(emitter, Map.of("saved", g.getId()));
-                    emitter.complete();
+                    safeSend(emitter, clientGone, Map.of("saved", g.getId()));
+                    safeComplete(emitter, clientGone);
                 },
                 e -> {
                     log.warn("讲义流式生成失败: {}", e.getMessage());
-                    emitter.completeWithError(e);
+                    try {
+                        emitter.completeWithError(e);
+                    } catch (Exception ex) {
+                        log.debug("SSE completeWithError 失败（忽略）: {}", ex.getMessage());
+                    }
                 });
         return emitter;
     }
 
-    private void safeSend(SseEmitter emitter, Object data) {
+    /**
+     * 推送失败（典型为客户端生成中途刷新/离开导致断连）只标记失效并跳过后续推送；
+     * 与 ChatController.safeSend 同理，绝不让异常逃逸进生成线程中断生成与落库。
+     */
+    private void safeSend(SseEmitter emitter, AtomicBoolean clientGone, Object data) {
+        if (clientGone.get()) {
+            return;
+        }
         try {
             emitter.send(SseEmitter.event().data(data));
-        } catch (IOException e) {
-            log.warn("SSE send 失败: {}", e.getMessage());
-            emitter.completeWithError(e);
+        } catch (Exception e) {
+            clientGone.set(true);
+            log.warn("SSE 推送失败，客户端可能已断开（生成与落库继续）: {}", e.getMessage());
+        }
+    }
+
+    private void safeComplete(SseEmitter emitter, AtomicBoolean clientGone) {
+        if (clientGone.get()) {
+            return;
+        }
+        try {
+            emitter.complete();
+        } catch (Exception e) {
+            log.debug("SSE complete 失败（忽略）: {}", e.getMessage());
         }
     }
 

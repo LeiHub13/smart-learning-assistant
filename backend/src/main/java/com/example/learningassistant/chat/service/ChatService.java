@@ -207,10 +207,10 @@ public class ChatService {
             aiMsg.setCreatedAt(LocalDateTime.now());
             messageMapper.insert(aiMsg);
             onDone.accept(refs);
-        }, e -> {
-            log.error("对话流式生成失败: sessionId={}", sessionId, e);
-            throw new BizException("生成失败，请重试");
-        });
+        }, e ->
+                // 运行在 ai-stream 守护线程里，异常无人接收：只记日志，rethrow 只会以
+                // 未捕获异常形式杀掉线程并留下噪音栈
+                log.error("对话流式生成失败: sessionId={}", sessionId, e));
     }
 
     private List<AIChatMessage> historyMessages(Long sessionId, int rounds) {
