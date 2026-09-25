@@ -73,6 +73,8 @@ export function mdToHtml(text) {
     if (/^#{1,4}\s/.test(raw)) {
       const lv = raw.match(/^#+/)[0].length
       html += '<h' + lv + '>' + raw.replace(/^#+\s*/, '') + '</h' + lv + '>'
+    } else if (/^\s*([-*_])\1{2,}\s*$/.test(raw)) {
+      html += '<hr class="md-divider">'
     } else if (/^\s*[-*]\s+/.test(raw)) {
       html += '<p>· ' + raw.replace(/^\s*[-*]\s+/, '') + '</p>'
     } else if (raw.startsWith('&gt;')) {

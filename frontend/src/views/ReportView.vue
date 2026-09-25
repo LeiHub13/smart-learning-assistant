@@ -20,7 +20,7 @@
           <span class="muted small">{{ formatTime(r.createdAt) }}</span>
         </div>
         <div v-if="current?.id === r.id" class="report-body">
-          <div class="md" v-html="renderMd(current.content)"></div>
+          <div class="md" v-html="mdToHtml(current.content)"></div>
           <button class="btn ghost small" :disabled="downloading" @click="downloadPdf(r)">下载 PDF</button>
         </div>
       </div>
@@ -31,6 +31,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getCourses, listReports, generateWeeklyReport, downloadFile } from '../api'
+import { mdToHtml } from '../utils'
 
 const courses = ref([])
 const reports = ref([])
@@ -69,17 +70,6 @@ const downloadPdf = async (r) => {
 }
 
 const formatTime = (s) => s ? new Date(s).toLocaleString() : ''
-
-const renderMd = (md) => {
-  if (!md) return ''
-  return md
-    .replace(/^### (.*$)/gim, '<h4>$1</h4>')
-    .replace(/^## (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^# (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^\- (.*$)/gim, '<li>$1</li>')
-    .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-    .replace(/\n/g, '<br>')
-}
 
 onMounted(load)
 </script>
