@@ -44,8 +44,8 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) {
         Long pg13Id = seedUser("pg13", "小明");
-        seedUser("xiaohong", "小张");
-        seedUser("xiaoyu", "小邸");
+        seedUser("xiaozhang", "小张");
+        seedUser("xiaodi", "小邸");
         List<Course> courses = seedCourses(pg13Id);
         ensureOwnerEnrolled(courses);
         Long courseId = courses.get(0).getId();

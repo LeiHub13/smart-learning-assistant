@@ -18,7 +18,7 @@
 - 引用来源 `sources`（如 `"1,2,3"`）由 Python 随 SSE done 事件回传，Java 落 `t_chat_message.sources`
 - 内部接口鉴权：`X-Internal-Token`（Java `app.internal-tool-token` ↔ Python `JAVA_TOOL_TOKEN`，两侧默认值必须一致）
 - LLM provider 仅支持 `python` / `openai-compatible`，无 mock 降级；`openai-compatible`/`spring-ai` 不经过 ai-service，因此没有知识库检索能力
-- 系统无用户角色概念：所有用户权限一致，资源按 userId 隔离；演示账号 pg13/xiaohong/xiaoyu（密码 123456）
+- 系统无用户角色概念：所有用户权限一致，资源按 userId 隔离；演示账号 pg13/xiaozhang/xiaodi（密码 123456）
 - 一键部署：根目录 `docker-compose.yml` + `deploy.sh`（三镜像编排，详见 `docs/05-Docker部署.md`）
 - push到远程仓库的时候要询问我！！！！
 

@@ -137,8 +137,8 @@ const feats = [
 
 const demos = [
   { name: 'pg13', tag: '泡椒' },
-  { name: 'xiaohong', tag: '小张' },
-  { name: 'xiaoyu', tag: '小邸' },
+  { name: 'xiaozhang', tag: '小张' },
+  { name: 'xiaodi', tag: '小邸' },
 ]
 
 const year = new Date().getFullYear()
