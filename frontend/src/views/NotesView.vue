@@ -39,7 +39,7 @@
           <button class="btn ghost small" @click="del(n)">删除</button>
         </div>
       </div>
-      <div v-if="expanded[n.id]" class="note-content">{{ n.content }}</div>
+      <div v-if="expanded[n.id]" class="note-content md" v-html="mdToHtml(n.content)"></div>
       <div v-else-if="preview(n.content)" class="note-preview">{{ preview(n.content) }}</div>
       <div class="muted small">更新于 {{ fmtTime(n.updatedAt) }}</div>
     </div>
@@ -49,7 +49,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { api, getCourses } from '../api'
-import { fmtTime } from '../utils'
+import { fmtTime, mdToHtml } from '../utils'
 import AppIcon from '../components/AppIcon.vue'
 
 defineOptions({ name: 'NotesView' })
@@ -127,7 +127,8 @@ onMounted(async () => {
 
 <style scoped>
 .editor { margin-top: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
-.note-content { white-space: pre-wrap; line-height: 1.8; color: #334155; margin: 10px 0; }
+/* 内容走 mdToHtml 渲染：段落/表格等结构由 Markdown 负责，不再用 pre-wrap */
+.note-content { line-height: 1.8; color: #334155; margin: 10px 0; }
 .note-preview { color: #94a3b8; margin: 8px 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-card { transition: box-shadow .2s ease; }
 .note-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.06); }
