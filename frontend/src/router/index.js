@@ -9,9 +9,16 @@ const routes = [
     meta: { public: true, title: '登录 - 智学助手' }
   },
   {
+    path: '/welcome',
+    name: 'welcome',
+    component: () => import('../views/WelcomeView.vue'),
+    meta: { public: true, title: '欢迎使用 - 智学助手' }
+  },
+  {
     path: '/',
     component: () => import('../Layout.vue'),
-    redirect: '/home',
+    // 未登录先看系统介绍页，已登录直接进首页
+    redirect: () => (getToken() ? { path: '/home' } : { path: '/welcome' }),
     children: [
       { path: 'home', name: 'home', component: () => import('../views/DashboardView.vue'), meta: { title: '首页 - 智学助手' } },
       { path: 'chat', name: 'chat', component: () => import('../views/ChatView.vue'), meta: { title: '智能答疑 - 智学助手' } },

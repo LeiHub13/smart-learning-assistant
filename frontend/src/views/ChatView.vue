@@ -49,9 +49,6 @@
           <div style="margin:10px 0 16px">
             {{ mode === 'kb' ? '选择课程知识库后提问，回答将基于资料并标注引用' : '学习问题随时问我' }}
           </div>
-          <div v-if="mode === 'kb'">
-            <button v-for="q in suggestions" :key="q" class="btn ghost small" style="margin:4px" @click="quickAsk(q)">{{ q }}</button>
-          </div>
         </div>
         <div v-for="(m, i) in messages" :key="i" class="m" :class="m.role === 'user' ? 'me' : 'ai'">
           <div class="av">{{ m.role === 'user' ? '我' : 'AI' }}</div>
@@ -120,7 +117,6 @@ const courseId = ref(null)
 const kbId = ref(null)
 const kbScope = ref('single')
 const bodyRef = ref(null)
-const suggestions = ['HashMap 的底层原理是什么？', 'Java 多线程有哪些核心要点？', '什么是受检异常？']
 
 let raf = null
 const scrollDown = () => {
@@ -288,11 +284,6 @@ const openSession = async (id) => {
     }
   }
   scrollDown()
-}
-
-const quickAsk = (q) => {
-  input.value = q
-  send()
 }
 
 const send = async () => {
