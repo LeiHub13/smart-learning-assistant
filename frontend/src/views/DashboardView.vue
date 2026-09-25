@@ -135,7 +135,7 @@ const mistakeTotal = ref(0)
 const chartRef = ref(null)
 let chart = null
 
-const PALETTE = ['#4f46e5', '#4a6cf7', '#3aa675', '#c05a4d', '#8b6fc0', '#4bacc6', '#d0a35c']
+const PALETTE = ['#4f46e5', '#4a6cf7', '#3aa675', '#c05a4d', '#8b6fc0', '#4bacc6', '#f59e0b']
 
 const fmtHours = (m) => {
   if (!m) return '0h'

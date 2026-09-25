@@ -133,12 +133,13 @@ const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeVi
 
 const menus = [
   { key: 'home', title: '首页', path: '/home', icon: 'home' },
+  { key: 'chat', title: '智能答疑', path: '/chat', icon: 'chat' },
+  { key: 'generate', title: 'AI生成讲义/练习题', path: '/generate', icon: 'sparkles' },
   {
     key: 'course', title: '课程学习', icon: 'manage',
     children: [
       { key: 'manage', title: '我的课程', path: '/manage', icon: 'manage' },
       { key: 'hub', title: '课程 Hub', path: '/hub', icon: 'hub' },
-      { key: 'chat', title: '智能答疑', path: '/chat', icon: 'chat' },
       { key: 'notes', title: '学习笔记', path: '/notes', icon: 'notes' }
     ]
   },
@@ -146,13 +147,12 @@ const menus = [
     key: 'quiz', title: '练习与测验', icon: 'exam',
     children: [
       { key: 'practice', title: '题库练习', path: '/practice', icon: 'practice' },
-  { key: 'mistakes', title: '错题本', path: '/mistakes', icon: 'target' },
+      { key: 'mistakes', title: '错题本', path: '/mistakes', icon: 'target' },
       { key: 'favorites', title: '收藏夹', path: '/favorites', icon: 'star' },
       { key: 'bank', title: '题库管理', path: '/bank', icon: 'bank' },
       { key: 'exam', title: '在线考试', path: '/exam', icon: 'exam' }
     ]
   },
-  { key: 'generate', title: 'AI生成讲义/练习题', path: '/generate', icon: 'sparkles' },
   {
     key: 'stats', title: '学情与规划', icon: 'progress',
     children: [
@@ -404,30 +404,30 @@ img.avatar { object-fit: cover; padding: 0; }
 .nm-foot { margin-top: 14px; display: flex; justify-content: flex-end; }
 .nm-btn {
   height: 32px; padding: 0 18px; border: none; border-radius: 999px;
-  background: linear-gradient(180deg, #262320, #121110); color: #fff;
+  background: linear-gradient(135deg, #6d28d9, #4f46e5 55%, #2563eb); color: #fff;
   font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer;
   transition: background .15s ease;
 }
-.nm-btn:hover { background: #121110; }
+.nm-btn:hover { background: linear-gradient(135deg, #5b21b6, #4338ca 55%, #1d4ed8); }
 
 /* ===== 多级侧边栏 ===== */
 .grp-arrow { margin-left: auto; opacity: .55; transition: transform .2s ease; }
 .grp-arrow.open { transform: rotate(180deg); opacity: .9; }
 /* 分组头的激活态：只用轻提示，不套白底卡片（button.on 是叶子菜单的样式，套上会看不清字） */
-.grp.active { background: rgba(255,255,255,.05); }
-.grp.active .m-txt { color: #f5f5f4; }
-.grp.active .m-ico { background: rgba(255,255,255,.14); opacity: 1; }
+.grp.active { background: rgba(79,70,229,.06); }
+.grp.active .m-txt { color: var(--text); }
+.grp.active .m-ico { background: rgba(79,70,229,.12); opacity: 1; }
 .sub { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .22s ease; }
 .sub.open { grid-template-rows: 1fr; }
 .sub-in { overflow: hidden; display: flex; flex-direction: column; gap: 2px; padding: 2px 6px 4px; }
 .sub-item {
   display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
   padding: 7px 8px 7px 14px; border: none; border-radius: 8px;
-  background: transparent; color: #a8a29e; font-size: 13px; cursor: pointer;
+  background: transparent; color: #565b6e; font-size: 13px; cursor: pointer;
   position: relative; transition: .2s ease;
 }
-.sub-item:hover { background: rgba(255,255,255,.07); color: #f5f5f4; }
-.sub-item.on { background: rgba(184,149,106,.16); color: #f2eadf; font-weight: 600; }
+.sub-item:hover { background: rgba(79,70,229,.07); color: var(--text); }
+.sub-item.on { background: rgba(79,70,229,.1); color: #4338ca; font-weight: 600; }
 .sub-item.on::before {
   content: ''; position: absolute; left: 5px; top: 50%; transform: translateY(-50%);
   width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
@@ -443,11 +443,11 @@ img.avatar { object-fit: cover; padding: 0; }
     padding: 8px 10px; font-size: 11px;
   }
   .sub-item.on::before { display: none; }
-  .sub-item.on { background: rgba(255,255,255,.1); }
+  .sub-item.on { background: rgba(79,70,229,.12); }
   .sub-ico {
     width: 22px; height: 22px; border-radius: 6px;
     align-items: center; justify-content: center;
-    background: rgba(255,255,255,.06);
+    background: rgba(79,70,229,.07);
   }
 }
 </style>
