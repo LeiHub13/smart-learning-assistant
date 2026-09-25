@@ -3,7 +3,7 @@
     <div class="page-title">个人中心</div>
     <div class="page-sub">头像、昵称、通知邮箱与密码管理</div>
 
-    <div v-if="msg" class="card" style="border-color:#c98f4e"><b>{{ msg }}</b></div>
+    <div v-if="msg" class="card" style="border-color:#a5b4fc"><b>{{ msg }}</b></div>
     <div v-if="err" class="err">{{ err }}</div>
 
     <div class="card">
