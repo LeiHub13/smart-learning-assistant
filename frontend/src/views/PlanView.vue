@@ -143,20 +143,37 @@ const createPlan = async () => {
   try {
     await createPlanApi({ goal: form.value.goal, days: form.value.days, courseId: form.value.courseId })
     form.value.goal = ''
-    await load()
+    await Promise.all([load(), loadCalendar()])
+  } catch (e) {
+    error.value = '计划生成失败：' + e.message
   } finally {
     loading.value = false
   }
 }
 
+// 打卡是 toggle 接口，锁住在途请求防止连点造成「打卡又取消」
+const checking = new Set()
+
 const checkIn = async (t) => {
-  await checkInTask(t.id)
-  await loadDetail(t.planId)
+  if (checking.has(t.id)) return
+  checking.add(t.id)
+  try {
+    await checkInTask(t.id)
+    await Promise.all([loadDetail(t.planId), loadCalendar()])
+  } catch (e) {
+    error.value = '打卡失败：' + e.message
+  } finally {
+    checking.delete(t.id)
+  }
 }
 
 const del = async (id) => {
-  await deletePlan(id)
-  await load()
+  try {
+    await deletePlan(id)
+    await Promise.all([load(), loadCalendar()])
+  } catch (e) {
+    error.value = '删除失败：' + e.message
+  }
 }
 
 onMounted(() => {
