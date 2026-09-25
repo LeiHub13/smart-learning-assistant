@@ -187,3 +187,14 @@ def test_new_write_tools_propose_with_request_context(monkeypatch):
     # 工具回执里「已生成待确认动作」是固定前缀；断言不得声称动作本身已完成
     assert "已创建学习笔记" not in out1 and "已收藏题目" not in out2
     assert "加入课程题库" not in out3 and "已打开「" not in out4
+
+
+def test_system_prompt_carries_selected_kb_context():
+    """会话选中的知识库名称/范围拼进系统提示，模型才能回答「当前选的是哪个库」。"""
+    prompt = agent._system_prompt([], note=None, kb_name="电商项目开发实战（项目文档）", kb_scope="course")
+    assert "电商项目开发实战（项目文档）" in prompt and "本课程全部知识库" in prompt
+    single = agent._system_prompt([], kb_name="课程资料", kb_scope="single")
+    assert "「课程资料」" in single and "仅该知识库" in single
+    # 未下发 KB_NAME（自由对话/旧版 Java）时不添加该段，空白名同样忽略
+    assert "会话上下文" not in agent._system_prompt([])
+    assert "会话上下文" not in agent._system_prompt([], kb_name="  ", kb_scope="single")

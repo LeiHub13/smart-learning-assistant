@@ -66,20 +66,31 @@ def _note_suffix(note: str | None) -> str:
     return ("\n" + note.strip()) if note and note.strip() else ""
 
 
-def _build_messages(scene: str, question: str, chunks, note: str = None) -> list:
+def _kb_suffix(kb_name: str | None, kb_scope: str | None) -> str:
+    """会话选中的知识库上下文：kbId 只是数字，模型要靠名称才能回答「当前选的是哪个库」。"""
+    if not kb_name or not kb_name.strip():
+        return ""
+    scope = "本课程全部知识库" if (kb_scope or "").strip() == "course" else "仅该知识库"
+    return (f"\n【会话上下文】学生当前选中的知识库：「{kb_name.strip()}」，检索范围：{scope}；"
+            "list_material_topics / search_materials 与引用来源都以此为准。")
+
+
+def _build_messages(scene: str, question: str, chunks, note: str = None,
+                    kb_name: str = None, kb_scope: str = None) -> list:
     chunks_text = _chunks_to_text(chunks)
     if scene == "rag_qa":
         return [
             SystemMessage(
                 "你是智能学习助手，请结合下方课程知识库资料回答学生问题，引用资料时标注编号[1][2]等；"
                 "若资料与问题无关则如实说明。\n【知识库资料】\n" + chunks_text + "\n【资料结束】"
-                + _note_suffix(note)
+                + _kb_suffix(kb_name, kb_scope) + _note_suffix(note)
             ),
             HumanMessage(question),
         ]
     if scene == "free":
         return [
-            SystemMessage("你是智能学习助手，用中文友好、准确地解答学生的学习问题。" + _note_suffix(note)),
+            SystemMessage("你是智能学习助手，用中文友好、准确地解答学生的学习问题。"
+                          + _kb_suffix(kb_name, kb_scope) + _note_suffix(note)),
             HumanMessage(question),
         ]
     if scene == "lecture":
@@ -164,9 +175,10 @@ def _summarizer(old_summary: str, rows_text: str) -> str:
     return get_model().invoke([HumanMessage(prompt)]).content.strip()
 
 
-def _assemble(scene: str, question: str, chunks, session_id: str, note: str = None) -> list:
+def _assemble(scene: str, question: str, chunks, session_id: str, note: str = None,
+              kb_name: str = None, kb_scope: str = None) -> list:
     """组装消息：系统提示 + （摘要）+ 最近 N 轮 + 当前问题。"""
-    msgs = _build_messages(scene, question, chunks, note)
+    msgs = _build_messages(scene, question, chunks, note, kb_name=kb_name, kb_scope=kb_scope)
     if session_id and scene in ("rag_qa", "free"):
         head = [msgs[0]]
         s = memory.summary(session_id)
@@ -206,16 +218,16 @@ def _prepare_rag(scene: str, question: str, chunks, session_id, kb_id, meta: dic
 
 def complete(scene: str, question: str, chunks=None, session_id: str = None,
              user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
-             course_id=None) -> str:
+             course_id=None, kb_name: str = None, kb_scope: str = None) -> str:
     """非流式完整回答（生成/批改/建议），带记忆。"""
     meta = meta if meta is not None else {}
     if scene == "agent":
         from app import agent
         return agent.complete_agent(get_model(), question, chunks=chunks, session_id=session_id,
                                     user_id=user_id, kb_id=kb_id, kb_ids=kb_ids, note=note, meta=meta,
-                                    course_id=course_id)
+                                    course_id=course_id, kb_name=kb_name, kb_scope=kb_scope)
     chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta, kb_ids=kb_ids)
-    msgs = _assemble(scene, question, chunks, session_id, note)
+    msgs = _assemble(scene, question, chunks, session_id, note, kb_name=kb_name, kb_scope=kb_scope)
     answer = _call_with_limit(lambda: get_model().invoke(msgs).content, scene)
     if session_id and _memorable(scene):
         memory.add(session_id, "user", question)
@@ -230,17 +242,17 @@ def complete(scene: str, question: str, chunks=None, session_id: str = None,
 
 def stream(scene: str, question: str, chunks=None, session_id: str = None,
            user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
-           course_id=None):
+           course_id=None, kb_name: str = None, kb_scope: str = None):
     """流式生成，yield 增量文本；检索到的引用编号通过 meta["sources"] 传出。"""
     meta = meta if meta is not None else {}
     if scene == "agent":
         from app import agent
         yield from agent.stream_agent(get_model(), question, chunks=chunks, session_id=session_id,
                                       user_id=user_id, kb_id=kb_id, kb_ids=kb_ids, note=note, meta=meta,
-                                      course_id=course_id)
+                                      course_id=course_id, kb_name=kb_name, kb_scope=kb_scope)
         return
     chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta, kb_ids=kb_ids)
-    msgs = _assemble(scene, question, chunks, session_id, note)
+    msgs = _assemble(scene, question, chunks, session_id, note, kb_name=kb_name, kb_scope=kb_scope)
     model = get_model()
     full = ""
     start = time.time()

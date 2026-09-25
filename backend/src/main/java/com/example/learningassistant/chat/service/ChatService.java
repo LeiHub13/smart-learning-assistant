@@ -148,6 +148,16 @@ public class ChatService {
         if (session.getKbId() != null) {
             system.append("RAG_QA\n你是智能学习助手，结合课程知识库资料回答学生问题，并标注引用编号[1][2]等。")
                     .append("\nKB_ID:").append(session.getKbId());
+            // 知识库名与检索范围随请求下发：kbId 只是数字，模型无从向学生解释「当前选的是哪个库」
+            try {
+                String kbName = kbService.requireKb(session.getKbId()).getName();
+                if (kbName != null && !kbName.isBlank()) {
+                    system.append("\nKB_NAME:").append(kbName.replaceAll("[\\r\\n]+", " ").trim());
+                }
+            } catch (Exception e) {
+                log.warn("会话 {} 的知识库 {} 名称解析失败，省略 KB_NAME: {}", sessionId, session.getKbId(), e.getMessage());
+            }
+            system.append("\nKB_SCOPE:").append(SCOPE_COURSE.equals(session.getKbScope()) ? "course" : "single");
             if (SCOPE_COURSE.equals(session.getKbScope()) && session.getCourseId() != null) {
                 // 检索范围=本课程全部知识库：由 Java 展开成 kbId 逗号串下发，
                 // 向量库元数据只有 kbId 没有 courseId，按课程展开只能发生在持有 t_knowledge_base 的一侧

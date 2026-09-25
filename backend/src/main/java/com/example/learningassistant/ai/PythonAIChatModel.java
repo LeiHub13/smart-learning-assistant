@@ -27,6 +27,8 @@ import java.util.function.Consumer;
  * 知识库答疑：system 中的 KB_ID 随请求传给 Python，检索链路（查询改写 -> 向量召回 -> 重排）
  * 全在 ai-service 内完成，引用编号 sources 由流式 done 事件回传（Java 落库）。
  * 检索范围：system 中的 KB_IDS（本课程全部知识库 id 逗号串）随请求下发，缺省表示只搜 KB_ID 单库。
+ * 选中知识库：system 中的 KB_NAME / KB_SCOPE（名称与范围）透传给 Python 拼进系统提示，
+ * 让 Agent 能回答「当前选中的是哪个知识库」。
  * 学情说明：system 中的 NOTE（如薄弱知识点）拼进 Python 侧系统提示。
  * 会话标识：system 中的 SESSION_ID:xxx 用于 Python 端按会话持久化记忆。
  *
@@ -172,7 +174,8 @@ public class PythonAIChatModel implements ChatModel {
         }
         return new RequestPayload(scene, lastUser, extractMarker(system, "SESSION_ID"),
                 extractMarker(system, "USER_ID"), extractMarker(system, "COURSE_ID"),
-                extractMarker(system, "KB_ID"), extractMarker(system, "KB_IDS"), extractMarker(system, "NOTE"));
+                extractMarker(system, "KB_ID"), extractMarker(system, "KB_IDS"), extractMarker(system, "NOTE"),
+                extractMarker(system, "KB_NAME"), extractMarker(system, "KB_SCOPE"));
     }
 
     private String extractMarker(String system, String key) {
@@ -188,7 +191,8 @@ public class PythonAIChatModel implements ChatModel {
     }
 
     private record RequestPayload(String scene, String question, String sessionId,
-                                  String userId, String courseId, String kbId, String kbIds, String note) {
+                                  String userId, String courseId, String kbId, String kbIds, String note,
+                                  String kbName, String kbScope) {
         Map<String, Object> toMap() {
             Map<String, Object> m = new java.util.LinkedHashMap<>();
             m.put("scene", scene);
@@ -202,6 +206,12 @@ public class PythonAIChatModel implements ChatModel {
             putIntList(m, "kbIds", kbIds);
             if (note != null && !note.isBlank()) {
                 m.put("note", note);
+            }
+            if (kbName != null && !kbName.isBlank()) {
+                m.put("kbName", kbName);
+            }
+            if (kbScope != null && !kbScope.isBlank()) {
+                m.put("kbScope", kbScope);
             }
             return m;
         }

@@ -60,6 +60,8 @@ class CompleteRequest(BaseModel):
     kbIds: list[int] | None = Field(default=None)
     courseId: int | None = Field(default=None)
     note: str | None = Field(default=None)
+    kbName: str | None = Field(default=None)
+    kbScope: str | None = Field(default=None)
 
 
 class StreamRequest(CompleteRequest):
@@ -116,7 +118,8 @@ def complete(req: CompleteRequest):
         content = chains.complete(req.scene, req.question, req.chunks, req.sessionId,
                                   user_id=req.userId, kb_id=req.kbId, kb_ids=req.kbIds or None,
                                   note=req.note, meta=meta,
-                                  course_id=req.courseId or None)
+                                  course_id=req.courseId or None,
+                                  kb_name=req.kbName, kb_scope=req.kbScope)
         return {"content": content, "sources": meta.get("sources", "")}
     except RuntimeError as e:
         logger.error("complete 失败: %s", e)
@@ -135,7 +138,8 @@ async def stream(req: StreamRequest):
             for delta in chains.stream(req.scene, req.question, req.chunks, req.sessionId,
                                        user_id=req.userId, kb_id=req.kbId, kb_ids=req.kbIds or None,
                                        note=req.note, meta=meta,
-                                       course_id=req.courseId or None):
+                                       course_id=req.courseId or None,
+                                       kb_name=req.kbName, kb_scope=req.kbScope):
                 yield {"event": "message", "data": json.dumps({"delta": delta}, ensure_ascii=False)}
             # sources：本服务自行检索时产出的引用编号，由 Java 落库
             yield {"event": "message",
