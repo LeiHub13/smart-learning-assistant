@@ -6,6 +6,7 @@ import com.example.learningassistant.security.CurrentUser;
 import com.example.learningassistant.user.entity.User;
 import com.example.learningassistant.user.service.AuthService;
 import com.example.learningassistant.user.service.AvatarService;
+import com.example.learningassistant.user.service.EmailCodeService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +29,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final AvatarService avatarService;
+    private final EmailCodeService emailCodeService;
 
     @PostMapping("/login")
     public ApiResponse<Map<String, String>> login(@RequestBody Map<String, String> body) {
@@ -37,7 +39,22 @@ public class AuthController {
     @PostMapping("/register")
     public ApiResponse<Map<String, String>> register(@RequestBody Map<String, String> body) {
         return ApiResponse.ok(authService.register(
-                body.get("username"), body.get("password"), body.get("nickname")));
+                body.get("username"), body.get("password"), body.get("nickname"),
+                body.get("email"), body.get("code")));
+    }
+
+    /** 发送邮箱验证码：scene=register 注册验证邮箱 / reset_password 重置密码 */
+    @PostMapping("/email-code")
+    public ApiResponse<Void> sendEmailCode(@RequestBody Map<String, String> body) {
+        emailCodeService.sendCode(body.get("scene"), body.get("email"));
+        return ApiResponse.ok(null);
+    }
+
+    /** 忘记密码：邮箱验证码验证身份后设置新密码 */
+    @PostMapping("/reset-password")
+    public ApiResponse<Void> resetPassword(@RequestBody Map<String, String> body) {
+        authService.resetPassword(body.get("email"), body.get("code"), body.get("newPassword"));
+        return ApiResponse.ok(null);
     }
 
     @GetMapping("/me")

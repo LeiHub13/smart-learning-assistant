@@ -80,6 +80,11 @@ app:
   notify:
     # 邮件渠道开关：true 时站内信同步外发邮件（用户已绑定邮箱才会发）
     email-enabled: ${MAIL_ENABLED:false}
+  email-code:
+    # 邮箱验证码（注册验证邮箱 / 重置密码）：复用 spring.mail 的 SMTP 配置发信，
+    # 与通知邮件开关 app.notify.email-enabled 相互独立，SMTP 配置好即可用
+    ttl-seconds: 600        # 验证码有效期：10 分钟
+    cooldown-seconds: 60    # 同邮箱同场景发送冷却
 
 springdoc:
   api-docs:

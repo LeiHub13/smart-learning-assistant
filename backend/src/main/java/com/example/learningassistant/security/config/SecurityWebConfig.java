@@ -39,6 +39,7 @@ public class SecurityWebConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
                         "/api/auth/login", "/api/auth/register",
+                        "/api/auth/email-code", "/api/auth/reset-password",
                         "/api/health");
     }
 }

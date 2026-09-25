@@ -43,23 +43,58 @@
     <!-- 右：登录 / 注册 -->
     <section class="tk-auth">
       <div class="tk-card">
-        <div class="tk-tabs">
+        <div class="tk-tabs" v-if="mode !== 'forgot'">
           <button type="button" :class="{ on: mode === 'login' }" @click="switchMode('login')">登 录</button>
           <button type="button" :class="{ on: mode === 'register' }" @click="switchMode('register')">注 册</button>
         </div>
+        <div class="tk-back-row" v-else>
+          <button type="button" class="tk-link" @click="switchMode('login')">← 返回登录</button>
+        </div>
 
-        <h2>{{ mode === 'login' ? '欢迎回来' : '创建账号' }}</h2>
-        <p class="tk-sub">{{ mode === 'login' ? '登录你的智学助手账号' : '注册一个新账号开始学习' }}</p>
+        <h2>{{ mode === 'login' ? '欢迎回来' : mode === 'register' ? '创建账号' : '重置密码' }}</h2>
+        <p class="tk-sub">{{ mode === 'login' ? '登录你的智学助手账号' : mode === 'register' ? '注册一个新账号开始学习' : '通过绑定邮箱的验证码设置新密码' }}</p>
 
         <form @submit.prevent="submit">
-          <label class="tk-label" for="username">用户名</label>
-          <input id="username" v-model="form.username" type="text" class="tk-input" placeholder="请输入用户名" autocomplete="username" />
-          <label class="tk-label" for="password" style="margin-top:14px">密码</label>
-          <input id="password" v-model="form.password" type="password" class="tk-input" placeholder="请输入密码" autocomplete="current-password" />
+          <template v-if="mode !== 'forgot'">
+            <label class="tk-label" for="username">用户名</label>
+            <input id="username" v-model="form.username" type="text" class="tk-input" placeholder="请输入用户名" autocomplete="username" />
+            <label class="tk-label" for="password" style="margin-top:14px">密码</label>
+            <input id="password" v-model="form.password" type="password" class="tk-input" placeholder="请输入密码" autocomplete="current-password" />
+            <template v-if="mode === 'register'">
+              <label class="tk-label" for="email" style="margin-top:14px">邮箱</label>
+              <input id="email" v-model="form.email" type="email" class="tk-input" placeholder="name@qq.com，用于接收验证码" autocomplete="email" />
+              <label class="tk-label" for="code" style="margin-top:14px">邮箱验证码</label>
+              <div class="tk-code-row">
+                <input id="code" v-model="form.code" type="text" class="tk-input" placeholder="6 位验证码" maxlength="6" inputmode="numeric" />
+                <button type="button" class="tk-code-btn" :disabled="countdown > 0 || sending" @click="sendCode">
+                  {{ countdown > 0 ? countdown + 's 后重发' : '发送验证码' }}
+                </button>
+              </div>
+            </template>
+            <div class="tk-forgot-row" v-if="mode === 'login'">
+              <button type="button" class="tk-link" @click="switchMode('forgot')">忘记密码？</button>
+            </div>
+          </template>
+          <template v-else>
+            <label class="tk-label" for="fp-email">邮箱</label>
+            <input id="fp-email" v-model="forgotForm.email" type="email" class="tk-input" placeholder="注册 / 绑定的邮箱" autocomplete="email" />
+            <label class="tk-label" for="fp-code" style="margin-top:14px">邮箱验证码</label>
+            <div class="tk-code-row">
+              <input id="fp-code" v-model="forgotForm.code" type="text" class="tk-input" placeholder="6 位验证码" maxlength="6" inputmode="numeric" />
+              <button type="button" class="tk-code-btn" :disabled="countdown > 0 || sending" @click="sendCode">
+                {{ countdown > 0 ? countdown + 's 后重发' : '发送验证码' }}
+              </button>
+            </div>
+            <label class="tk-label" for="fp-new" style="margin-top:14px">新密码</label>
+            <input id="fp-new" v-model="forgotForm.password" type="password" class="tk-input" placeholder="至少 6 位" autocomplete="new-password" />
+            <label class="tk-label" for="fp-confirm" style="margin-top:14px">确认新密码</label>
+            <input id="fp-confirm" v-model="forgotForm.confirm" type="password" class="tk-input" placeholder="再输入一次新密码" autocomplete="new-password" />
+          </template>
           <div v-if="error" class="tk-error">{{ error }}</div>
+          <div v-if="success" class="tk-success">{{ success }}</div>
           <button type="submit" class="tk-btn" :class="{ loading }" :disabled="loading">
             <span class="spinner"></span>
-            <span class="btn-text">{{ mode === 'login' ? '登 录' : '注 册' }}</span>
+            <span class="btn-text">{{ mode === 'login' ? '登 录' : mode === 'register' ? '注 册' : '重置密码' }}</span>
           </button>
         </form>
 
@@ -80,16 +115,23 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, setToken } from '../api'
 import AppIcon from '../components/AppIcon.vue'
 
 const router = useRouter()
-const mode = ref('login')
+const mode = ref('login') // login | register | forgot
 const loading = ref(false)
+const sending = ref(false)
 const error = ref('')
-const form = reactive({ username: '', password: '' })
+const success = ref('')
+const form = reactive({ username: '', password: '', email: '', code: '' })
+const forgotForm = reactive({ email: '', code: '', password: '', confirm: '' })
+const countdown = ref(0)
+let timer = null
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const feats = [
   { icon: 'chat', name: 'AI 答疑', desc: '课程知识库 RAG 检索，回答标注引用来源' },
@@ -115,18 +157,82 @@ const fillDemo = (name) => {
 const switchMode = (m) => {
   mode.value = m
   error.value = ''
+  success.value = ''
 }
 
-const submit = async () => {
-  if (!form.username || !form.password) {
-    error.value = '请输入用户名和密码'
+const startCountdown = () => {
+  countdown.value = 60
+  if (timer) clearInterval(timer)
+  timer = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      clearInterval(timer)
+      timer = null
+    }
+  }, 1000)
+}
+onUnmounted(() => timer && clearInterval(timer))
+
+const sendCode = async () => {
+  const email = (mode.value === 'register' ? form.email : forgotForm.email).trim()
+  if (!EMAIL_RE.test(email)) {
+    error.value = '请输入正确的邮箱地址'
     return
   }
-  loading.value = true
+  sending.value = true
   error.value = ''
+  success.value = ''
+  try {
+    await api('/api/auth/email-code', {
+      method: 'POST',
+      body: { email, scene: mode.value === 'register' ? 'register' : 'reset_password' }
+    })
+    success.value = '验证码已发送，请登录邮箱查收（10 分钟内有效）'
+    startCountdown()
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    sending.value = false
+  }
+}
+
+const fail = (t) => { error.value = t; return }
+
+const submit = async () => {
+  error.value = ''
+  success.value = ''
+  if (mode.value === 'forgot') {
+    if (!EMAIL_RE.test(forgotForm.email.trim())) return fail('请输入正确的邮箱地址')
+    if (!forgotForm.code.trim()) return fail('请填写邮箱验证码')
+    if (!forgotForm.password || forgotForm.password.length < 6) return fail('新密码至少 6 位')
+    if (forgotForm.password !== forgotForm.confirm) return fail('两次输入的新密码不一致')
+    loading.value = true
+    try {
+      await api('/api/auth/reset-password', {
+        method: 'POST',
+        body: { email: forgotForm.email.trim(), code: forgotForm.code.trim(), newPassword: forgotForm.password }
+      })
+      Object.assign(forgotForm, { email: '', code: '', password: '', confirm: '' })
+      switchMode('login')
+      success.value = '密码已重置，请使用新密码登录'
+    } catch (e) {
+      error.value = e.message
+    } finally {
+      loading.value = false
+    }
+    return
+  }
+  if (!form.username || !form.password) return fail('请输入用户名和密码')
+  if (mode.value === 'register' && (!EMAIL_RE.test(form.email.trim()) || !form.code.trim())) {
+    return fail(EMAIL_RE.test(form.email.trim()) ? '请填写邮箱验证码' : '请输入正确的邮箱地址')
+  }
+  loading.value = true
   try {
     const path = mode.value === 'login' ? '/api/auth/login' : '/api/auth/register'
-    const data = await api(path, { method: 'POST', body: form })
+    const body = mode.value === 'login'
+      ? { username: form.username, password: form.password }
+      : { username: form.username, password: form.password, email: form.email.trim(), code: form.code.trim() }
+    const data = await api(path, { method: 'POST', body })
     setToken(data.accessToken || data.token)
     const target = router.currentRoute.value.query.redirect || '/home'
     router.replace(target)
@@ -315,6 +421,33 @@ const submit = async () => {
   color: var(--tk-danger); background: rgba(153, 26, 0, .07);
   border: 1px solid rgba(153, 26, 0, .18);
 }
+
+.tk-success {
+  margin: 14px 0 2px; padding: 10px 14px; border-radius: 14px;
+  font-size: 13px; line-height: 1.6;
+  color: #1a6b3c; background: rgba(26, 107, 60, .08);
+  border: 1px solid rgba(26, 107, 60, .2);
+}
+
+.tk-forgot-row { margin-top: 10px; display: flex; justify-content: flex-end; }
+.tk-back-row { margin-bottom: 16px; }
+.tk-link {
+  border: none; background: none; padding: 0;
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  color: var(--tk-pink); cursor: pointer;
+}
+.tk-link:hover { color: var(--tk-pink-dark); text-decoration: underline; }
+
+.tk-code-row { display: flex; gap: 8px; }
+.tk-code-row .tk-input { flex: 1; min-width: 0; }
+.tk-code-btn {
+  flex: none; height: 48px; padding: 0 16px; border-radius: 14px;
+  border: 1.5px solid var(--tk-line); background: var(--tk-soft); color: var(--tk-ink);
+  font-size: 13px; font-weight: 700; font-family: inherit; white-space: nowrap; cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, color .18s ease;
+}
+.tk-code-btn:hover:not(:disabled) { border-color: var(--tk-pink); color: var(--tk-pink-dark); background: var(--tk-pink-pale); }
+.tk-code-btn:disabled { opacity: .55; cursor: not-allowed; }
 
 .tk-btn {
   width: 100%; height: 50px; margin-top: 18px;

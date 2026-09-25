@@ -297,6 +297,21 @@ CREATE TABLE IF NOT EXISTS t_report (
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ========== 新增：邮箱验证码（注册验证邮箱 / 重置密码） ==========
+
+CREATE TABLE IF NOT EXISTS t_email_code (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id  BIGINT DEFAULT 1,
+    email      VARCHAR(100) NOT NULL,
+    scene      VARCHAR(20) NOT NULL,
+    code       VARCHAR(10) NOT NULL,
+    used_flag  BOOLEAN DEFAULT FALSE,
+    fail_count INT DEFAULT 0,
+    expired_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_email_code (email, scene, used_flag)
+);
+
 -- ========== 新增：Agent 待确认动作（写操作先登记 proposal，用户点确认后才真正落库） ==========
 
 CREATE TABLE IF NOT EXISTS t_agent_action (

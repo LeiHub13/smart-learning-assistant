@@ -55,18 +55,33 @@
 
     <div class="card">
       <h3>修改密码</h3>
-      <div class="row" style="align-items:center">
+      <div class="row" style="align-items:center" v-if="!pwdByEmail">
         <div><span class="label">原密码</span><input v-model="oldPwd" type="password" /></div>
         <div><span class="label">新密码</span><input v-model="newPwd" type="password" placeholder="至少 6 位" /></div>
         <div><span class="label">确认新密码</span><input v-model="newPwd2" type="password" /></div>
         <button class="btn small" :disabled="savingPwd" @click="savePassword">修改密码</button>
+        <button class="btn small ghost" @click="togglePwdMode">忘记原密码？邮箱验证码修改</button>
+      </div>
+      <div class="row" style="align-items:center" v-else>
+        <div><span class="label">绑定邮箱</span><input :value="me?.email || '未绑定'" type="email" disabled /></div>
+        <div><span class="label">邮箱验证码</span><input v-model="emailCode" type="text" maxlength="6" placeholder="6 位验证码" /></div>
+        <div><span class="label">新密码</span><input v-model="newPwd" type="password" placeholder="至少 6 位" /></div>
+        <div><span class="label">确认新密码</span><input v-model="newPwd2" type="password" /></div>
+        <button class="btn small ghost" :disabled="countdown > 0 || sendingCode" @click="sendResetCode">
+          {{ countdown > 0 ? countdown + 's 后重发' : '发送验证码' }}
+        </button>
+        <button class="btn small" :disabled="savingPwd" @click="savePasswordByEmail">确认修改</button>
+        <button class="btn small ghost" @click="togglePwdMode">返回原密码方式</button>
+      </div>
+      <div class="hint" style="margin-top:10px" v-if="pwdByEmail && !me?.email">
+        尚未绑定邮箱：请先在上方「通知邮箱」保存邮箱，再用验证码方式修改密码。
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { api, getToken, downloadFile } from '../api'
 
 defineOptions({ name: 'ProfileView' })
@@ -85,6 +100,11 @@ const savingNick = ref(false)
 const savingEmail = ref(false)
 const savingPwd = ref(false)
 const exporting = ref('')
+const pwdByEmail = ref(false)
+const emailCode = ref('')
+const sendingCode = ref(false)
+const countdown = ref(0)
+let timer = null
 
 const exportData = async (path, filename) => {
   exporting.value = path.includes('exams') ? 'exams' : 'practice'
@@ -170,6 +190,75 @@ const savePassword = async () => {
   }
 }
 
+const togglePwdMode = () => {
+  pwdByEmail.value = !pwdByEmail.value
+  err.value = ''
+  oldPwd.value = emailCode.value = newPwd.value = newPwd2.value = ''
+}
+
+const sendResetCode = async () => {
+  if (!me.value?.email) {
+    err.value = '尚未绑定邮箱，请先在上方「通知邮箱」保存邮箱'
+    return
+  }
+  sendingCode.value = true
+  err.value = ''
+  try {
+    await api('/api/auth/email-code', {
+      method: 'POST',
+      body: { email: me.value.email, scene: 'reset_password' }
+    })
+    flash('验证码已发送至 ' + me.value.email + '，10 分钟内有效')
+    countdown.value = 60
+    if (timer) clearInterval(timer)
+    timer = setInterval(() => {
+      countdown.value--
+      if (countdown.value <= 0) {
+        clearInterval(timer)
+        timer = null
+      }
+    }, 1000)
+  } catch (e) {
+    err.value = e.message
+  } finally {
+    sendingCode.value = false
+  }
+}
+
+const savePasswordByEmail = async () => {
+  if (!me.value?.email) {
+    err.value = '尚未绑定邮箱，无法使用验证码修改密码'
+    return
+  }
+  if (!emailCode.value.trim()) {
+    err.value = '请填写邮箱验证码'
+    return
+  }
+  if (newPwd.value.length < 6) {
+    err.value = '新密码至少 6 位'
+    return
+  }
+  if (newPwd.value !== newPwd2.value) {
+    err.value = '两次输入的新密码不一致'
+    return
+  }
+  savingPwd.value = true
+  err.value = ''
+  try {
+    await api('/api/auth/reset-password', {
+      method: 'POST',
+      body: { email: me.value.email, code: emailCode.value.trim(), newPassword: newPwd.value }
+    })
+    emailCode.value = newPwd.value = newPwd2.value = ''
+    togglePwdMode()
+    flash('密码已修改')
+  } catch (e) {
+    err.value = e.message
+  } finally {
+    savingPwd.value = false
+  }
+}
+
 const uploadAvatar = async (ev) => {
   const file = ev.target.files?.[0]
   ev.target.value = ''
@@ -198,6 +287,7 @@ const uploadAvatar = async (ev) => {
 }
 
 onMounted(loadMe)
+onUnmounted(() => timer && clearInterval(timer))
 </script>
 
 <style scoped>
