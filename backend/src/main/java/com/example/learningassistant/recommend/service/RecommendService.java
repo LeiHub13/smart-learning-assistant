@@ -157,10 +157,11 @@ public class RecommendService {
             practicePicks++;
         }
 
-        // 3. 相关资料（最薄弱的组 → 向量检索知识库片段，最多 2 条；标题给文档名，原文折叠进 snippet）
+        // 3. 相关资料（最薄弱的组 → 向量检索知识库片段，最多 2 条；同一文档只推荐一次）
         List<Long> kbIds = kbService.kbList(courseId).stream()
                 .map(com.example.learningassistant.kb.entity.KnowledgeBase::getId).toList();
         int docPicks = 0;
+        Set<Long> usedDocIds = new java.util.HashSet<>();
         for (List<KnowledgeMastery> g : groups) {
             if (docPicks >= 2) {
                 break;
@@ -174,7 +175,7 @@ public class RecommendService {
                 continue;
             }
             DocRef doc = relatedDoc(name, kbIds);
-            if (doc != null) {
+            if (doc != null && usedDocIds.add(doc.docId())) {
                 items.add(item("document", "资料：《" + doc.docName() + "》",
                         "「" + name + "」是当前薄弱点，读一读这篇资料再来做题效果更好。",
                         m.getMastery() + 0.5, name, null, doc.snippet()));
@@ -232,8 +233,8 @@ public class RecommendService {
         return path;
     }
 
-    /** 相关资料检索结果：来源文档名 + 折叠预览的片段原文。 */
-    private record DocRef(String docName, String snippet) {}
+    /** 相关资料检索结果：来源文档 id（去重用）+ 文档名 + 折叠预览的片段原文。 */
+    private record DocRef(Long docId, String docName, String snippet) {}
 
     /**
      * 按知识点名称走 ai-service 语义检索，返回最相关的知识库片段。
@@ -258,7 +259,7 @@ public class RecommendService {
             }
             Document doc = documentMapper.selectById(chunk.getDocId());
             String docName = clip(doc != null && doc.getFileName() != null ? doc.getFileName() : "课程资料", DOC_TITLE_MAX);
-            return new DocRef(docName, content);
+            return new DocRef(chunk.getDocId(), docName, content);
         } catch (Exception e) {
             log.warn("相关资料检索失败（忽略）: {}", e.getMessage());
             return null;
