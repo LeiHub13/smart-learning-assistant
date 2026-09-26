@@ -103,6 +103,41 @@ public class GeneratorService {
                         "GEN_QUESTIONS\n你是出题老师，只输出 JSON 数组，字段: type(单选/多选/判断/问答), stem, options(数组[{k,v}]), answer, analysis, kpName, difficulty。难度要求：" + difficulty),
                 new AIChatMessage("user", "知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
                         + "\n数量:" + count + "\n难度:" + difficulty + "\n请生成练习题。")));
+        List<Map<String, Object>> parsed = parseQuestionArray(raw);
+        return persistQuestions(userId, courseId, kp, difficulty, raw, parsed, "AI 生成练习（" + parsed.size() + " 题）");
+    }
+
+    /**
+     * 错题变式（举一反三）：以学生做错的题为参照，围绕同一考点出情境/数据/角度不同的变式题。
+     * 变式题与普通 AI 题同构入库，作答后走统一判分与掌握度更新；难度按该知识点掌握度自适应。
+     */
+    public List<Question> generateVariants(Long userId, Long questionId, int count) {
+        Question origin = questionMapper.selectById(questionId);
+        if (origin == null) {
+            throw new com.example.learningassistant.common.BizException("原题不存在或已被删除");
+        }
+        String kp = origin.getKpName();
+        String difficulty = determineDifficulty(userId, origin.getCourseId(), kp);
+        ChatModel model = modelFactory.get();
+        String raw = model.complete(List.of(
+                new AIChatMessage("system",
+                        "GEN_QUESTIONS\n你是出题老师，只输出 JSON 数组，字段: type(单选/多选/判断/问答), stem, options(数组[{k,v}]), answer, analysis, kpName, difficulty。难度要求：" + difficulty),
+                new AIChatMessage("user",
+                        "一位学生做错了下面的题，请围绕同一知识点出 " + count + " 道变式题帮他举一反三："
+                                + "考查点与原题一致，但情境、数据或提问角度必须不同，不得与原题雷同；题型与选项个数尽量与原题保持一致。\n"
+                                + "原题:" + origin.getStem() + "\n"
+                                + "原题选项:" + (origin.getOptions() == null ? "无" : origin.getOptions()) + "\n"
+                                + "原题正确答案:" + origin.getAnswer() + "\n"
+                                + "原题解析:" + (origin.getAnalysis() == null || origin.getAnalysis().isBlank() ? "无" : origin.getAnalysis()) + "\n"
+                                + "知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
+                                + "\n难度:" + difficulty + "\n请生成变式题。")));
+        List<Map<String, Object>> parsed = parseQuestionArray(raw);
+        String title = "错题变式（" + parsed.size() + " 题）· " + (kp == null || kp.isBlank() ? "未知考点" : kp);
+        return persistQuestions(userId, origin.getCourseId(), kp, difficulty, raw, parsed, title);
+    }
+
+    /** 解析 LLM 出题返回（只接受 JSON 数组），为空视为未出题。 */
+    private List<Map<String, Object>> parseQuestionArray(String raw) {
         List<Map<String, Object>> parsed;
         try {
             parsed = objectMapper.readValue(raw, new TypeReference<List<Map<String, Object>>>() {
@@ -114,7 +149,15 @@ public class GeneratorService {
         if (parsed.isEmpty()) {
             throw new com.example.learningassistant.common.BizException("AI 未生成题目，请重试");
         }
+        return parsed;
+    }
 
+    /**
+     * 题目 + 生成记录入库。LLM 调用在事务外（耗时且不该持有连接），写库部分整体一个事务：
+     * 中途失败不能留下半批题目——否则重试会叠加重复题，练习记录也指向不存在的题目。
+     */
+    private List<Question> persistQuestions(Long userId, Long courseId, String kp, String difficulty,
+                                            String raw, List<Map<String, Object>> parsed, String contentTitle) {
         List<Question> saved;
         try {
             saved = transactionTemplate.execute(status -> {
@@ -122,7 +165,8 @@ public class GeneratorService {
                 for (Map<String, Object> m : parsed) {
                     Question q = new Question();
                     q.setCourseId(courseId);
-                    q.setType(String.valueOf(m.getOrDefault("type", "单选")));
+                    String type = String.valueOf(m.getOrDefault("type", "单选"));
+                    q.setType(type);
                     q.setStem(String.valueOf(m.getOrDefault("stem", "")));
                     Object opts = m.get("options");
                     q.setOptions(opts == null ? null : writeOptions(opts));
@@ -132,6 +176,7 @@ public class GeneratorService {
                     q.setDifficulty(String.valueOf(m.getOrDefault("difficulty", difficulty)));
                     q.setSource("AI");
                     q.setCreatedAt(LocalDateTime.now());
+                    sanitizeJudge(q);
                     questionMapper.insert(q);
                     rows.add(q);
                 }
@@ -139,7 +184,7 @@ public class GeneratorService {
                 g.setUserId(userId);
                 g.setCourseId(courseId);
                 g.setType("questions");
-                g.setTitle("AI 生成练习（" + rows.size() + " 题）");
+                g.setTitle(contentTitle);
                 g.setContent(raw);
                 g.setCreatedAt(LocalDateTime.now());
                 contentMapper.insert(g);
@@ -160,6 +205,25 @@ public class GeneratorService {
             return objectMapper.writeValueAsString(opts);
         } catch (Exception e) {
             throw new com.example.learningassistant.common.BizException("AI 出题选项格式异常，请重试");
+        }
+    }
+
+    /**
+     * 判断题兜底：LLM 常不给 options（会导致答题页无选项可点）或答案写"正确/错误"（与选项 k=对/错 判分对不上）。
+     * 入库前统一：options 缺省注入标准 对/错 两项，答案归一化为 对/错。
+     */
+    private void sanitizeJudge(Question q) {
+        if (!"判断".equals(q.getType())) {
+            return;
+        }
+        if (q.getOptions() == null || q.getOptions().isBlank()) {
+            q.setOptions("[{\"k\":\"对\",\"v\":\"正确\"},{\"k\":\"错\",\"v\":\"错误\"}]");
+        }
+        String a = q.getAnswer() == null ? "" : q.getAnswer().trim();
+        if (a.matches("(?i)(对|正确|是|T|TRUE|Y|√)")) {
+            q.setAnswer("对");
+        } else if (a.matches("(?i)(错|错误|否|不对|F|FALSE|N|×)")) {
+            q.setAnswer("错");
         }
     }
 

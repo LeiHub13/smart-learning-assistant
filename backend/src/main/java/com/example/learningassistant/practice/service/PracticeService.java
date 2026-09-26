@@ -249,8 +249,8 @@ public class PracticeService {
         return report;
     }
 
-    /** withAnswer=false 供答题页（隐藏答案），true 供报告页（展示答案与解析）。 */
-    private Map<String, Object> toPaperItem(Question q, boolean withAnswer) {
+    /** withAnswer=false 供答题页（隐藏答案），true 供报告页（展示答案与解析）。错题变式等出题接口也复用此投影。 */
+    public static Map<String, Object> toPaperItem(Question q, boolean withAnswer) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", q.getId());
         m.put("type", q.getType());
