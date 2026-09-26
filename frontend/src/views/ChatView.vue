@@ -127,6 +127,11 @@ const scrollDown = () => {
   })
 }
 
+// 进行中的流：sid=流所属会话，target=正在被流式填充的 assistant 消息对象（响应式代理）。
+// 切到别的会话时生成仍在后台继续，target 引用保证增量只写进归属会话的那条回复，
+// 不会污染当前打开的别的会话的消息列表；切回来时按它重新挂载（见 openSession）。
+const activeStream = { sid: null, target: null }
+
 const sessionMode = (s) => (s && s.kbId ? 'kb' : 'free')
 const filteredSessions = computed(() => sessions.value.filter((s) => sessionMode(s) === mode.value))
 
@@ -258,6 +263,19 @@ const doDelete = async () => {
 const openSession = async (id) => {
   sessionId.value = id
   messages.value = await api('/api/chat/sessions/' + id + '/messages')
+  // 这个会话的回复正在后台流式生成：把进行中的那条回复重新挂回列表（带上已生成的部分），
+  // 后续增量继续写进它。否则切走再切回时只能看到提问、看不到正在生成的回复。
+  if (activeStream.sid === id && activeStream.target) {
+    const seeded = {
+      role: 'assistant',
+      content: activeStream.target.content,
+      sources: activeStream.target.sources || '',
+      actions: activeStream.target.actions || []
+    }
+    messages.value.push(seeded)
+    activeStream.target = messages.value[messages.value.length - 1]
+    scrollDown()
+  }
   // 服务端仍在有效期内的待确认动作要在重进会话时重现：否则卡片一刷新就"消失"，
   // 但动作还在，用户既确认不了也取消不了。挂在最后一条 assistant 消息下作为锚点。
   try {
@@ -294,28 +312,34 @@ const send = async () => {
     return
   }
   if (!sessionId.value) await newSession()
+  const sid = sessionId.value
   messages.value.push({ role: 'user', content: text })
   messages.value.push({ role: 'assistant', content: '' })
+  activeStream.sid = sid
+  activeStream.target = messages.value[messages.value.length - 1]
   input.value = ''
   streaming.value = true
   scrollDown()
   try {
-    await sseStream('/api/chat/sessions/' + sessionId.value + '/stream', { message: text },
+    await sseStream('/api/chat/sessions/' + sid + '/stream', { message: text },
       (delta) => {
-        messages.value[messages.value.length - 1].content += delta
-        scrollDown()
+        if (activeStream.target) activeStream.target.content += delta
+        if (sessionId.value === sid) scrollDown()
       },
       (done) => {
-        const last = messages.value[messages.value.length - 1]
-        last.sources = (done && done.sources) || ''
-        last.actions = (done && done.actions) || []
+        if (activeStream.target) {
+          activeStream.target.sources = (done && done.sources) || ''
+          activeStream.target.actions = (done && done.actions) || []
+        }
       })
   } catch (e) {
-    messages.value[messages.value.length - 1].content = '（请求失败：' + e.message + '）'
+    if (activeStream.target) activeStream.target.content = '（请求失败：' + e.message + '）'
   } finally {
     streaming.value = false
+    activeStream.sid = null
+    activeStream.target = null
     sessions.value = await api('/api/chat/sessions')
-    scrollDown()
+    if (sessionId.value === sid) scrollDown()
   }
 }
 
