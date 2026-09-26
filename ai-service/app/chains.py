@@ -11,6 +11,7 @@
 - rerank            候选 chunk 重排序（输入编号列表，输出最相关编号 JSON）
 - plan              学习计划生成（JSON 数组：每日任务）
 - report            学习报告（Markdown）
+- recommend         今日推荐（基于规则引擎候选条目，JSON 数组）
 """
 import json
 import logging
@@ -162,6 +163,21 @@ def _build_messages(scene: str, question: str, chunks, note: str = None,
             ),
             HumanMessage(question),
         ]
+    if scene == "recommend":
+        return [
+            SystemMessage(
+                "你是学习推荐师。规则引擎已根据学生真实学习数据（掌握度、遗忘衰减、知识库资料）"
+                "生成候选条目，请据此为学生编排今日推荐。要求：\n"
+                "1. 只能从候选条目中挑选与排序，可润色 title 和 reason 使其更具体、更贴近学生、更有行动力，"
+                "但不得编造候选之外的知识点、数字或资料；\n"
+                "2. type 为 document 的条目，reason 必须原样保留候选中的资料文本（含来源标注），不得改写；\n"
+                "3. 输出不超过 6 条，按紧急程度从高到低排列（最该先做的在前）；\n"
+                "4. 只输出 JSON 数组，不要输出任何其他文字。每项字段："
+                "type(startup/review_kp/practice_kp/document), title(字符串), reason(字符串), "
+                "kpName(知识点名，无则为 null)。"
+            ),
+            HumanMessage(question),
+        ]
     raise ValueError(f"未知场景: {scene}")
 
 
@@ -289,7 +305,7 @@ def complete(scene: str, question: str, chunks=None, session_id: str = None,
     answer = _call_with_limit(lambda: get_model().invoke(msgs).content, scene)
     if _memorable(scene):
         _remember(session_id, user_id, question, answer)
-    if scene in ("questions", "plan"):
+    if scene in ("questions", "plan", "recommend"):
         return _ensure_json_array(answer)
     if scene in ("review", "rerank"):
         return _ensure_json_object(answer) if scene == "review" else _ensure_json_array(answer)

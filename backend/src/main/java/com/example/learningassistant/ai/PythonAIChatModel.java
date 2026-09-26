@@ -23,7 +23,7 @@ import java.util.function.Consumer;
  *
  * 场景映射（从 system 消息中的标记解析）：
  *   RAG_QA / FREE -> /ai/stream（SSE 流式，带会话记忆）
- *   GEN_LECTURE / GEN_QUESTIONS / REVIEW_SUBJECTIVE / ADVICE -> /ai/complete
+ *   GEN_LECTURE / GEN_QUESTIONS / REVIEW_SUBJECTIVE / ADVICE / PLAN / REPORT / RECOMMEND -> /ai/complete
  * 知识库答疑：system 中的 KB_ID 随请求传给 Python，检索链路（查询改写 -> 向量召回 -> 重排）
  * 全在 ai-service 内完成，引用编号 sources 由流式 done 事件回传（Java 落库）。
  * 检索范围：system 中的 KB_IDS（本课程全部知识库 id 逗号串）随请求下发，缺省表示只搜 KB_ID 单库。
@@ -165,6 +165,8 @@ public class PythonAIChatModel implements ChatModel {
             scene = "plan";
         } else if (system.contains("REPORT")) {
             scene = "report";
+        } else if (system.contains("RECOMMEND")) {
+            scene = "recommend";
         } else {
             scene = "free";
         }

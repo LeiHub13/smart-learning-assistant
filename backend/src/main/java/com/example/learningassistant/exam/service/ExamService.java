@@ -277,6 +277,9 @@ public class ExamService {
         // 掌握度已变化，失效学情 summary 聚合缓存
         cacheService.delete(com.example.learningassistant.progress.service.ProgressService.summaryKey(
                 userId, exam.getCourseId()));
+        // 掌握度已变化，失效今日推荐 LLM 缓存
+        cacheService.delete(com.example.learningassistant.recommend.service.RecommendService.cacheKey(
+                userId, exam.getCourseId()));
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("recordId", record.getId());

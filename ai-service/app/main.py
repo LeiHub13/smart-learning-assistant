@@ -48,7 +48,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="AI Service (langchain)", version="1.0.0", lifespan=lifespan)
 
 SCENES = {"rag_qa", "free", "agent", "lecture", "questions", "review", "advice",
-          "rewrite", "rerank", "plan", "report"}
+          "rewrite", "rerank", "plan", "report", "recommend"}
 
 
 class CompleteRequest(BaseModel):
