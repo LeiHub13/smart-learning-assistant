@@ -23,11 +23,14 @@ def test_write_tools_mounted_when_enabled(monkeypatch):
     monkeypatch.setattr(config, "AGENT_WRITE_TOOLS", True)
     names = _names(agent._make_tools([], user_id=1, course_id=9))
     assert {"query_plan_tasks", "schedule_review", "finish_plan_task", "save_material_to_kb",
-            "add_note", "favorite_question", "generate_questions", "open_page"} <= names
+            "add_note", "favorite_question", "generate_questions", "open_page",
+            "add_plan_task", "add_question"} <= names
     prompt = agent._system_prompt([])
     assert "schedule_review" in prompt and "open_page" in prompt
     # 写提示词必须讲清「只登记待确认动作」，否则模型会对学生谎称动作已生效
     assert "待确认动作" in prompt and "确认执行" in prompt
+    # 系统提示必须带当前日期：否则模型安排任务/提醒时会凭空编日期
+    assert "今天是" in prompt
 
 
 def test_course_id_comes_from_request_not_the_model():
@@ -59,6 +62,8 @@ def test_write_tools_require_user_context(monkeypatch):
     assert "未提供用户信息" in tools["favorite_question"].invoke({"question_id": 1})
     assert "未提供用户信息" in tools["generate_questions"].invoke({})
     assert "未提供用户信息" in tools["open_page"].invoke({"page": "notes"})
+    assert "未提供用户信息" in tools["add_plan_task"].invoke({"title": "T"})
+    assert "未提供用户信息" in tools["add_question"].invoke({"q_type": "判断", "stem": "S", "answer": "对"})
     # 无用户上下文时只能原地拒绝，不得发起任何 HTTP 回调
     assert calls == []
 
@@ -73,10 +78,12 @@ def test_course_scoped_write_tools_require_course_context(monkeypatch):
     assert "未绑定课程" in tools["add_note"].invoke({"title": "T", "content": "C"})
     assert "未绑定课程" in tools["favorite_question"].invoke({"question_id": 1})
     assert "未绑定课程" in tools["generate_questions"].invoke({})
+    assert "未绑定课程" in tools["add_question"].invoke({"q_type": "判断", "stem": "S", "answer": "对"})
     assert calls == []
-    # open_page 是全局导航，不依赖课程，允许发起 propose
+    # open_page / add_plan_task 不依赖课程，允许发起 propose
     assert "未绑定课程" not in tools["open_page"].invoke({"page": "notes"})
-    assert calls == ["/internal/tools/actions/propose"]
+    assert "未绑定课程" not in tools["add_plan_task"].invoke({"title": "T"})
+    assert calls == ["/internal/tools/actions/propose"] * 2
 
 
 def test_save_material_proposes_with_closure_context(monkeypatch):
@@ -188,6 +195,46 @@ def test_new_write_tools_propose_with_request_context(monkeypatch):
     # 工具回执里「已生成待确认动作」是固定前缀；断言不得声称动作本身已完成
     assert "已创建学习笔记" not in out1 and "已收藏题目" not in out2
     assert "加入课程题库" not in out3 and "已打开「" not in out4
+
+
+def test_add_plan_task_and_add_question_propose_with_request_context(monkeypatch):
+    """新建任务/添加题目同样只登记待确认动作；字段名与 Java 侧 payload 约定对齐。"""
+    monkeypatch.setattr(config, "AGENT_WRITE_TOOLS", True)
+    calls = []
+
+    def fake_post(path, payload):
+        calls.append((path, payload))
+        return '{"actionId": 10, "summary": "已登记"}'
+
+    monkeypatch.setattr(agent, "_post_java_tool", fake_post)
+    tools = {t.name: t for t in agent._make_tools([], user_id=3, course_id=9, session_id="12")}
+
+    out1 = tools["add_plan_task"].invoke(
+        {"title": "复习 B+ 树", "task_date": "2026-10-01", "focus_kp": "索引", "tasks": "重做错题"})
+    out2 = tools["add_plan_task"].invoke({"title": "预习动态规划"})
+    out3 = tools["add_question"].invoke({
+        "q_type": "单选", "stem": "下列哪一个是平衡二叉树？", "answer": "A",
+        "options": [{"k": "A", "v": "AVL 树"}, {"k": "B", "v": "二叉搜索树"}],
+        "kp_name": "平衡树", "difficulty": "进阶"})
+    out4 = tools["add_question"].invoke({"q_type": "判断", "stem": "堆是完全二叉树。", "answer": "正确"})
+
+    assert [p["kind"] for _, p in calls] == [
+        "add_plan_task", "add_plan_task", "add_question", "add_question"]
+    # 日期原样透传（留空由 Java 侧默认今天），聚焦点/内容驼峰命名
+    assert calls[0][1]["payload"] == {"title": "复习 B+ 树", "taskDate": "2026-10-01",
+                                      "focusKp": "索引", "tasks": "重做错题"}
+    assert calls[1][1]["payload"] == {"title": "预习动态规划", "taskDate": "",
+                                      "focusKp": "", "tasks": ""}
+    # 选项原样透传数组，判断题不携带 options（对齐由 Java 侧兜底）
+    assert calls[2][1]["payload"]["options"] == [{"k": "A", "v": "AVL 树"}, {"k": "B", "v": "二叉搜索树"}]
+    assert calls[2][1]["payload"]["type"] == "单选" and calls[2][1]["payload"]["answer"] == "A"
+    assert "options" not in calls[3][1]["payload"] and calls[3][1]["payload"]["answer"] == "正确"
+    for path, p in calls:
+        assert path == "/internal/tools/actions/propose"
+        assert p["userId"] == 3 and p["courseId"] == 9 and p["sessionId"] == 12
+    for out in (out1, out2, out3, out4):
+        assert "待确认动作" in out and "确认执行" in out
+    assert "已创建" not in out1 and "已入库" not in out3
 
 
 def test_query_past_questions_scopes_to_user_and_excludes_current_session():

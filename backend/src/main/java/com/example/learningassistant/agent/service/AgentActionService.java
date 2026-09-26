@@ -46,7 +46,11 @@ public class AgentActionService {
     /** 动作类型白名单：全部是「先登记、用户确认后才生效」的写动作。 */
     private static final Set<String> ALLOWED_KINDS =
             Set.of("add_material", "schedule_review", "finish_plan_task",
-                    "add_note", "favorite_question", "generate_questions", "open_page");
+                    "add_note", "favorite_question", "generate_questions", "open_page",
+                    "add_plan_task", "add_question");
+    /** add_question 的题型白名单（与出题链路的题型保持一致）。 */
+    private static final Set<String> QUESTION_TYPES = Set.of("单选", "多选", "判断", "问答");
+    private static final Set<String> DIFFICULTIES = Set.of("基础", "进阶", "综合");
     private static final int TITLE_MAX = 100;
     private static final int CONTENT_MAX = 20000;
     private static final int NOTE_CONTENT_MAX = 5000;
@@ -56,6 +60,13 @@ public class AgentActionService {
     private static final int KP_MAX = 50;
     private static final int STEM_MAX = 60;
     private static final int NOTE_MAX = 100;
+    private static final int TASKS_MAX = 500;
+    private static final int STEM_INPUT_MAX = 2000;
+    private static final int ANSWER_MAX = 500;
+    private static final int ANALYSIS_MAX = 1000;
+    private static final int OPTION_VALUE_MAX = 200;
+    private static final int OPTION_KEY_MAX = 10;
+    private static final int OPTIONS_MAX = 8;
     private static final long TTL_MINUTES = 30;
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -85,6 +96,7 @@ public class AgentActionService {
     private final FavoriteService favoriteService;
     private final GeneratorService generatorService;
     private final QuestionMapper questionMapper;
+    private final com.example.learningassistant.practice.service.QuestionService questionService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -108,6 +120,8 @@ public class AgentActionService {
             case "favorite_question" -> proposeFavorite(userId, courseId, sessionId, src);
             case "generate_questions" -> proposeGenerateQuestions(userId, courseId, sessionId, src);
             case "open_page" -> proposeOpenPage(userId, sessionId, src);
+            case "add_plan_task" -> proposeAddPlanTask(userId, courseId, sessionId, src);
+            case "add_question" -> proposeAddQuestion(userId, courseId, sessionId, src);
             default -> throw new BizException("不支持的动作类型");
         };
     }
@@ -318,6 +332,170 @@ public class AgentActionService {
         return a;
     }
 
+    /**
+     * 新建学习计划任务：目标计划在登记阶段只读解析（追加进最近一条计划），
+     * 无计划时 planId 存空，确认执行时才自动创建轻量计划——登记动作本身不写任何业务表。
+     */
+    private AgentAction proposeAddPlanTask(Long userId, Long courseId, Long sessionId,
+                                           Map<String, Object> src) {
+        String title = text(src.get("title"));
+        if (title.isEmpty()) {
+            throw new BizException("缺少任务标题");
+        }
+        title = clip(title, TITLE_MAX);
+        String tasks = clip(text(src.get("tasks")), TASKS_MAX);
+        String focusKp = clip(src.get("focusKp"), KP_MAX);
+        LocalDate date = parseTaskDate(src.get("taskDate"));
+
+        com.example.learningassistant.plan.entity.StudyPlan plan =
+                planService.list(userId).stream().findFirst().orElse(null);
+
+        Map<String, Object> stored = new LinkedHashMap<>();
+        stored.put("planId", plan == null ? null : plan.getId());
+        stored.put("planGoal", plan == null ? null : clip(plan.getGoal(), TITLE_MAX));
+        stored.put("title", title);
+        stored.put("tasks", tasks);
+        stored.put("focusKp", focusKp == null || focusKp.isBlank() ? null : focusKp);
+        stored.put("taskDate", date.toString());
+
+        AgentAction a = newAction(userId, courseId, sessionId, "add_plan_task", stored,
+                "添加学习任务：《" + title + "》→ "
+                        + (plan == null ? "新学习计划" : "计划「" + clip(plan.getGoal(), 30) + "」")
+                        + "，日期 " + date);
+        log.info("用户 {} 登记待确认动作 {}（kind=add_plan_task，plan={}）", userId, a.getId(),
+                plan == null ? "新建" : plan.getId());
+        return a;
+    }
+
+    /**
+     * 添加题目入课程题库：题目内容在登记阶段就地归一化（题型白名单、判断题答案/选项对齐、
+     * 选择题答案必须是选项之一），确认执行时经 QuestionService.create 落库。
+     */
+    private AgentAction proposeAddQuestion(Long userId, Long courseId, Long sessionId,
+                                           Map<String, Object> src) {
+        if (courseId == null) {
+            throw new BizException("当前会话未绑定课程，无法添加题目");
+        }
+        String type = text(src.get("type"));
+        if (!QUESTION_TYPES.contains(type)) {
+            throw new BizException("题型仅支持：单选/多选/判断/问答");
+        }
+        String stem = clip(text(src.get("stem")), STEM_INPUT_MAX);
+        if (stem.isEmpty()) {
+            throw new BizException("缺少题干");
+        }
+        String answer = clip(text(src.get("answer")), ANSWER_MAX);
+        if (answer.isEmpty()) {
+            throw new BizException("缺少正确答案");
+        }
+        String analysis = clip(text(src.get("analysis")), ANALYSIS_MAX);
+        String kp = clip(src.get("kpName"), KP_MAX);
+        String difficulty = text(src.get("difficulty"));
+        if (!DIFFICULTIES.contains(difficulty)) {
+            difficulty = "进阶";
+        }
+
+        String options;
+        if ("判断".equals(type)) {
+            options = GeneratorService.JUDGE_OPTIONS;
+            answer = GeneratorService.normalizeJudgeAnswer(answer);
+            if (!"对".equals(answer) && !"错".equals(answer)) {
+                throw new BizException("判断题答案应为 对/错");
+            }
+        } else if ("问答".equals(type)) {
+            options = null;
+        } else {
+            List<Map<String, Object>> opts = normalizeOptions(src.get("options"));
+            if (opts.size() < 2) {
+                throw new BizException("单选/多选题至少需要两个选项");
+            }
+            options = writeValue(opts);
+            java.util.Set<String> keys = opts.stream()
+                    .map(o -> String.valueOf(o.get("k")).toUpperCase())
+                    .collect(java.util.stream.Collectors.toSet());
+            String letters = answer.replaceAll("[^A-Za-z]", "").toUpperCase();
+            if (letters.isEmpty() || letters.chars().anyMatch(c -> !keys.contains(String.valueOf((char) c)))) {
+                throw new BizException("正确答案需为给出的选项之一（多选可填多个字母）");
+            }
+            answer = letters;
+        }
+
+        Map<String, Object> stored = new LinkedHashMap<>();
+        stored.put("type", type);
+        stored.put("stem", stem);
+        stored.put("options", options);
+        stored.put("answer", answer);
+        stored.put("analysis", analysis);
+        stored.put("kpName", kp == null || kp.isBlank() ? null : kp);
+        stored.put("difficulty", difficulty);
+
+        AgentAction a = newAction(userId, courseId, sessionId, "add_question", stored,
+                "添加题目入题库：「" + clip(stem, STEM_MAX) + "」（" + type + "）");
+        log.info("用户 {} 登记待确认动作 {}（kind=add_question，type={}）", userId, a.getId(), type);
+        return a;
+    }
+
+    /**
+     * 选项归一化：接受 [{k,v}] 数组（与出题链路同构），k 缺省按序补 A/B/C…，截断超长项。
+     * 格式不合法直接拒绝登记，不让模型侧脏数据走到确认。
+     */
+    private List<Map<String, Object>> normalizeOptions(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            throw new BizException("选择题需要提供选项数组 [{k,v}]");
+        }
+        if (list.size() > OPTIONS_MAX) {
+            throw new BizException("选项数量过多（最多 " + OPTIONS_MAX + " 个）");
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        int i = 0;
+        for (Object item : list) {
+            String k;
+            String v;
+            if (item instanceof Map<?, ?> m) {
+                k = m.get("k") == null ? "" : String.valueOf(m.get("k")).trim().toUpperCase();
+                v = m.get("v") == null ? "" : String.valueOf(m.get("v")).trim();
+            } else {
+                // 允许 ["选项A", "选项B"] 的简写形式，k 按序补字母
+                v = String.valueOf(item).trim();
+                k = "";
+            }
+            if (v.isEmpty()) {
+                throw new BizException("选项内容不能为空");
+            }
+            if (k.isEmpty() || k.length() > OPTION_KEY_MAX) {
+                k = String.valueOf((char) ('A' + i));
+            }
+            Map<String, Object> opt = new LinkedHashMap<>();
+            opt.put("k", clip(k, OPTION_KEY_MAX));
+            opt.put("v", clip(v, OPTION_VALUE_MAX));
+            result.add(opt);
+            i++;
+        }
+        return result;
+    }
+
+    /** 任务日期：留空视为今天；过去的日期明确拒绝——模型可能不知道今天几号，报错能促使其重试，避免任务排错天。 */
+    private static LocalDate parseTaskDate(Object raw) {
+        if (raw == null || String.valueOf(raw).isBlank()) {
+            return LocalDate.now();
+        }
+        LocalDate date;
+        try {
+            date = LocalDate.parse(String.valueOf(raw).trim());
+        } catch (Exception e) {
+            throw new BizException("任务日期格式应为 yyyy-MM-dd");
+        }
+        if (date.isBefore(LocalDate.now())) {
+            throw new BizException("任务日期不能早于今天（今天是 " + LocalDate.now() + "）");
+        }
+        return date;
+    }
+
+    /** 模型侧文本：null 安全 trim（propose 阶段高频使用）。 */
+    private static String text(Object raw) {
+        return raw == null ? "" : String.valueOf(raw).trim();
+    }
+
     /** 三种动作共用：pending + 30 分钟有效期，摘要由服务端模板生成。 */
     private AgentAction newAction(Long userId, Long courseId, Long sessionId, String kind,
                                   Map<String, Object> storedPayload, String summary) {
@@ -395,6 +573,8 @@ public class AgentActionService {
                 case "favorite_question" -> executeFavorite(a, payload);
                 case "generate_questions" -> executeGenerateQuestions(a, payload);
                 case "open_page" -> executeOpenPage(a, payload);
+                case "add_plan_task" -> executeAddPlanTask(a, payload);
+                case "add_question" -> executeAddQuestion(a, payload);
                 default -> throw new BizException("不支持的动作类型");
             }
         } catch (Exception e) {
@@ -522,6 +702,48 @@ public class AgentActionService {
         log.info("待确认动作 {} 已执行，跳转 {}", a.getId(), payload.get("path"));
     }
 
+    private void executeAddPlanTask(AgentAction a, Map<String, Object> payload) {
+        Long planId = asLong(payload.get("planId"));
+        LocalDate date;
+        try {
+            date = LocalDate.parse(String.valueOf(payload.get("taskDate")));
+        } catch (Exception e) {
+            throw new BizException("任务日期数据损坏，请重新发起");
+        }
+        // planId 是登记时的只读快照：期间计划可能被删除，归属由 addTask 再校验一次；
+        // 为空说明登记时用户还没有计划，这里自动创建轻量计划承接
+        com.example.learningassistant.plan.entity.PlanTask task = planService.addTask(
+                a.getUserId(), a.getCourseId(), planId, date,
+                String.valueOf(payload.getOrDefault("title", "")),
+                payload.get("tasks") == null ? null : String.valueOf(payload.get("tasks")),
+                payload.get("focusKp") == null ? null : String.valueOf(payload.get("focusKp")));
+        payload.put("taskId", task.getId());
+        a.setPayload(writeJson(payload));
+        a.setStatus("executed");
+        a.setResult(clip("已添加学习任务：《" + payload.getOrDefault("title", "") + "》"
+                + "（" + payload.get("taskDate") + "）", RESULT_MAX));
+        actionMapper.updateById(a);
+        log.info("待确认动作 {} 已执行，计划任务 {} 落库", a.getId(), task.getId());
+    }
+
+    private void executeAddQuestion(AgentAction a, Map<String, Object> payload) {
+        Question q = questionService.create(a.getUserId(), a.getCourseId(),
+                String.valueOf(payload.getOrDefault("type", "单选")),
+                String.valueOf(payload.getOrDefault("stem", "")),
+                payload.get("options") == null ? null : String.valueOf(payload.get("options")),
+                String.valueOf(payload.getOrDefault("answer", "")),
+                payload.get("analysis") == null ? null : String.valueOf(payload.get("analysis")),
+                payload.get("kpName") == null ? null : String.valueOf(payload.get("kpName")),
+                String.valueOf(payload.getOrDefault("difficulty", "进阶")));
+        payload.put("questionId", q.getId());
+        a.setPayload(writeJson(payload));
+        a.setStatus("executed");
+        a.setResult(clip("已把题目加入课程题库（题 id=" + q.getId() + "），可在题库管理中查看",
+                RESULT_MAX));
+        actionMapper.updateById(a);
+        log.info("待确认动作 {} 已执行，题目 {} 入库", a.getId(), q.getId());
+    }
+
     /** 提醒时间：yyyy-MM-dd 视为当天 09:00，ISO 日期时间原样解析，解析不了视为「立即」。 */
     private static LocalDateTime parseRemindAt(Object raw) {
         if (raw == null || String.valueOf(raw).isBlank()) {
@@ -593,6 +815,15 @@ public class AgentActionService {
     private String writeJson(Map<String, Object> map) {
         try {
             return objectMapper.writeValueAsString(map);
+        } catch (Exception e) {
+            throw new BizException("动作登记失败，请重试");
+        }
+    }
+
+    /** 选项数组的 JSON 序列化（写入 payload 前归一化为字符串，执行时原样传给 QuestionService）。 */
+    private String writeValue(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
         } catch (Exception e) {
             throw new BizException("动作登记失败，请重试");
         }

@@ -208,6 +208,22 @@ public class GeneratorService {
         }
     }
 
+    /** 判断题标准选项：LLM/手动录入常省略 options，统一兜底为 对/错 两项。 */
+    public static final String JUDGE_OPTIONS =
+            "[{\"k\":\"对\",\"v\":\"正确\"},{\"k\":\"错\",\"v\":\"错误\"}]";
+
+    /** 判断题答案归一化：正确/错误/true 等写法统一为 对/错，与选项 k 对齐便于判分。 */
+    public static String normalizeJudgeAnswer(String raw) {
+        String a = raw == null ? "" : raw.trim();
+        if (a.matches("(?i)(对|正确|是|T|TRUE|Y|√)")) {
+            return "对";
+        }
+        if (a.matches("(?i)(错|错误|否|不对|F|FALSE|N|×)")) {
+            return "错";
+        }
+        return a;
+    }
+
     /**
      * 判断题兜底：LLM 常不给 options（会导致答题页无选项可点）或答案写"正确/错误"（与选项 k=对/错 判分对不上）。
      * 入库前统一：options 缺省注入标准 对/错 两项，答案归一化为 对/错。
@@ -217,14 +233,9 @@ public class GeneratorService {
             return;
         }
         if (q.getOptions() == null || q.getOptions().isBlank()) {
-            q.setOptions("[{\"k\":\"对\",\"v\":\"正确\"},{\"k\":\"错\",\"v\":\"错误\"}]");
+            q.setOptions(JUDGE_OPTIONS);
         }
-        String a = q.getAnswer() == null ? "" : q.getAnswer().trim();
-        if (a.matches("(?i)(对|正确|是|T|TRUE|Y|√)")) {
-            q.setAnswer("对");
-        } else if (a.matches("(?i)(错|错误|否|不对|F|FALSE|N|×)")) {
-            q.setAnswer("错");
-        }
+        q.setAnswer(normalizeJudgeAnswer(q.getAnswer()));
     }
 
     public List<GeneratedContent> history(Long userId) {

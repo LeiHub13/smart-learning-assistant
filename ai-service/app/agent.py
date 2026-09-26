@@ -13,9 +13,10 @@
 - query_past_questions    定向检索该学生过往其他会话的问答片段（回调 Java，
                           排除当前会话——其内容已在会话记忆里）
 - 写动作（AGENT_WRITE_TOOLS 开关）：
-  - query_plan_tasks / schedule_review / finish_plan_task   学习计划打卡与复习提醒
+  - query_plan_tasks / schedule_review / finish_plan_task / add_plan_task   学习计划查看、打卡、复习提醒与新建任务
   - save_material_to_kb                                     存资料进知识库
   - add_note / favorite_question / generate_questions       记笔记、收藏题目、AI 出题
+  - add_question                                            把一道完整题目加入课程题库
   - open_page                                               打开系统页面（前端跳转）
   全部只登记「待确认动作」，用户在前端点确认后才生效
 - MCP 外部工具            通过 AI_MCP_CONFIG 接入（如联网搜索 tavily-mcp），
@@ -30,6 +31,7 @@ import logging
 import threading
 import time
 import urllib.request
+from datetime import datetime
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage
@@ -38,6 +40,8 @@ from langchain_core.tools import tool
 from app import config, memory
 
 logger = logging.getLogger("ai-service.agent")
+
+_WEEKDAYS = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
 
 SYSTEM_PROMPT = (
     "你是智能学习助手的答疑 Agent。收到学生问题后先思考需要哪些信息，再决定调用工具：\n"
@@ -49,6 +53,12 @@ SYSTEM_PROMPT = (
     "最后结合收集到的信息回答，引用资料时标注编号[n]。查不到的内容如实说明，不要编造。"
     "回答保持简洁、准确、有针对性。"
 )
+
+
+def _today_line() -> str:
+    """给模型注入当前日期：安排复习/任务时模型不知道今天是几号，会凭空编日期。"""
+    now = datetime.now()
+    return f"（今天是 {now.strftime('%Y-%m-%d')} {_WEEKDAYS[now.weekday()]}，涉及日期时以此为准）"
 
 # MCP 外部工具接入后追加的提示（仅在有 MCP 工具时拼接）
 MCP_PROMPT_SUFFIX = (
@@ -66,10 +76,14 @@ WRITE_PROMPT_SUFFIX = (
     "- add_note 记学习笔记、favorite_question 收藏题库题目（先用 query_question_bank 拿 questionId）、"
     "save_material_to_kb 存资料进本课程知识库——这三个要求会话已绑定课程；\n"
     "- generate_questions AI 出题（默认 5 道、1-10 道，生成需要等待，完成后页面会引导去练习）；\n"
+    "- add_question 把一道完整题目加入本课程题库（要求会话已绑定课程；题型 单选/多选/判断/问答，"
+    "单选/多选必须给出选项数组 [{k,v}]，判断题答案只写 对/错）；\n"
     "- open_page 打开系统页面，page 从白名单里选（home/chat/generate/practice/mistakes/favorites/"
     "exam/bank/progress/manage/hub/plans/reports/notes/search）；\n"
-    "- schedule_review 安排复习提醒、finish_plan_task 学习任务打卡（先用 query_plan_tasks 拿 taskId）。\n"
-    "注意：这些工具都不会直接写入或跳转，你绝不能声称笔记已记好、题目已收藏、出题已完成或页面已打开，"
+    "- schedule_review 安排复习提醒、finish_plan_task 学习任务打卡（先用 query_plan_tasks 拿 taskId）、"
+    "add_plan_task 新建学习计划任务（task_date 传 yyyy-MM-dd，留空表示今天；"
+    "没有计划时系统会自动建一个轻量计划承接）。\n"
+    "注意：这些工具都不会直接写入或跳转，你绝不能声称笔记已记好、题目已收藏、任务已创建、出题已完成或页面已打开，"
     "调用后应提醒用户在消息下方点击『确认执行』。"
     "登记前先确认信息，一次对话里不要重复登记同一条动作，也不要在学生没提出意图时擅自登记。"
 )
@@ -392,6 +406,19 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
         return _propose_action("finish_plan_task", {"taskId": int(task_id)})
 
     @tool
+    def add_plan_task(title: str, task_date: str = "", focus_kp: str = "", tasks: str = "") -> str:
+        """为学生新建一条学习计划任务（登记为待确认动作，用户确认后才真正创建）。
+        title 是任务标题；task_date 传 yyyy-MM-dd（留空表示今天）；focus_kp 是可选的聚焦知识点；
+        tasks 是可选的任务内容说明（具体做什么）。追加进现有计划或自动创建轻量计划由服务端决定。"""
+        if not user_id:
+            return "未提供用户信息，无法登记学习任务。"
+        if not (title or "").strip():
+            return "请提供任务标题。"
+        return _propose_action("add_plan_task", {
+            "title": title.strip(), "taskDate": (task_date or "").strip(),
+            "focusKp": (focus_kp or "").strip(), "tasks": (tasks or "").strip()})
+
+    @tool
     def save_material_to_kb(title: str, content: str) -> str:
         """把答疑中值得留存的一段资料登记为「待确认动作」，由用户确认后才存入当前课程的知识库。
         该工具不会直接写入任何数据；kbId/courseId 由会话上下文绑定，不由模型填写。"""
@@ -439,6 +466,26 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
         return _propose_action("generate_questions", {"kp": (kp or "").strip(), "count": int(count)})
 
     @tool
+    def add_question(q_type: str, stem: str, answer: str, options: list = None,
+                     analysis: str = "", kp_name: str = "", difficulty: str = "") -> str:
+        """把一道完整题目登记进本课程题库（待确认动作，用户确认后才真正入库）。
+        q_type 取 单选/多选/判断/问答；stem 是题干；answer 是正确答案（单选如 A、多选如 AB、判断只写 对/错）；
+        options 是选项数组 [{"k":"A","v":"选项内容"}]，仅单选/多选必填，判断/问答不传；
+        analysis 解析、kp_name 知识点、difficulty 难度（基础/进阶/综合）可选；需会话已绑定课程。"""
+        if not user_id:
+            return "未提供用户信息，无法登记题目。"
+        if not course_id:
+            return "当前会话未绑定课程，无法添加题目，请让学生在知识库答疑中提问。"
+        if not (q_type or "").strip() or not (stem or "").strip() or not (answer or "").strip():
+            return "请提供题型、题干与正确答案。"
+        inner = {"type": q_type.strip(), "stem": stem.strip(), "answer": answer.strip(),
+                 "analysis": (analysis or "").strip(), "kpName": (kp_name or "").strip(),
+                 "difficulty": (difficulty or "").strip()}
+        if options:
+            inner["options"] = options
+        return _propose_action("add_question", inner)
+
+    @tool
     def open_page(page: str) -> str:
         """打开系统中的某个功能页面（待确认动作，用户确认后前端才会跳转）。
         page 取以下白名单之一：home(首页) chat(智能答疑) generate(AI内容生成) practice(题库练习)
@@ -448,8 +495,9 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
             return "未提供用户信息，无法打开页面。"
         return _propose_action("open_page", {"page": (page or "").strip()})
 
-    return read_tools + ([query_plan_tasks, schedule_review, finish_plan_task, save_material_to_kb,
-                          add_note, favorite_question, generate_questions, open_page]
+    return read_tools + ([query_plan_tasks, schedule_review, finish_plan_task, add_plan_task,
+                          save_material_to_kb, add_note, favorite_question, generate_questions,
+                          add_question, open_page]
                          if config.AGENT_WRITE_TOOLS else [])
 
 
@@ -496,6 +544,7 @@ def _seed_materials(chunks, session_id, kb_id, question, meta, kb_ids=None):
 def _system_prompt(mcp_tools: list, note: str = None, kb_name: str = None, kb_scope: str = None) -> str:
     from app import chains
     return (SYSTEM_PROMPT
+            + _today_line()
             + (MCP_PROMPT_SUFFIX if mcp_tools else "")
             + (WRITE_PROMPT_SUFFIX if config.AGENT_WRITE_TOOLS else "")
             + chains._kb_suffix(kb_name, kb_scope)

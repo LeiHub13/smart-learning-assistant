@@ -350,7 +350,8 @@ public class InternalToolController {
 
     /**
      * 登记 Agent 待确认动作：Agent 侧所有写动作的唯一入口（add_material / schedule_review /
-     * finish_plan_task / add_note / favorite_question / generate_questions / open_page），
+     * finish_plan_task / add_note / favorite_question / generate_questions / open_page /
+     * add_plan_task / add_question），
      * 只落 proposal，真正写入（或页面跳转）发生在用户点「确认执行」之后。
      */
     @PostMapping("/actions/propose")

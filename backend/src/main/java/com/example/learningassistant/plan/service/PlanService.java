@@ -215,6 +215,50 @@ public class PlanService {
     }
 
     /**
+     * 追加单条学习任务（Agent 提议确认后的写入路径）。
+     * planId 为空时自动创建一个轻量计划承接（courseId 可空，自由对话也能安排任务）；
+     * 追加到已完成计划时把计划重新置回 active，避免出现"计划已完成但还有未打卡任务"的矛盾状态。
+     */
+    public PlanTask addTask(Long userId, Long courseId, Long planId, LocalDate taskDate,
+                            String title, String tasks, String focusKp) {
+        StudyPlan plan;
+        if (planId == null) {
+            plan = new StudyPlan();
+            plan.setUserId(userId);
+            plan.setCourseId(courseId);
+            plan.setGoal("Agent 快速安排");
+            plan.setDays(1);
+            plan.setStatus("active");
+            plan.setCreatedAt(LocalDateTime.now());
+            planMapper.insert(plan);
+        } else {
+            plan = planMapper.selectById(planId);
+            if (plan == null || !plan.getUserId().equals(userId)) {
+                throw new BizException("计划不存在或不属于当前用户");
+            }
+            if ("done".equals(plan.getStatus())) {
+                plan.setStatus("active");
+                planMapper.updateById(plan);
+            }
+        }
+        Integer maxDay = taskMapper.selectList(new LambdaQueryWrapper<PlanTask>()
+                        .eq(PlanTask::getPlanId, plan.getId())
+                        .orderByDesc(PlanTask::getDayNo)
+                        .last("LIMIT 1"))
+                .stream().findFirst().map(PlanTask::getDayNo).orElse(0);
+        PlanTask task = new PlanTask();
+        task.setPlanId(plan.getId());
+        task.setDayNo((maxDay == null ? 0 : maxDay) + 1);
+        task.setTaskDate(taskDate == null ? LocalDate.now() : taskDate);
+        task.setTitle(title);
+        task.setTasks(tasks == null ? "" : tasks);
+        task.setFocusKp(focusKp == null ? "" : focusKp);
+        task.setDone(false);
+        taskMapper.insert(task);
+        return task;
+    }
+
+    /**
      * 每日打卡。
      */
     public PlanTask checkIn(Long userId, Long taskId) {
