@@ -28,8 +28,9 @@
     </div>
 
     <div class="grid2">
-      <!-- 成绩曲线 -->
-      <div class="card">
+      <div class="col-left">
+        <!-- 成绩曲线 -->
+        <div class="card">
         <h3>最近成绩曲线</h3>
         <div v-if="seriesList.length" class="trend-wrap">
           <div ref="chartRef" class="d-chart"></div>
@@ -49,6 +50,49 @@
           </div>
         </div>
         <div v-if="!seriesList.length" class="empty">暂无练习数据</div>
+        </div>
+
+        <!-- 学习热力图 -->
+        <div class="card">
+          <div class="hm-top">
+            <h3>学习热力图（近 12 周）</h3>
+            <div v-if="heat" class="hm-stats">
+              <span>累计 <b>{{ fmtHeat(heat.total) }}</b></span>
+              <span>活跃 <b>{{ heat.activeDays }}</b> 天</span>
+              <span>最长连续 <b>{{ heat.best }}</b> 天</span>
+            </div>
+          </div>
+          <div v-if="heat" class="hm-wrap">
+            <div class="hm-months">
+              <span v-for="col in heat.columns" :key="col.i" :style="{ gridColumn: col.i + 1 }">{{ col.label }}</span>
+            </div>
+            <div class="hm-main">
+              <div class="hm-dow">
+                <span style="grid-row: 1">一</span>
+                <span style="grid-row: 3">三</span>
+                <span style="grid-row: 5">五</span>
+              </div>
+              <div class="heatmap">
+                <template v-for="(w, wi) in heat.weeks" :key="wi">
+                  <span
+                    v-for="(c, ci) in w"
+                    :key="ci"
+                    class="hm-cell"
+                    :class="c ? hmLevel(c.minutes) : 'pad'"
+                    :title="c ? c.label : ''"
+                  ></span>
+                </template>
+              </div>
+            </div>
+            <div class="hm-legend">
+              <span>少</span>
+              <i class="hm-cell hm-0"></i><i class="hm-cell hm-1"></i><i class="hm-cell hm-2"></i><i class="hm-cell hm-3"></i><i class="hm-cell hm-4"></i>
+              <span>多</span>
+              <span class="hm-unit">（按当日学习分钟数分档）</span>
+            </div>
+          </div>
+          <div v-else class="empty">暂无数据（使用系统期间每分钟自动记录）</div>
+        </div>
       </div>
 
       <!-- 今日推荐 -->
@@ -63,47 +107,6 @@
           </div>
         </div>
       </div>
-    </div>
-    <!-- 学习热力图 -->
-    <div class="card">
-      <div class="hm-top">
-        <h3>学习热力图（近 12 周）</h3>
-        <div v-if="heat" class="hm-stats">
-          <span>累计 <b>{{ fmtHeat(heat.total) }}</b></span>
-          <span>活跃 <b>{{ heat.activeDays }}</b> 天</span>
-          <span>最长连续 <b>{{ heat.best }}</b> 天</span>
-        </div>
-      </div>
-      <div v-if="heat" class="hm-wrap">
-        <div class="hm-months">
-          <span v-for="col in heat.columns" :key="col.i" :style="{ gridColumn: col.i + 1 }">{{ col.label }}</span>
-        </div>
-        <div class="hm-main">
-          <div class="hm-dow">
-            <span style="grid-row: 1">一</span>
-            <span style="grid-row: 3">三</span>
-            <span style="grid-row: 5">五</span>
-          </div>
-          <div class="heatmap">
-            <template v-for="(w, wi) in heat.weeks" :key="wi">
-              <span
-                v-for="(c, ci) in w"
-                :key="ci"
-                class="hm-cell"
-                :class="c ? hmLevel(c.minutes) : 'pad'"
-                :title="c ? c.label : ''"
-              ></span>
-            </template>
-          </div>
-        </div>
-        <div class="hm-legend">
-          <span>少</span>
-          <i class="hm-cell hm-0"></i><i class="hm-cell hm-1"></i><i class="hm-cell hm-2"></i><i class="hm-cell hm-3"></i><i class="hm-cell hm-4"></i>
-          <span>多</span>
-          <span class="hm-unit">（按当日学习分钟数分档）</span>
-        </div>
-      </div>
-      <div v-else class="empty">暂无数据（使用系统期间每分钟自动记录）</div>
     </div>
   </div>
 </template>
@@ -307,6 +310,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .grid2 { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
+.col-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
 .d-chart { width: 100%; height: 240px; flex: 1; min-width: 0; }
 .trend-wrap { display: flex; align-items: stretch; }
