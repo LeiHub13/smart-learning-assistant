@@ -28,7 +28,8 @@ import java.util.Map;
 
 /**
  * 学情分析服务：掌握度聚合、错题本、AI 复习建议。
- * AI 建议走缓存：summary 优先读缓存（Redis/内存），仅用户显式「重新生成」时才调 LLM。
+ * AI 建议不在 summary 里自动生成——只回读缓存（有则带出），由用户在页面点「开始分析」
+ * 显式触发（regenerateAdvice，Redis/内存缓存 7 天）。
  * summary 聚合（掌握度 + 错题本）整体缓存：错题本聚合是全量扫描+逐题回表，代价高；
  * 练习/考试提交时按 key 失效（PracticeService/ExamService），重新生成建议时也失效。
  */
@@ -83,18 +84,14 @@ public class ProgressService {
         summary.put("averageMastery", Math.round(average));
         summary.put("totalAttempts", totalAttempts);
         summary.put("wrongBook", wrongBook);
-        // 建议优先取缓存，未命中才调 LLM（并写缓存）；空掌握度不缓存
+        // 建议只回读缓存，绝不在 summary 内调 LLM——分析由用户点「开始分析」显式触发
         String advice = cacheService.get(adviceKey(userId, courseId));
         if (advice != null && !advice.isBlank()) {
             summary.put("advice", advice);
             summary.put("adviceCached", true);
         } else {
-            advice = generateAdvice(masteries);
-            summary.put("advice", advice);
+            summary.put("advice", null);
             summary.put("adviceCached", false);
-            if (!masteries.isEmpty()) {
-                cacheService.set(adviceKey(userId, courseId), advice, ADVICE_TTL);
-            }
         }
         writeSummaryCache(userId, courseId, summary);
         return summary;

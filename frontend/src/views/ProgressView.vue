@@ -15,7 +15,7 @@
       </div>
     </div>
 
-    <div v-if="!summary" class="loading"><i></i>正在分析学情…</div>
+    <div v-if="!summary" class="loading"><i></i>正在加载学情数据…</div>
 
     <template v-else>
       <div class="card">
@@ -72,11 +72,19 @@
           <h3 style="margin:0">AI 复习建议
             <span v-if="summary.adviceCached" class="tag" title="读取缓存，点击重新生成可更新">缓存 · 7天内有效</span>
           </h3>
-          <button class="btn ghost small" :disabled="refreshingAdvice" @click="refreshAdvice">
-            {{ refreshingAdvice ? 'AI 生成中…' : '重新生成' }}
+          <button
+            v-if="summary.masteries.length"
+            class="btn ghost small"
+            :disabled="refreshingAdvice"
+            @click="refreshAdvice"
+          >
+            {{ refreshingAdvice ? 'AI 分析中…' : (summary.advice ? '重新生成' : '开始分析') }}
           </button>
         </div>
-        <div class="md" v-html="mdToHtml(summary.advice)"></div>
+        <div v-if="summary.advice" class="md" v-html="mdToHtml(summary.advice)"></div>
+        <div v-else-if="refreshingAdvice" class="loading"><i></i>AI 正在分析学情，请稍候…</div>
+        <div v-else-if="!summary.masteries.length" class="empty">暂无练习数据，去「题库练习」做一组题后再来分析</div>
+        <div v-else class="empty">尚未分析，点击右上角「开始分析」，AI 将基于你的掌握度数据给出复习建议</div>
       </div>
 
       <div class="card">
