@@ -141,6 +141,9 @@ services:
       # Agent 工具回调 + chunk 下发：Java 内部 API（容器间访问）
       JAVA_TOOL_BASE: http://backend:8080
       JAVA_TOOL_TOKEN: ${INTERNAL_TOOL_TOKEN:-internal-tool-token}
+      # Agent 写动作（记笔记/打卡/出题/建任务/加题等）：全部走「提议+用户确认」门禁。
+      # 默认关闭；置 true 后答疑 Agent 才挂载写工具，用户须在聊天里点「确认执行」才真正落库
+      AGENT_WRITE_TOOLS: ${AGENT_WRITE_TOOLS:-false}
     volumes:
       - ai-data:/app/data
     networks: [la-net]
