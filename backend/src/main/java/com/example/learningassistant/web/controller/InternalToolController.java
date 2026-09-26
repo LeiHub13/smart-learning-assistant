@@ -3,6 +3,10 @@ package com.example.learningassistant.web.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.learningassistant.agent.entity.AgentAction;
 import com.example.learningassistant.agent.service.AgentActionService;
+import com.example.learningassistant.chat.entity.ChatMessage;
+import com.example.learningassistant.chat.entity.ChatSession;
+import com.example.learningassistant.chat.mapper.ChatMessageMapper;
+import com.example.learningassistant.chat.mapper.ChatSessionMapper;
 import com.example.learningassistant.common.ApiResponse;
 import com.example.learningassistant.common.BizException;
 import com.example.learningassistant.kb.entity.Chunk;
@@ -54,6 +58,8 @@ public class InternalToolController {
     private final KnowledgeBaseMapper kbMapper;
     private final DocumentMapper documentMapper;
     private final ChunkMapper chunkMapper;
+    private final ChatMessageMapper messageMapper;
+    private final ChatSessionMapper sessionMapper;
     private final PlanService planService;
     private final NoteService noteService;
     private final FavoriteService favoriteService;
@@ -232,6 +238,66 @@ public class InternalToolController {
             row.put("kpName", q.getKpName());
             row.put("difficulty", q.getDifficulty());
             row.put("source", q.getSource());
+            result.add(row);
+        }
+        return ApiResponse.ok(result);
+    }
+
+    /**
+     * 过往会话定向检索（Agent 读工具）：按关键词在该学生其他答疑会话的提问里匹配，
+     * 返回命中问题与紧随其后的回答片段；keyword 留空返回最近的提问。
+     * excludeSessionId 排除当前会话——其内容已在会话记忆里，无需重复检索。
+     */
+    @GetMapping("/past-qa")
+    public ApiResponse<List<Map<String, Object>>> pastQa(HttpServletRequest request,
+                                                         @RequestParam Long userId,
+                                                         @RequestParam(required = false) String keyword,
+                                                         @RequestParam(required = false) String excludeSessionId,
+                                                         @RequestParam(defaultValue = "5") Integer limit) {
+        checkToken(request);
+        int size = Math.min(Math.max(limit == null ? 5 : limit, 1), 10);
+        Long excludeParsed = null;
+        try {
+            excludeParsed = excludeSessionId == null || excludeSessionId.isBlank()
+                    ? null : Long.valueOf(excludeSessionId.trim());
+        } catch (NumberFormatException ignored) {
+            // 非数字的会话标识直接忽略
+        }
+        final Long exclude = excludeParsed;
+        List<ChatSession> sessions = sessionMapper.selectList(new LambdaQueryWrapper<ChatSession>()
+                .eq(ChatSession::getUserId, userId));
+        List<Long> sessionIds = sessions.stream()
+                .filter(s -> !s.getId().equals(exclude))
+                .map(ChatSession::getId)
+                .toList();
+        if (sessionIds.isEmpty()) {
+            return ApiResponse.ok(List.of());
+        }
+        Map<Long, String> titles = new java.util.HashMap<>();
+        for (ChatSession s : sessions) {
+            titles.put(s.getId(), s.getTitle() == null ? "" : s.getTitle());
+        }
+        String kw = keyword == null || keyword.isBlank() ? null : keyword.trim();
+        List<ChatMessage> hits = messageMapper.selectList(new LambdaQueryWrapper<ChatMessage>()
+                .in(ChatMessage::getSessionId, sessionIds)
+                .eq(ChatMessage::getRole, "user")
+                .like(kw != null, ChatMessage::getContent, kw)
+                .orderByDesc(ChatMessage::getId)
+                .last("LIMIT " + size));
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (ChatMessage hit : hits) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("sessionId", hit.getSessionId());
+            row.put("sessionTitle", titles.getOrDefault(hit.getSessionId(), ""));
+            row.put("askedAt", hit.getCreatedAt() == null ? null : hit.getCreatedAt().toString());
+            row.put("question", clip(hit.getContent(), 200));
+            ChatMessage answer = messageMapper.selectOne(new LambdaQueryWrapper<ChatMessage>()
+                    .eq(ChatMessage::getSessionId, hit.getSessionId())
+                    .eq(ChatMessage::getRole, "assistant")
+                    .gt(ChatMessage::getId, hit.getId())
+                    .orderByAsc(ChatMessage::getId)
+                    .last("LIMIT 1"));
+            row.put("answer", answer == null ? null : clip(answer.getContent(), 400));
             result.add(row);
         }
         return ApiResponse.ok(result);

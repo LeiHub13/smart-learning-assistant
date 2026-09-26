@@ -10,6 +10,8 @@
 - query_notes             查当前用户的学习笔记（回调 Java）
 - query_favorites         查当前用户的收藏夹题目（回调 Java）
 - query_question_bank     按关键词检索本课程题库（回调 Java）
+- query_past_questions    定向检索该学生过往其他会话的问答片段（回调 Java，
+                          排除当前会话——其内容已在会话记忆里）
 - 写动作（AGENT_WRITE_TOOLS 开关）：
   - query_plan_tasks / schedule_review / finish_plan_task   学习计划打卡与复习提醒
   - save_material_to_kb                                     存资料进知识库
@@ -40,9 +42,10 @@ logger = logging.getLogger("ai-service.agent")
 SYSTEM_PROMPT = (
     "你是智能学习助手的答疑 Agent。收到学生问题后先思考需要哪些信息，再决定调用工具：\n"
     "- 需要课程资料：先 list_material_topics 查看资料清单，再 search_materials 按关键词检索；\n"
-    "- 需要了解学生的学习情况：query_mastery（掌握度）、query_wrong_book（错题）、"
-    "query_recent_practices（最近练习）、query_kb_documents（知识库文档清单）、"
-    "query_notes（学习笔记）、query_favorites（收藏夹）、query_question_bank（题库检索）。\n"
+"- 需要了解学生的学习情况：query_mastery（掌握度）、query_wrong_book（错题）、"
+        "query_recent_practices（最近练习）、query_kb_documents（知识库文档清单）、"
+        "query_notes（学习笔记）、query_favorites（收藏夹）、query_question_bank（题库检索）、"
+        "query_past_questions（过往其他会话的问答片段，按关键词检索，衔接历史讨论时用）。\n"
     "最后结合收集到的信息回答，引用资料时标注编号[n]。查不到的内容如实说明，不要编造。"
     "回答保持简洁、准确、有针对性。"
 )
@@ -321,9 +324,22 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
         return _call_java_tool(
             f"/internal/tools/questions?courseId={course_id}&keyword={kw}&limit=10")
 
+    @tool
+    def query_past_questions(keyword: str = "") -> str:
+        """按关键词定向检索该学生过往其他答疑会话的提问与回答片段（当前会话除外）。
+        学生提到"之前/上次/我们刚才讨论过"或新问题可能与历史讨论衔接时使用；
+        keyword 留空返回最近的提问清单。"""
+        if not user_id:
+            return "未提供用户信息，无法查询历史会话。"
+        from urllib.parse import quote
+        kw = quote((keyword or "").strip())
+        extra = f"&excludeSessionId={session_id}" if session_id else ""
+        return _call_java_tool(
+            f"/internal/tools/past-qa?userId={user_id}&keyword={kw}&limit=5{extra}")
+
     read_tools = [list_material_topics, search_materials,
                   query_wrong_book, query_mastery, query_recent_practices, query_kb_documents,
-                  query_notes, query_favorites, query_question_bank]
+                  query_notes, query_favorites, query_question_bank, query_past_questions]
 
     @tool
     def query_plan_tasks(only_pending: bool = True) -> str:

@@ -9,11 +9,12 @@ def _names(tools):
 def test_write_tools_hidden_by_default(monkeypatch):
     monkeypatch.setattr(config, "AGENT_WRITE_TOOLS", False)
     names = _names(agent._make_tools(["资料A"], user_id=1, course_id=9))
-    # 默认为 9 个只读工具：新加的 query_notes/query_favorites/query_question_bank 也是只读，
-    # save_material_to_kb 等写工具开关关闭时不得出现
+    # 默认为 10 个只读工具：query_notes/query_favorites/query_question_bank/query_past_questions
+    # 也是只读；save_material_to_kb 等写工具开关关闭时不得出现
     assert names == {"list_material_topics", "search_materials", "query_wrong_book",
                      "query_mastery", "query_recent_practices", "query_kb_documents",
-                     "query_notes", "query_favorites", "query_question_bank"}
+                     "query_notes", "query_favorites", "query_question_bank",
+                     "query_past_questions"}
     assert "save_material_to_kb" not in names and "open_page" not in names
     assert "待确认动作" not in agent._system_prompt([])
 
@@ -187,6 +188,32 @@ def test_new_write_tools_propose_with_request_context(monkeypatch):
     # 工具回执里「已生成待确认动作」是固定前缀；断言不得声称动作本身已完成
     assert "已创建学习笔记" not in out1 and "已收藏题目" not in out2
     assert "加入课程题库" not in out3 and "已打开「" not in out4
+
+
+def test_query_past_questions_scopes_to_user_and_excludes_current_session():
+    """定向检索过往会话：userId/session_id 由闭包绑定，当前会话被排除，关键词 URL 编码。"""
+    calls = []
+    original = agent._call_java_tool
+    agent._call_java_tool = lambda path: calls.append(path) or "captured"
+    try:
+        tools = {t.name: t for t in agent._make_tools([], user_id=8, session_id="42")}
+        tools["query_past_questions"].invoke({"keyword": "递归"})
+        tools["query_past_questions"].invoke({})
+        assert calls == [
+            "/internal/tools/past-qa?userId=8&keyword=%E9%80%92%E5%BD%92&limit=5&excludeSessionId=42",
+            "/internal/tools/past-qa?userId=8&keyword=&limit=5&excludeSessionId=42",
+        ]
+        # 无会话上下文时不带排除参数；无用户上下文时原地拒绝，不发回调
+        calls.clear()
+        no_session = {t.name: t for t in agent._make_tools([], user_id=8)}
+        no_session["query_past_questions"].invoke({"keyword": "x"})
+        assert calls == ["/internal/tools/past-qa?userId=8&keyword=x&limit=5"]
+        calls.clear()
+        anon = {t.name: t for t in agent._make_tools([], user_id=None)}
+        assert "未提供用户信息" in anon["query_past_questions"].invoke({"keyword": "x"})
+        assert calls == []
+    finally:
+        agent._call_java_tool = original
 
 
 def test_system_prompt_carries_selected_kb_context():
