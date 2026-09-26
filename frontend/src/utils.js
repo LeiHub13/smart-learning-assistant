@@ -107,3 +107,21 @@ export function parseOptions(s) {
     return []
   }
 }
+
+/**
+ * AI 点评兼容解析：新版为结构化 JSON（评分点逐项批改，summary + points），
+ * 旧版/兜底为纯文本。统一返回 { summary, points }，非 JSON 时 points 为空数组。
+ */
+export function parseReview(raw) {
+  if (!raw) return { summary: '', points: [] }
+  const s = String(raw).trim()
+  if (s.startsWith('{') && s.includes('"points"')) {
+    try {
+      const o = JSON.parse(s)
+      if (o && Array.isArray(o.points) && o.points.length) {
+        return { summary: o.summary || '', points: o.points }
+      }
+    } catch (e) { /* 落入纯文本 */ }
+  }
+  return { summary: s, points: [] }
+}

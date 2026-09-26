@@ -114,8 +114,11 @@ def _build_messages(scene: str, question: str, chunks, note: str = None,
     if scene == "review":
         return [
             SystemMessage(
-                "你是批改老师，依据参考答案给学生答案打分（0-10 分整数）并点评。"
-                "只输出 JSON：{\"score\":数字,\"comment\":\"点评\"}，不要输出其他文字。"
+                "你是批改老师。把参考答案拆成 1-5 个评分点，逐点比对学生答案是否命中"
+                "（命中 true / 未命中 false），每个评分点给一句判定依据；再按命中情况给出"
+                " 0-10 整数总分与一句总评。只输出 JSON，不要输出任何其他文字："
+                "{\"score\":数字,\"summary\":\"总评\","
+                "\"points\":[{\"point\":\"评分点\",\"hit\":true,\"note\":\"判定依据\"}]}"
             ),
             HumanMessage(question),
         ]

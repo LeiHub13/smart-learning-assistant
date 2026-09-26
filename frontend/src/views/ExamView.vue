@@ -113,7 +113,17 @@
         </div>
         <div class="ans"><b>你的答案：</b>{{ it.answer.userAnswer || '（未作答）' }}<br />
           <b>参考答案：</b>{{ it.question.answer }}<br /><b>解析：</b>{{ it.question.analysis }}</div>
-        <div v-if="it.answer.review" class="ans ai" style="margin-top:6px"><b>AI 点评：</b>{{ it.answer.review }}</div>
+        <div v-if="it.answer.review" class="ans ai" style="margin-top:6px">
+          <template v-if="parseReview(it.answer.review).points.length">
+            <b>AI 点评：</b>{{ parseReview(it.answer.review).summary }}
+            <div v-for="(p, pi) in parseReview(it.answer.review).points" :key="pi" class="rv-line">
+              <i :class="p.hit ? 'hit' : 'miss'">{{ p.hit ? '✓' : '✗' }}</i>
+              <span class="rv-p">{{ p.point }}</span>
+              <span v-if="p.note" class="rv-n">{{ p.note }}</span>
+            </div>
+          </template>
+          <template v-else><b>AI 点评：</b>{{ it.answer.review }}</template>
+        </div>
       </div>
     </template>
   </div>
@@ -122,7 +132,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { api, getCourses } from '../api'
-import { parseOptions } from '../utils'
+import { parseOptions, parseReview } from '../utils'
 
 defineOptions({ name: 'ExamView' })
 
@@ -284,4 +294,11 @@ onMounted(async () => {
 .bank { max-height: 240px; overflow: auto; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
 .bank > div { padding: 8px 6px; border-bottom: 1px solid var(--border); cursor: pointer; }
 .bank > div.picked { background: #f3ede2; }
+/* 主观题评分点逐项批改 */
+.rv-line { display: flex; gap: 8px; align-items: baseline; margin-top: 6px; font-size: 13px; line-height: 1.7; }
+.rv-line i { font-style: normal; font-weight: 700; flex-shrink: 0; width: 16px; text-align: center; }
+.rv-line i.hit { color: var(--success); }
+.rv-line i.miss { color: var(--danger); }
+.rv-p { font-weight: 600; }
+.rv-n { color: var(--muted); }
 </style>

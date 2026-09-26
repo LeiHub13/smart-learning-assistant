@@ -155,7 +155,17 @@
             </div>
             <div class="ans"><b>你的答案：</b>{{ it.pq.userAnswer || '（未作答）' }}<br />
               <b>参考答案：</b>{{ it.q.answer }}<br /><b>解析：</b>{{ it.q.analysis }}</div>
-            <div v-if="it.pq.review" class="ans ai" style="margin-top:6px"><b>AI 点评：</b>{{ it.pq.review }}</div>
+            <div v-if="it.pq.review" class="ans ai" style="margin-top:6px">
+              <template v-if="parseReview(it.pq.review).points.length">
+                <b>AI 点评：</b>{{ parseReview(it.pq.review).summary }}
+                <div v-for="(p, pi) in parseReview(it.pq.review).points" :key="pi" class="rv-line">
+                  <i :class="p.hit ? 'hit' : 'miss'">{{ p.hit ? '✓' : '✗' }}</i>
+                  <span class="rv-p">{{ p.point }}</span>
+                  <span v-if="p.note" class="rv-n">{{ p.note }}</span>
+                </div>
+              </template>
+              <template v-else><b>AI 点评：</b>{{ it.pq.review }}</template>
+            </div>
           </div>
           <div class="va-ops">
             <button class="btn accent" @click="closeVariants">完成</button>
@@ -170,7 +180,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, getCourses } from '../api'
-import { fmtTime, parseOptions } from '../utils'
+import { fmtTime, parseOptions, parseReview } from '../utils'
 import AppIcon from '../components/AppIcon.vue'
 
 defineOptions({ name: 'MistakeBookView' })
@@ -399,6 +409,13 @@ const closeVariants = () => { va.value = null }
 }
 .va-stats { margin-bottom: 12px; }
 .va-ops { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+/* 主观题评分点逐项批改 */
+.rv-line { display: flex; gap: 8px; align-items: baseline; margin-top: 6px; font-size: 13px; line-height: 1.7; }
+.rv-line i { font-style: normal; font-weight: 700; flex-shrink: 0; width: 16px; text-align: center; }
+.rv-line i.hit { color: var(--success); }
+.rv-line i.miss { color: var(--danger); }
+.rv-p { font-weight: 600; }
+.rv-n { color: var(--muted); }
 
 /* ===== 分页 / 空态 ===== */
 .pager { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 6px 0 12px; }
