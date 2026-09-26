@@ -99,12 +99,18 @@
       <div class="card">
         <h3>今日推荐</h3>
         <div v-if="!recommend.length" class="empty">暂无推荐，做一组练习后生成</div>
-        <div v-for="(r, i) in recommend" :key="i" class="rc-item">
-            <span class="rc-icon"><AppIcon :name="rcIcon(r.type)" :size="16" /></span>
+        <div v-for="(r, i) in recommend" :key="i" class="rc-item"
+             :class="{ clickable: r.action }" @click="r.action && router.push(r.action)">
+          <span class="rc-icon"><AppIcon :name="rcIcon(r.type)" :size="16" /></span>
           <div class="rc-body">
             <div class="rc-title">{{ r.title }}</div>
             <div class="rc-reason">{{ r.reason }}</div>
+            <details v-if="r.snippet" class="rc-snippet" @click.stop>
+              <summary>展开资料原文</summary>
+              <div class="rc-snippet-txt">{{ r.snippet }}</div>
+            </details>
           </div>
+          <span v-if="r.action" class="rc-go">{{ goLabel(r.type) }}</span>
         </div>
       </div>
     </div>
@@ -160,6 +166,7 @@ const streak = computed(() => {
 })
 
 const rcIcon = (t) => ({ startup: 'zap', review_kp: 'alarm', practice_kp: 'practice', document: 'report' }[t] || 'lightbulb')
+const goLabel = (t) => (t === 'startup' ? '去摸底 →' : '去做题 →')
 const hmLevel = (m) => (m >= 120 ? 'hm-4' : m >= 60 ? 'hm-3' : m >= 30 ? 'hm-2' : m >= 10 ? 'hm-1' : 'hm-0')
 const DOW = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -337,9 +344,18 @@ onBeforeUnmount(() => {
 .quick-row { gap: 12px; flex-wrap: wrap; }
 .rc-item { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
 .rc-item:last-child { border-bottom: none; }
+.rc-item.clickable { cursor: pointer; border-radius: 8px; margin: 0 -8px; padding: 9px 8px; transition: background .15s ease; }
+.rc-item.clickable:hover { background: var(--soft); }
 .rc-icon { color: var(--accent); display: inline-flex; align-items: center; }
 .rc-title { font-weight: 700; font-size: 13px; }
 .rc-reason { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.6; }
+.rc-body { flex: 1; min-width: 0; }
+.rc-go { flex-shrink: 0; align-self: center; font-size: 12px; font-weight: 600; color: var(--primary); white-space: nowrap; }
+.rc-snippet { margin-top: 6px; }
+.rc-snippet summary { cursor: pointer; user-select: none; list-style: none; font-size: 12px; font-weight: 600; color: var(--primary); }
+.rc-snippet summary::-webkit-details-marker { display: none; }
+.rc-snippet[open] summary { margin-bottom: 4px; }
+.rc-snippet-txt { font-size: 12px; color: #57606a; line-height: 1.7; background: var(--soft); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
 .heatmap { display: grid; grid-template-rows: repeat(7, 13px); grid-auto-flow: column; grid-auto-columns: 13px; gap: 3px; }
 .hm-cell { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
 .hm-cell.pad { visibility: hidden; }

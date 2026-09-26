@@ -53,6 +53,7 @@
       <div class="card">
         <div class="row" style="justify-content:space-between">
           <h3 style="margin:0">{{ courseName }} · 本次 {{ paper.length }} 题
+            <span v-if="kp" class="tag">专项：{{ kp }}</span>
             <span class="tag">{{ mistake ? '错题重练' : '作答后提交' }}</span>
           </h3>
           <button class="btn ghost small" @click="confirmExit = true">退出练习</button>
@@ -151,6 +152,7 @@ const historyPage = ref(1)
 const historyTotal = ref(0)
 const PAGE_SIZE = 5
 const mistake = ref(false)
+const kp = ref('')
 const trend = ref([])
 const loading = ref(false)
 const submitting = ref(false)
@@ -176,6 +178,8 @@ onMounted(async () => {
     courseId.value = Number(route.query.courseId)
   }
   if (courses.value.length && !courseId.value) courseId.value = courses.value[0].id
+  // 从今日推荐跳转：限定知识点专项抽题
+  if (route.query.kp) kp.value = String(route.query.kp)
   await loadHistory(1)
   await refreshTrend()
   // 从错题本跳转：自动开始错题重练
@@ -187,6 +191,11 @@ onMounted(async () => {
   // 从收藏夹跳转：自动开始收藏题重练
   if (route.query.favorite) {
     start(true)
+    return
+  }
+  // 从今日推荐跳转：限定知识点专项抽题，自动开始
+  if (route.query.kp) {
+    start()
     return
   }
   // 从答疑 Agent 跳转（如 AI 出题完成后）：自动开始练习
@@ -274,6 +283,7 @@ const start = async (favMode = false) => {
   try {
     const url = '/api/practice/paper?courseId=' + courseId.value + '&count=' + count.value
       + '&favorite=' + favMode + '&mistake=' + mistake.value
+      + (kp.value ? '&kp=' + encodeURIComponent(kp.value) : '')
     paper.value = await api(url)
   } catch (e) {
     error.value = e.message

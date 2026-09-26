@@ -46,8 +46,25 @@ public class PracticeService {
     private final com.example.learningassistant.recommend.service.RecommendService recommendService;
 
     public List<Map<String, Object>> paper(Long userId, Long courseId, int count, boolean favorite, boolean mistake) {
+        return paper(userId, courseId, count, favorite, mistake, null);
+    }
+
+    public List<Map<String, Object>> paper(Long userId, Long courseId, int count, boolean favorite, boolean mistake, String kp) {
         if (count < 1) {
             count = 5;
+        }
+        // 知识点专项抽题（今日推荐「复习/专项练习」落点）：题源限定该知识点的题目
+        if (kp != null && !kp.isBlank()) {
+            List<Question> kqs = questionMapper.selectList(new LambdaQueryWrapper<Question>()
+                    .eq(Question::getCourseId, courseId)
+                    .eq(Question::getKpName, kp));
+            if (kqs.isEmpty()) {
+                throw new BizException("知识点「" + kp + "」暂无题目，先练练别的吧");
+            }
+            List<Question> shuffledKp = new ArrayList<>(kqs);
+            java.util.Collections.shuffle(shuffledKp);
+            return shuffledKp.stream().limit(Math.min(count, shuffledKp.size()))
+                    .map(q -> toPaperItem(q, false)).toList();
         }
         if (mistake) {
             // 错题重练：以错题本为题源，重练答对后自动出本
