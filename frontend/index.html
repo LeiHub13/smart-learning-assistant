@@ -129,6 +129,7 @@ body {
 /* ======== 主区域 ======== */
 .main {
   flex: 1; overflow: auto; padding: 24px 32px 40px;
+  background: var(--soft);
   scrollbar-gutter: stable;
 }
 .page-title { font-size: 24px; font-weight: 600; letter-spacing: -.01em; }
@@ -136,6 +137,7 @@ body {
 .card {
   background: var(--card); border: 1px solid var(--border); border-radius: 8px;
   padding: 20px; margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(31,35,40,.05);
   transition: box-shadow .2s ease, border-color .2s ease;
 }
 .card:hover { box-shadow: 0 1px 3px rgba(31,35,40,.08), 0 8px 24px rgba(31,35,40,.06); }
@@ -261,6 +263,7 @@ textarea { resize: vertical; min-height: 80px; }
 .chatbox {
   flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--card);
   border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(31,35,40,.05);
 }
 .msgs { flex: 1; overflow-y: auto; padding: 22px 24px; }
 .m { display: flex; gap: 10px; margin-bottom: 18px; animation: msg-in .22s ease; }
