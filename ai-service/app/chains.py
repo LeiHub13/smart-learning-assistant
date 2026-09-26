@@ -14,6 +14,7 @@
 """
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -178,6 +179,11 @@ def _summarizer(old_summary: str, rows_text: str) -> str:
 # 进入画像提炼的单轮问答截断长度（防止长回答撑爆提炼提示词）
 PROFILE_TEXT_LIMIT = 500
 
+# 画像提炼并发闸门：提炼调用不走 _call_with_limit 的场景信号量，须自限并发，
+# 避免突发流量下无限开线程、无限并发打 LLM
+_PROFILE_CONCURRENCY = int(os.getenv("AI_PROFILE_CONCURRENCY", "2"))
+_PROFILE_SLOTS = threading.BoundedSemaphore(_PROFILE_CONCURRENCY)
+
 
 def _extract_profile(user_id, question: str, answer: str) -> None:
     """后台线程：把本轮答疑中的长期有效信息合并进学生画像（跨会话记忆）。
@@ -203,14 +209,23 @@ def _extract_profile(user_id, question: str, answer: str) -> None:
         logger.warning("用户画像提炼失败（忽略，userId=%s）: %s", user_id, e)
 
 
+def _extract_profile_limited(user_id, question: str, answer: str) -> None:
+    try:
+        _extract_profile(user_id, question, answer)
+    finally:
+        _PROFILE_SLOTS.release()
+
+
 def _remember(session_id: str, user_id, question: str, answer: str) -> None:
     """落会话记忆（成对追加 + 触发滚动压缩），并异步提炼用户长期画像。"""
     if session_id:
         memory.add(session_id, "user", question)
         memory.add(session_id, "assistant", answer)
         memory.maybe_compress(session_id, _summarizer)
-    if user_id:
-        threading.Thread(target=_extract_profile, args=(user_id, question, answer),
+    if user_id and _PROFILE_SLOTS.acquire(blocking=False):
+        # 有限并发：闸门占满时直接放弃本轮提炼（旁路任务，合并式 prompt 会由后续轮次补上），
+        # 不排队、不无限开线程；守护线程随进程退出，不阻塞服务关闭
+        threading.Thread(target=_extract_profile_limited, args=(user_id, question, answer),
                          daemon=True, name="profile-extract").start()
 
 

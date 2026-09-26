@@ -62,3 +62,22 @@ def test_assemble_no_profile_when_absent(monkeypatch, tmp_path):
 
     msgs = chains._assemble("free", "怎么学递归？", None, "sess-q", user_id=9)
     assert not any(isinstance(m, SystemMessage) and "学生长期画像" in m.content for m in msgs)
+
+
+def test_remember_profile_gated_by_slots(monkeypatch):
+    """画像提炼并发闸门：槽位占满时放弃本轮（不起线程），释放后恢复提炼。"""
+    import threading
+
+    called = threading.Event()
+    monkeypatch.setattr(chains, "_extract_profile", lambda *a, **k: called.set())
+
+    # 占满全部槽位
+    while chains._PROFILE_SLOTS.acquire(blocking=False):
+        pass
+    chains._remember(None, 9, "请结合例题讲讲递归的基准情况", "好的，我们来看这道题……" * 10)
+    assert not called.is_set()
+
+    for _ in range(chains._PROFILE_CONCURRENCY):
+        chains._PROFILE_SLOTS.release()
+    chains._remember(None, 9, "请结合例题讲讲递归的基准情况", "好的，我们来看这道题……" * 10)
+    assert called.wait(timeout=5)
