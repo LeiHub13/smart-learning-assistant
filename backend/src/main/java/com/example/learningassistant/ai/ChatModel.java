@@ -19,7 +19,15 @@ public interface ChatModel {
     /**
      * 流式补全：增量文本回调 + 完成回调 + 异常回调。
      *
-     * @param onDone 完成回调，参数为引用来源（RAG 命中的片段编号，如 "1,2,3"；无引用时为空串）
+     * @param onDone 完成回调：refs 为引用来源（RAG 命中的片段编号，如 "1,2,3"；无引用时为空串），
+     *               chunkIds 为与编号一一对齐的 chunkId 串（如 "12,15,18"；不支持来源追溯的适配器为空串）
      */
-    void stream(List<AIChatMessage> messages, Consumer<String> onDelta, Consumer<String> onDone, Consumer<Throwable> onError);
+    void stream(List<AIChatMessage> messages, Consumer<String> onDelta, Consumer<SourceRefs> onDone, Consumer<Throwable> onError);
+
+    /** 完成回调载荷：引用编号 + 对齐的 chunkId 列表（前端点引用跳原文用）。 */
+    record SourceRefs(String refs, String chunkIds) {
+        public static SourceRefs empty() {
+            return new SourceRefs("", "");
+        }
+    }
 }

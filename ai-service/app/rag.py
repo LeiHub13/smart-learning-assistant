@@ -4,6 +4,7 @@
 迁移到本模块后由 ai-service 自行完成检索与上下文组装，并把引用编号 sources 回传给 Java 落库。
 
 sources 格式与原实现保持一致：逗号分隔的引用编号（"1,2,3"），前端按编号展示「引用来源」。
+chunk_ids 与引用编号一一对齐的 chunkId 列表，随回答回传供「点引用跳原文」取片段原文。
 """
 import json
 import logging
@@ -14,10 +15,11 @@ logger = logging.getLogger("ai-service.rag")
 
 
 class RagContext:
-    def __init__(self, context: str, sources: str, hits: list[dict]):
+    def __init__(self, context: str, sources: str, hits: list[dict], chunk_ids: list[int] = None):
         self.context = context
         self.sources = sources
         self.hits = hits
+        self.chunk_ids = chunk_ids or []
 
     @property
     def empty(self) -> bool:
@@ -51,7 +53,8 @@ def build_context(kb_id, question: str, history: list[dict] | None = None,
     picked = hits[:config.RAG_TOP_K]
     lines = [f"[{i}] {h['content']}" for i, h in enumerate(picked, start=1)]
     sources = ",".join(str(i) for i in range(1, len(picked) + 1))
-    return RagContext("\n".join(lines), sources, picked)
+    chunk_ids = [int(h["chunkId"]) for h in picked if h.get("chunkId") is not None]
+    return RagContext("\n".join(lines), sources, picked, chunk_ids)
 
 
 def _rewrite(question: str, history: list[dict]) -> str | None:

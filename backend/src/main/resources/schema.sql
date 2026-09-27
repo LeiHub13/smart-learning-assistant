@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS t_chat_message (
     role       VARCHAR(20) NOT NULL,
     content    TEXT NOT NULL,
     sources    VARCHAR(1000),
+    source_chunks VARCHAR(300),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

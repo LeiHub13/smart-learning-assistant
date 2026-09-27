@@ -65,14 +65,14 @@ public class SpringAiChatModel implements ChatModel {
     }
 
     @Override
-    public void stream(List<AIChatMessage> messages, Consumer<String> onDelta, Consumer<String> onDone, Consumer<Throwable> onError) {
+    public void stream(List<AIChatMessage> messages, Consumer<String> onDelta, Consumer<SourceRefs> onDone, Consumer<Throwable> onError) {
         try {
             client().prompt()
                     .messages(toSpringMessages(messages))
                     .stream()
                     .content()
                     // 该适配器不经过 ai-service，无知识库检索能力，引用来源恒为空
-                    .subscribe(onDelta::accept, onError::accept, () -> onDone.accept(""));
+                    .subscribe(onDelta::accept, onError::accept, () -> onDone.accept(SourceRefs.empty()));
         } catch (Exception e) {
             onError.accept(e);
         }

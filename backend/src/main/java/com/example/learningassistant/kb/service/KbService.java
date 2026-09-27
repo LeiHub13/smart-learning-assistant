@@ -217,6 +217,29 @@ public class KbService {
     }
 
     /**
+     * 按 chunkId 批量取片段原文 + 所属文档名（答疑「点引用跳原文」用）。
+     * 登录即可访问，与文档预览同一权限口径；内容截断防单条超长。
+     */
+    public List<Map<String, Object>> chunkRefs(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        List<Chunk> chunks = chunkMapper.selectBatchIds(ids.stream().distinct().limit(10).toList());
+        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        for (Chunk c : chunks) {
+            Document doc = documentMapper.selectById(c.getDocId());
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("chunkId", c.getId());
+            m.put("docId", c.getDocId());
+            m.put("docName", doc == null || doc.getFileName() == null ? "课程资料" : doc.getFileName());
+            String content = c.getContent() == null ? "" : c.getContent();
+            m.put("content", content.length() > 600 ? content.substring(0, 600) + "…" : content);
+            result.add(m);
+        }
+        return result;
+    }
+
+    /**
      * ai-service 侧的向量条数（-1 表示 ai-service 不可达）。
      */
     public long vectorCount() {

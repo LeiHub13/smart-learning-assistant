@@ -1,6 +1,7 @@
 package com.example.learningassistant.web.controller;
 
 import com.example.learningassistant.agent.service.AgentActionService;
+import com.example.learningassistant.ai.ChatModel;
 import com.example.learningassistant.chat.entity.ChatMessage;
 import com.example.learningassistant.chat.entity.ChatSession;
 import com.example.learningassistant.chat.service.ChatService;
@@ -101,8 +102,11 @@ public class ChatController {
                         log.warn("查询待确认动作失败: {}", e.getMessage());
                         actions = List.of();
                     }
+                    var r = sources == null ? ChatModel.SourceRefs.empty() : sources;
                     safeSend(emitter, clientGone, Map.of(
-                            "sources", sources == null ? "" : sources, "actions", actions));
+                            "sources", r.refs() == null ? "" : r.refs(),
+                            "sourceChunks", r.chunkIds() == null ? "" : r.chunkIds(),
+                            "actions", actions));
                     safeComplete(emitter, clientGone);
                 });
         return emitter;

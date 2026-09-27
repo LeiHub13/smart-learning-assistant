@@ -538,6 +538,7 @@ def _seed_materials(chunks, session_id, kb_id, question, meta, kb_ids=None):
                             kb_ids=kb_ids)
     if meta is not None:
         meta["sources"] = ctx.sources
+        meta["sourceChunks"] = ",".join(str(i) for i in ctx.chunk_ids)
     return [h["content"] for h in ctx.hits]
 
 

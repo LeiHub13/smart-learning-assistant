@@ -285,6 +285,8 @@ def _prepare_rag(scene: str, question: str, chunks, session_id, kb_id, meta: dic
     ctx = rag.build_context(kb_id, question, memory.recent(session_id) if session_id else None,
                             kb_ids=kb_ids)
     meta["sources"] = ctx.sources
+    # 与 sources 序号对齐的 chunkId 列表：Java 落库后供前端「点引用跳原文」（getattr 兼容测试桩/旧调用方）
+    meta["sourceChunks"] = ",".join(str(i) for i in getattr(ctx, "chunk_ids", []))
     return ctx.context
 
 

@@ -128,7 +128,7 @@ public class ChatService {
      * 流式对话：可选 query 改写 -> RAG 检索（可选 Rerank） -> 历史拼装 -> 流式生成 -> 落库。
      */
     public void streamMessage(Long sessionId, String question, Long userId,
-                              Consumer<String> onDelta, Consumer<String> onDone) {
+                              Consumer<String> onDelta, Consumer<com.example.learningassistant.ai.ChatModel.SourceRefs> onDone) {
         ChatSession session = requireOwnedSession(sessionId, userId);
         LocalDateTime now = LocalDateTime.now();
 
@@ -197,16 +197,21 @@ public class ChatService {
         model.stream(messages, msg -> {
             acc.append(msg);
             onDelta.accept(msg);
-        }, sources -> {
-            String refs = sources == null ? "" : sources.trim();
+        }, refs -> {
+            com.example.learningassistant.ai.ChatModel.SourceRefs r = refs == null
+                    ? ChatModel.SourceRefs.empty() : refs;
+            String sourceRefs = r.refs() == null ? "" : r.refs().trim();
+            String chunkIds = r.chunkIds() == null ? "" : r.chunkIds().trim();
             ChatMessage aiMsg = new ChatMessage();
             aiMsg.setSessionId(sessionId);
             aiMsg.setRole("assistant");
             aiMsg.setContent(acc.toString());
-            aiMsg.setSources(refs.isEmpty() ? null : refs);
+            aiMsg.setSources(sourceRefs.isEmpty() ? null : sourceRefs);
+            // 与 sources 序号对齐的 chunkId 串：前端「点引用跳原文」按它取片段原文
+            aiMsg.setSourceChunks(chunkIds.isEmpty() ? null : chunkIds);
             aiMsg.setCreatedAt(LocalDateTime.now());
             messageMapper.insert(aiMsg);
-            onDone.accept(refs);
+            onDone.accept(r);
         }, e ->
                 // 运行在 ai-stream 守护线程里，异常无人接收：只记日志，rethrow 只会以
                 // 未捕获异常形式杀掉线程并留下噪音栈

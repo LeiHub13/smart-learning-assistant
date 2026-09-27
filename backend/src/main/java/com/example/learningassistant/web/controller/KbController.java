@@ -58,6 +58,15 @@ public class KbController {
         return ApiResponse.ok(kbService.previewDocument(kbId, docId));
     }
 
+    /** 片段原文批量查询：答疑「点引用跳原文」按 chunkId 取正文与所属文档名（登录即可访问，同预览口径）。 */
+    @GetMapping("/api/kb/chunks")
+    public ApiResponse<List<Map<String, Object>>> chunkRefs(@RequestParam String ids) {
+        List<Long> chunkIds = java.util.Arrays.stream(ids.split(","))
+                .map(String::trim).filter(s -> !s.isEmpty())
+                .map(Long::valueOf).toList();
+        return ApiResponse.ok(kbService.chunkRefs(chunkIds));
+    }
+
     @PostMapping("/api/kb/{kbId}/documents")
     public ApiResponse<Map<String, Object>> addDocument(@PathVariable Long kbId, @RequestBody Map<String, String> body) {
         String fileName = body.get("fileName");

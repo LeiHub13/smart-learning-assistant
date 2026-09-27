@@ -78,11 +78,12 @@ public class PythonAIChatModel implements ChatModel {
     }
 
     @Override
-    public void stream(List<AIChatMessage> messages, Consumer<String> onDelta, Consumer<String> onDone, Consumer<Throwable> onError) {
+    public void stream(List<AIChatMessage> messages, Consumer<String> onDelta, Consumer<SourceRefs> onDone, Consumer<Throwable> onError) {
         RequestPayload payload = toPayload(messages);
         Thread streamThread = new Thread(() -> {
             HttpURLConnection conn = null;
             String sources = "";
+            String chunkIds = "";
             try {
                 conn = (HttpURLConnection) URI.create(baseUrl + "/ai/stream").toURL().openConnection();
                 conn.setRequestMethod("POST");
@@ -115,6 +116,8 @@ public class PythonAIChatModel implements ChatModel {
                         } else if (Boolean.TRUE.equals(d.get("done"))) {
                             Object s = d.get("sources");
                             sources = s == null ? "" : String.valueOf(s);
+                            Object sc = d.get("sourceChunks");
+                            chunkIds = sc == null ? "" : String.valueOf(sc);
                             break;
                         } else if (d.containsKey("error")) {
                             throw new IllegalStateException("ai-service: " + d.get("error"));
@@ -123,7 +126,7 @@ public class PythonAIChatModel implements ChatModel {
                         log.warn("SSE 行解析跳过: {}", data);
                     }
                 }
-                onDone.accept(sources);
+                onDone.accept(new SourceRefs(sources, chunkIds));
             } catch (Exception e) {
                 onError.accept(e);
             } finally {

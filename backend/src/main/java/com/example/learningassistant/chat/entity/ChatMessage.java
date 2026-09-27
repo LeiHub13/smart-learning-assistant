@@ -21,5 +21,7 @@ public class ChatMessage {
     private String role;
     private String content;
     private String sources;
+    /** 与 sources 序号一一对齐的 chunkId 串（如 "12,15"），供前端点引用跳原文；旧消息为 NULL */
+    private String sourceChunks;
     private LocalDateTime createdAt;
 }

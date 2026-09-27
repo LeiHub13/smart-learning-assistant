@@ -125,7 +125,8 @@ def complete(req: CompleteRequest):
                                   note=req.note, meta=meta,
                                   course_id=req.courseId or None,
                                   kb_name=req.kbName, kb_scope=req.kbScope)
-        return {"content": content, "sources": meta.get("sources", "")}
+        return {"content": content, "sources": meta.get("sources", ""),
+                "sourceChunks": meta.get("sourceChunks", "")}
     except RuntimeError as e:
         logger.error("complete 失败: %s", e)
         raise HTTPException(502, str(e)) from e
@@ -146,9 +147,10 @@ async def stream(req: StreamRequest):
                                        course_id=req.courseId or None,
                                        kb_name=req.kbName, kb_scope=req.kbScope):
                 yield {"event": "message", "data": json.dumps({"delta": delta}, ensure_ascii=False)}
-            # sources：本服务自行检索时产出的引用编号，由 Java 落库
+            # sources：本服务自行检索时产出的引用编号；sourceChunks：对齐的 chunkId，供「点引用跳原文」
             yield {"event": "message",
-                   "data": json.dumps({"done": True, "sources": meta.get("sources", "")})}
+                   "data": json.dumps({"done": True, "sources": meta.get("sources", ""),
+                                       "sourceChunks": meta.get("sourceChunks", "")}, ensure_ascii=False)}
         except RuntimeError as e:
             logger.error("stream 失败: %s", e)
             yield {"event": "error", "data": json.dumps({"error": str(e)})}

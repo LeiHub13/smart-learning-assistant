@@ -57,7 +57,19 @@
             <div v-else-if="m.role === 'user'">{{ m.content }}</div>
             <div v-else v-html="mdToHtml(m.content)"></div>
             <div v-if="m.sources && m.role === 'assistant' && !(streaming && i === messages.length - 1)" class="sources">
-              引用来源：知识库片段 {{ m.sources.split(',').join('、') }}
+              <template v-if="m.sourceChunks">
+                <span>引用来源：</span>
+                <a v-for="(cid, si) in m.sourceChunks.split(',')" :key="si"
+                   class="src-chip" @click="jumpSource(m, si + 1)">[{{ si + 1 }}]</a>
+              </template>
+              <template v-else>引用来源：知识库片段 {{ m.sources.split(',').join('、') }}</template>
+            </div>
+            <div v-if="m.showSources && m.sourceChunks" class="src-panel">
+              <div v-for="(d, di) in m.sourceDetails || []" :key="di" class="src-item"
+                   :class="{ flash: m.flashSrc === di + 1 }">
+                <div class="src-doc">[{{ di + 1 }}] 《{{ d.docName }}》</div>
+                <div class="src-txt">{{ d.content }}</div>
+              </div>
             </div>
             <!-- Agent 待确认动作：只有点击「确认执行」后 Java 侧才真正写库 -->
             <div v-for="a in m.actions || []" :key="a.id" class="agent-action">
@@ -96,7 +108,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, sseStream, getCourses } from '../api'
 import { mdToHtml } from '../utils'
@@ -270,6 +282,7 @@ const openSession = async (id) => {
       role: 'assistant',
       content: activeStream.target.content,
       sources: activeStream.target.sources || '',
+      sourceChunks: activeStream.target.sourceChunks || '',
       actions: activeStream.target.actions || []
     }
     messages.value.push(seeded)
@@ -329,6 +342,7 @@ const send = async () => {
       (done) => {
         if (activeStream.target) {
           activeStream.target.sources = (done && done.sources) || ''
+          activeStream.target.sourceChunks = (done && done.sourceChunks) || ''
           activeStream.target.actions = (done && done.actions) || []
         }
       })
@@ -341,6 +355,27 @@ const send = async () => {
     sessions.value = await api('/api/chat/sessions')
     if (sessionId.value === sid) scrollDown()
   }
+}
+
+/* ===== 引用跳转：点 [n] 展开来源原文面板并高亮定位（chunk 原文懒加载，按消息缓存） ===== */
+const jumpSource = async (m, n) => {
+  m.showSources = true
+  m.flashSrc = n
+  if (!m.sourceDetails) {
+    try {
+      m.sourceDetails = await api('/api/kb/chunks?ids=' + m.sourceChunks)
+    } catch (e) {
+      showHint('引用原文加载失败：' + e.message)
+      m.showSources = false
+      return
+    }
+  }
+  nextTick(() => {
+    const panel = document.querySelector('.src-panel')
+    const item = panel && panel.children[n - 1]
+    if (item) item.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+  setTimeout(() => { if (m.flashSrc === n) m.flashSrc = 0 }, 1800)
 }
 
 const confirmAction = async (m, a) => {
@@ -383,4 +418,19 @@ const cancelAction = async (m, a) => {
   display: flex; gap: 8px; background: #ddf4ff;
   border-radius: 0 0 8px 8px; padding: 6px 10px;
 }
+
+/* 引用跳转：chips + 来源原文面板 */
+.src-chip {
+  cursor: pointer; font-weight: 700; margin: 0 3px; padding: 1px 6px;
+  border: 1px solid currentColor; border-radius: 6px; transition: background .15s ease;
+}
+.src-chip:hover { background: #fff; }
+.src-panel { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.src-item {
+  background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+  transition: border-color .3s ease, box-shadow .3s ease;
+}
+.src-item.flash { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(9,105,218,.18); }
+.src-doc { font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 3px; }
+.src-txt { font-size: 12.5px; color: #57606a; line-height: 1.7; }
 </style>
