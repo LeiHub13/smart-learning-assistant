@@ -96,6 +96,16 @@ def _build_messages(scene: str, question: str, chunks, note: str = None,
                           + _kb_suffix(kb_name, kb_scope) + _note_suffix(note) + socratic_suffix),
             HumanMessage(question),
         ]
+    if scene == "flashcards":
+        return [
+            SystemMessage(
+                "你是学习卡片制作师。阅读材料，提炼 5-10 张问对式闪卡帮助记忆："
+                "front 是一个具体、可自测的问题（不要是判断题式的是非句），back 是简洁准确的答案（50 字内）。"
+                "覆盖材料中最重要的概念与关系，不要照抄原文长句。只输出 JSON 数组，不要输出任何其他文字："
+                '[{"front":"问题","back":"答案"}]'
+            ),
+            HumanMessage(question),
+        ]
     if scene == "doc_overview":
         return [
             SystemMessage(
@@ -332,7 +342,7 @@ def complete(scene: str, question: str, chunks=None, session_id: str = None,
     answer = resp.content
     if _memorable(scene):
         _remember(session_id, user_id, question, answer)
-    if scene in ("questions", "plan", "recommend"):
+    if scene in ("questions", "plan", "recommend", "flashcards"):
         return _ensure_json_array(answer)
     if scene == "doc_overview":
         return _ensure_json_object(answer)

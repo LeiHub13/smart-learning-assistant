@@ -47,7 +47,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="AI Service (langchain)", version="1.0.0", lifespan=lifespan)
 
-SCENES = {"rag_qa", "free", "agent", "lecture", "questions", "review", "advice", "doc_overview",
+SCENES = {"rag_qa", "free", "agent", "lecture", "questions", "review", "advice", "doc_overview", "flashcards",
           "rewrite", "rerank", "plan", "report", "recommend"}
 
 

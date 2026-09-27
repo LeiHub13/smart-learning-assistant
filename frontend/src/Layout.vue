@@ -157,6 +157,7 @@ const menus = [
     children: [
       { key: 'practice', title: '题库练习', path: '/practice', icon: 'practice' },
       { key: 'mistakes', title: '错题本', path: '/mistakes', icon: 'target' },
+      { key: 'flashcards', title: '闪卡', path: '/flashcards', icon: 'lightbulb' },
       { key: 'favorites', title: '收藏夹', path: '/favorites', icon: 'star' },
       { key: 'bank', title: '题库管理', path: '/bank', icon: 'bank' },
       { key: 'exam', title: '在线考试', path: '/exam', icon: 'exam' }

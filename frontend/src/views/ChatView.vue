@@ -44,6 +44,7 @@
 
     <div class="chatbox">
       <div class="chat-toolbar">
+        <button class="btn ghost small" :disabled="streaming || !sessionId" @click="genFlashcards">生成闪卡</button>
         <label class="socratic-toggle" title="开启后 AI 不直接给答案，拆步骤反问引导你思考">
           <input type="checkbox" :checked="socratic" @change="toggleSocratic" />
           苏格拉底引导
@@ -389,6 +390,20 @@ const send = async () => {
     activeStream.target = null
     sessions.value = await api('/api/chat/sessions')
     if (sessionId.value === sid) scrollDown()
+  }
+}
+
+/* 一键把当前会话提炼成闪卡 */
+const genFlashcards = async () => {
+  if (!sessionId.value) {
+    showHint('先选择或新建会话')
+    return
+  }
+  try {
+    const r = await api('/api/flashcards/generate', { method: 'POST', body: { mode: 'chat', sourceId: sessionId.value } })
+    showHint('已生成 ' + r.created + ' 张闪卡，去「闪卡」页复习')
+  } catch (e) {
+    showHint(e.message)
   }
 }
 

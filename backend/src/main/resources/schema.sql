@@ -145,6 +145,21 @@ CREATE TABLE IF NOT EXISTS t_chat_message (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS t_flashcard (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   BIGINT DEFAULT 1,
+    user_id     BIGINT,
+    course_id   BIGINT,
+    source      VARCHAR(20),
+    source_id   BIGINT,
+    front       VARCHAR(1000),
+    back        TEXT,
+    box         INT DEFAULT 1,
+    last_result VARCHAR(10),
+    last_reviewed_at TIMESTAMP NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS t_generated_content (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     tenant_id  BIGINT DEFAULT 1,
