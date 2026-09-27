@@ -63,6 +63,7 @@ class CompleteRequest(BaseModel):
     note: str | None = Field(default=None)
     kbName: str | None = Field(default=None)
     kbScope: str | None = Field(default=None)
+    socratic: bool = Field(default=False)
 
 
 class StreamRequest(CompleteRequest):
@@ -124,7 +125,8 @@ def complete(req: CompleteRequest):
                                   user_id=req.userId, kb_id=req.kbId, kb_ids=req.kbIds or None,
                                   note=req.note, meta=meta,
                                   course_id=req.courseId or None,
-                                  kb_name=req.kbName, kb_scope=req.kbScope)
+                                  kb_name=req.kbName, kb_scope=req.kbScope,
+                                  socratic=req.socratic)
         return {"content": content, "sources": meta.get("sources", ""),
                 "sourceChunks": meta.get("sourceChunks", "")}
     except RuntimeError as e:
@@ -145,7 +147,8 @@ async def stream(req: StreamRequest):
                                        user_id=req.userId, kb_id=req.kbId, kb_ids=req.kbIds or None,
                                        note=req.note, meta=meta,
                                        course_id=req.courseId or None,
-                                       kb_name=req.kbName, kb_scope=req.kbScope):
+                                       kb_name=req.kbName, kb_scope=req.kbScope,
+                                       socratic=req.socratic):
                 yield {"event": "message", "data": json.dumps({"delta": delta}, ensure_ascii=False)}
             # sources：本服务自行检索时产出的引用编号；sourceChunks：对齐的 chunkId，供「点引用跳原文」
             yield {"event": "message",

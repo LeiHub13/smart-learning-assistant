@@ -81,3 +81,14 @@ def test_remember_profile_gated_by_slots(monkeypatch):
         chains._PROFILE_SLOTS.release()
     chains._remember(None, 9, "请结合例题讲讲递归的基准情况", "好的，我们来看这道题……" * 10)
     assert called.wait(timeout=5)
+
+
+def test_socratic_prompt_appended_only_when_enabled():
+    """引导模式开关：开启时系统提示拼入苏格拉底引导块，关闭时不出现在提示里。"""
+    on = chains._build_messages("free", "什么是TCP三次握手？", None, socratic=True)
+    assert "苏格拉底引导模式" in on[0].content
+    assert "引导问题" in on[0].content
+    off = chains._build_messages("free", "什么是TCP三次握手？", None)
+    assert "苏格拉底引导" not in off[0].content
+    rag_on = chains._build_messages("rag_qa", "什么是TCP三次握手？", ["片段A"], socratic=True)
+    assert "苏格拉底引导模式" in rag_on[0].content

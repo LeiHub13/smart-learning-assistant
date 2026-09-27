@@ -88,7 +88,8 @@ public class ChatService {
         return s;
     }
 
-    public ChatSession updateSession(Long id, Long userId, String title, Long courseId, Long kbId, String kbScope) {
+    public ChatSession updateSession(Long id, Long userId, String title, Long courseId, Long kbId, String kbScope,
+                                     Boolean socratic) {
         ChatSession s = requireOwnedSession(id, userId);
         if (title != null && !title.isBlank()) {
             s.setTitle(title.trim());
@@ -102,6 +103,10 @@ public class ChatService {
         }
         if (kbScope != null && s.getKbId() != null) {
             s.setKbScope(normalizeScope(kbScope));
+        }
+        // 引导模式三态：null=不变（重命名场景），true/false=显式开关
+        if (socratic != null) {
+            s.setSocratic(socratic);
         }
         sessionMapper.updateById(s);
         return s;
@@ -181,6 +186,11 @@ public class ChatService {
         if (!profile.isEmpty()) {
             // NOTE 供 ai-service 拼进系统提示（单行，标记以换行结尾）；其余适配器直接续在 system 后
             system.append("\nNOTE:").append(profile.replaceAll("\\s+", " "));
+        }
+
+        if (Boolean.TRUE.equals(session.getSocratic())) {
+            // 苏格拉底引导：Python 侧 rag_qa/free 提示词据此切换为「只引导不给答案」
+            system.append("\nSOCRATIC:1");
         }
 
         system.append("\nUSER_ID:").append(userId)

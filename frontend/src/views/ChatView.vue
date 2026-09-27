@@ -31,7 +31,7 @@
                  @click.stop @keyup.enter="doRename(s)" @keyup.esc="cancelRename" @blur="doRename(s)" />
           <template v-else>
             <span class="sess-title">{{ s.title }}</span>
-            <span class="sess-mode-tag">{{ s.kbId ? '知识库' : '自由' }}</span>
+            <span class="sess-mode-tag">{{ s.socratic ? '引导' : (s.kbId ? '知识库' : '自由') }}</span>
             <span class="sess-ops" @click.stop>
               <button class="sess-btn" title="重命名" @click="startRename(s)">✎</button>
               <button class="sess-btn" title="删除" @click="removeSession(s)">✕</button>
@@ -43,6 +43,16 @@
     </div>
 
     <div class="chatbox">
+      <div class="chat-toolbar">
+        <label class="socratic-toggle" title="开启后 AI 不直接给答案，拆步骤反问引导你思考">
+          <input type="checkbox" :checked="socratic" @change="toggleSocratic" />
+          苏格拉底引导
+        </label>
+        <template v-if="socratic">
+          <span class="socratic-hint">引导模式：AI 逐步反问，不直接给答案</span>
+          <a class="link" style="margin-left:auto;font-size:12px" @click="askDirect">卡住了？直接讲解</a>
+        </template>
+      </div>
       <div class="msgs" ref="bodyRef">
         <div v-if="!messages.length" class="empty">
           <div style="font-size:16px;font-weight:600;margin-bottom:8px">你好，我是 AI 学习助手</div>
@@ -86,7 +96,7 @@
         </div>
       </div>
       <div class="input-bar">
-        <textarea v-model="input" placeholder="输入问题，Enter 发送" :disabled="streaming"
+        <textarea v-model="input" :placeholder="socratic ? '输入你的思考或回答…（引导模式）' : '输入问题，Enter 发送'" :disabled="streaming"
                   @keydown.enter.exact.prevent="send"></textarea>
         <button class="btn" :disabled="streaming || !input.trim()" @click="send">
           {{ streaming ? '生成中…' : '发送' }}
@@ -125,6 +135,7 @@ const messages = ref([])
 const input = ref('')
 const streaming = ref(false)
 const mode = ref('kb')
+const socratic = ref(false)
 const courseId = ref(null)
 const kbId = ref(null)
 const kbScope = ref('single')
@@ -202,6 +213,29 @@ const onScopeChange = async () => {
   } catch (e) {
     showHint(e.message)
   }
+}
+
+/* ===== 苏格拉底引导模式：会话级开关，开启后 AI 逐步反问不直接给答案 ===== */
+const toggleSocratic = async () => {
+  if (!sessionId.value) {
+    showHint('先选择或新建会话，再开启引导模式')
+    return
+  }
+  const next = !socratic.value
+  try {
+    const up = await api('/api/chat/sessions/' + sessionId.value, { method: 'PUT', body: { socratic: next } })
+    socratic.value = !!up.socratic
+    const s = sessions.value.find((x) => x.id === sessionId.value)
+    if (s) s.socratic = !!up.socratic
+  } catch (e) {
+    showHint(e.message)
+  }
+}
+
+const askDirect = () => {
+  if (streaming.value) return
+  input.value = '我卡住了，请直接给我讲解'
+  send()
 }
 
 let hintTimer = null
@@ -301,6 +335,7 @@ const openSession = async (id) => {
   const s = sessions.value.find((x) => x.id === id)
   if (s) {
     mode.value = sessionMode(s)
+    socratic.value = !!s.socratic
     if (mode.value === 'kb') {
       courseId.value = s.courseId || null
       kbId.value = s.kbId || null
@@ -433,4 +468,17 @@ const cancelAction = async (m, a) => {
 .src-item.flash { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(9,105,218,.18); }
 .src-doc { font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 3px; }
 .src-txt { font-size: 12.5px; color: #57606a; line-height: 1.7; }
+
+/* 苏格拉底引导模式 */
+.chat-toolbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 18px 0; font-size: 12.5px;
+}
+.socratic-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  cursor: pointer; user-select: none; font-weight: 600; color: var(--muted);
+}
+.socratic-toggle input { width: auto; margin: 0; accent-color: var(--primary); }
+.socratic-toggle:has(input:checked) { color: var(--primary); }
+.socratic-hint { color: var(--muted); }
 </style>

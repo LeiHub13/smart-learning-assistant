@@ -60,8 +60,11 @@ public class ChatController {
     public ApiResponse<ChatSession> rename(HttpServletRequest request, @PathVariable Long id,
                                            @RequestBody Map<String, Object> body) {
         AuthUser u = CurrentUser.get(request);
+        Boolean socratic = body.get("socratic") == null ? null
+                : Boolean.parseBoolean(String.valueOf(body.get("socratic")));
         return ApiResponse.ok(chatService.updateSession(id, u.id(), (String) body.get("title"),
-                asLong(body.get("courseId")), asLong(body.get("kbId")), (String) body.get("kbScope")));
+                asLong(body.get("courseId")), asLong(body.get("kbId")), (String) body.get("kbScope"),
+                socratic));
     }
 
     @DeleteMapping("/{id}")

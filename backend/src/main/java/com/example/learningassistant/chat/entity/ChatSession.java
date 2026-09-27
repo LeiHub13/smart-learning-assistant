@@ -22,6 +22,8 @@ public class ChatSession {
     private Long kbId;
     /** 检索范围：single=只搜 kbId 这个知识库（默认），course=搜本课程全部知识库。 */
     private String kbScope;
+    /** 苏格拉底引导模式：开启后 AI 不直接给答案，拆步骤反问引导。 */
+    private Boolean socratic;
     private String title;
     private LocalDateTime createdAt;
 }

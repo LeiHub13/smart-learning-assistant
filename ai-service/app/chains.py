@@ -78,21 +78,22 @@ def _kb_suffix(kb_name: str | None, kb_scope: str | None) -> str:
 
 
 def _build_messages(scene: str, question: str, chunks, note: str = None,
-                    kb_name: str = None, kb_scope: str = None) -> list:
+                    kb_name: str = None, kb_scope: str = None, socratic: bool = False) -> list:
     chunks_text = _chunks_to_text(chunks)
+    socratic_suffix = SOCRATIC_PROMPT if socratic else ""
     if scene == "rag_qa":
         return [
             SystemMessage(
                 "你是智能学习助手，请结合下方课程知识库资料回答学生问题，引用资料时标注编号[1][2]等；"
                 "若资料与问题无关则如实说明。\n【知识库资料】\n" + chunks_text + "\n【资料结束】"
-                + _kb_suffix(kb_name, kb_scope) + _note_suffix(note)
+                + _kb_suffix(kb_name, kb_scope) + _note_suffix(note) + socratic_suffix
             ),
             HumanMessage(question),
         ]
     if scene == "free":
         return [
             SystemMessage("你是智能学习助手，用中文友好、准确地解答学生的学习问题。"
-                          + _kb_suffix(kb_name, kb_scope) + _note_suffix(note)),
+                          + _kb_suffix(kb_name, kb_scope) + _note_suffix(note) + socratic_suffix),
             HumanMessage(question),
         ]
     if scene == "lecture":
@@ -244,10 +245,23 @@ def _remember(session_id: str, user_id, question: str, answer: str) -> None:
                          daemon=True, name="profile-extract").start()
 
 
+SOCRATIC_PROMPT = (
+    "\n\n【苏格拉底引导模式（已开启）】\n"
+    "你现在必须采用苏格拉底式引导教学，绝不在学生思考前直接给出完整答案或结论性讲解：\n"
+    "1. 把当前问题拆解为 3-5 个循序渐进的思考步骤，每一轮回复只推进一个步骤；\n"
+    "2. 每轮回复结构：先用一两句点评学生上一轮的回答（肯定合理部分、点出偏差），"
+    "再恰好抛出一个新的引导问题，最多附一条小线索（是提示而不是答案）；\n"
+    "3. 各步骤全部完成后，才给出简要的总结性讲解；\n"
+    "4. 仅当学生明确表示「不知道 / 直接讲 / 放弃」时才转为直接讲解，"
+    "并在讲解结尾建议学生稍后用自己的话复述一遍。"
+)
+
+
 def _assemble(scene: str, question: str, chunks, session_id: str, note: str = None,
-              kb_name: str = None, kb_scope: str = None, user_id=None) -> list:
+              kb_name: str = None, kb_scope: str = None, user_id=None, socratic: bool = False) -> list:
     """组装消息：系统提示 + （学生画像）+ （摘要）+ 最近 N 轮 + 当前问题。"""
-    msgs = _build_messages(scene, question, chunks, note, kb_name=kb_name, kb_scope=kb_scope)
+    msgs = _build_messages(scene, question, chunks, note, kb_name=kb_name, kb_scope=kb_scope,
+                           socratic=socratic)
     if session_id and scene in ("rag_qa", "free"):
         head = [msgs[0]]
         profile = memory.user_profile(user_id) if user_id else ""
@@ -292,17 +306,19 @@ def _prepare_rag(scene: str, question: str, chunks, session_id, kb_id, meta: dic
 
 def complete(scene: str, question: str, chunks=None, session_id: str = None,
              user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
-             course_id=None, kb_name: str = None, kb_scope: str = None) -> str:
+             course_id=None, kb_name: str = None, kb_scope: str = None,
+             socratic: bool = False) -> str:
     """非流式完整回答（生成/批改/建议），带记忆。"""
     meta = meta if meta is not None else {}
     if scene == "agent":
         from app import agent
         return agent.complete_agent(get_model(), question, chunks=chunks, session_id=session_id,
                                     user_id=user_id, kb_id=kb_id, kb_ids=kb_ids, note=note, meta=meta,
-                                    course_id=course_id, kb_name=kb_name, kb_scope=kb_scope)
+                                    course_id=course_id, kb_name=kb_name, kb_scope=kb_scope,
+                                    socratic=socratic)
     chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta, kb_ids=kb_ids)
     msgs = _assemble(scene, question, chunks, session_id, note, kb_name=kb_name,
-                     kb_scope=kb_scope, user_id=user_id)
+                     kb_scope=kb_scope, user_id=user_id, socratic=socratic)
     answer = _call_with_limit(lambda: get_model().invoke(msgs).content, scene)
     if _memorable(scene):
         _remember(session_id, user_id, question, answer)
@@ -315,18 +331,19 @@ def complete(scene: str, question: str, chunks=None, session_id: str = None,
 
 def stream(scene: str, question: str, chunks=None, session_id: str = None,
            user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
-           course_id=None, kb_name: str = None, kb_scope: str = None):
+           course_id=None, kb_name: str = None, kb_scope: str = None, socratic: bool = False):
     """流式生成，yield 增量文本；检索到的引用编号通过 meta["sources"] 传出。"""
     meta = meta if meta is not None else {}
     if scene == "agent":
         from app import agent
         yield from agent.stream_agent(get_model(), question, chunks=chunks, session_id=session_id,
                                       user_id=user_id, kb_id=kb_id, kb_ids=kb_ids, note=note, meta=meta,
-                                      course_id=course_id, kb_name=kb_name, kb_scope=kb_scope)
+                                      course_id=course_id, kb_name=kb_name, kb_scope=kb_scope,
+                                      socratic=socratic)
         return
     chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta, kb_ids=kb_ids)
     msgs = _assemble(scene, question, chunks, session_id, note, kb_name=kb_name,
-                     kb_scope=kb_scope, user_id=user_id)
+                     kb_scope=kb_scope, user_id=user_id, socratic=socratic)
     model = get_model()
     full = ""
     start = time.time()
