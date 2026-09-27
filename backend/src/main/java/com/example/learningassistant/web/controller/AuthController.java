@@ -28,6 +28,7 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final com.example.learningassistant.admin.service.AdminService adminService;
     private final AvatarService avatarService;
     private final EmailCodeService emailCodeService;
 
@@ -63,6 +64,7 @@ public class AuthController {
         User user = authService.me(u.id());
         return ApiResponse.ok(Map.of(
                 "id", String.valueOf(user.getId()),
+                "isAdmin", String.valueOf(adminService.isAdmin(user.getId())),
                 "username", user.getUsername(),
                 "nickname", user.getNickname() == null ? "" : user.getNickname(),
                 "email", user.getEmail() == null ? "" : user.getEmail(),

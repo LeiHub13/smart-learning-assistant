@@ -34,6 +34,7 @@ import urllib.request
 from datetime import datetime
 
 from langchain.agents import create_agent
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 
@@ -501,6 +502,24 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
                          if config.AGENT_WRITE_TOOLS else [])
 
 
+class _AgentUsageHandler(BaseCallbackHandler):
+    """统计一次 Agent 运行内的 LLM 调用次数与 token 总量（经 with_config 回调）。"""
+
+    def __init__(self):
+        self.calls = 0
+        self.tokens = 0
+
+    def on_llm_end(self, response, **kwargs) -> None:
+        self.calls += 1
+        usage = getattr(response, "usage_metadata", None)
+        if not usage:
+            llm_output = getattr(response, "llm_output", None) or {}
+            tu = llm_output.get("token_usage") or {}
+            usage = {"input_tokens": tu.get("prompt_tokens", 0) or 0,
+                     "output_tokens": tu.get("completion_tokens", 0) or 0}
+        self.tokens += int(usage.get("input_tokens", 0) or 0) + int(usage.get("output_tokens", 0) or 0)
+
+
 def _build_messages(question: str, session_id: str = None, user_id=None) -> list:
     """系统提示 + 学生画像 + 会话摘要 + 最近 N 轮 + 当前问题。"""
     msgs = [SystemMessage(content=SYSTEM_PROMPT)]
@@ -560,11 +579,13 @@ def complete_agent(model, question: str, chunks=None, session_id: str = None,
                    socratic: bool = False) -> str:
     """非流式：跑完整 ReAct 循环后返回最终回答。"""
     meta = meta if meta is not None else {}
+    start = time.time()
     chunks = _seed_materials(chunks, session_id, kb_id, question, meta, kb_ids=kb_ids)
     mcp_tools = get_mcp_tools()
+    usage = _AgentUsageHandler()
     tools = _make_tools(chunks, user_id, kb_id, course_id, kb_ids=kb_ids,
                         session_id=session_id) + mcp_tools
-    agent = create_agent(model, tools,
+    agent = create_agent(model.with_config(callbacks=[usage]), tools,
                          system_prompt=_system_prompt(mcp_tools, note, kb_name, kb_scope,
                                                       socratic=socratic))
     result = agent.invoke(
@@ -572,6 +593,9 @@ def complete_agent(model, question: str, chunks=None, session_id: str = None,
         config={"recursion_limit": RECURSION_LIMIT},
     )
     answer = result["messages"][-1].content
+    from app import stats
+    stats.record("agent", True, int((time.time() - start) * 1000),
+                 tokens=usage.tokens, tokens_estimated=False)
     _remember(session_id, user_id, question, answer)
     return answer
 
@@ -581,11 +605,13 @@ def stream_agent(model, question: str, chunks=None, session_id: str = None,
                  course_id=None, kb_name: str = None, kb_scope: str = None, socratic: bool = False):
     """流式：逐块 yield 最终回答的 token。"""
     meta = meta if meta is not None else {}
+    start = time.time()
     chunks = _seed_materials(chunks, session_id, kb_id, question, meta, kb_ids=kb_ids)
     mcp_tools = get_mcp_tools()
+    usage = _AgentUsageHandler()
     tools = _make_tools(chunks, user_id, kb_id, course_id, kb_ids=kb_ids,
                         session_id=session_id) + mcp_tools
-    agent = create_agent(model, tools,
+    agent = create_agent(model.with_config(callbacks=[usage]), tools,
                          system_prompt=_system_prompt(mcp_tools, note, kb_name, kb_scope,
                                                       socratic=socratic))
     full = ""
@@ -600,5 +626,9 @@ def stream_agent(model, question: str, chunks=None, session_id: str = None,
                 full += chunk.content
                 yield chunk.content
     except Exception as e:  # noqa: BLE001
+        from app import stats
+        stats.record("agent", False, int((time.time() - start) * 1000), tokens=usage.tokens)
         raise RuntimeError(f"Agent 调用失败: {e}") from e
+    from app import stats
+    stats.record("agent", True, int((time.time() - start) * 1000), tokens=usage.tokens)
     _remember(session_id, user_id, question, full)

@@ -73,6 +73,20 @@ public class PythonRagClient {
     }
 
     /**
+     * LLM 调用观测（管理员看板）：调 ai-service /ai/stats，days>0 附带按天趋势。
+     * ai-service 不可用时返回 null，由调用方降级（看板其余数据不受影响）。
+     */
+    public Map<String, Object> aiStats(int days) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> resp = restTemplate.getForObject(baseUrl + "/ai/stats?days=" + days, Map.class);
+            return resp;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
      * 向量召回并限定在给定知识库集合内：一个课程可有多个知识库，按课程隔离检索必须传多个 kbId，
      * 否则会命中其他课程的资料。
      *

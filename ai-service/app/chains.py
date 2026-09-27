@@ -328,7 +328,8 @@ def complete(scene: str, question: str, chunks=None, session_id: str = None,
     chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta, kb_ids=kb_ids)
     msgs = _assemble(scene, question, chunks, session_id, note, kb_name=kb_name,
                      kb_scope=kb_scope, user_id=user_id, socratic=socratic)
-    answer = _call_with_limit(lambda: get_model().invoke(msgs).content, scene)
+    resp = _call_with_limit(lambda: get_model().invoke(msgs), scene)
+    answer = resp.content
     if _memorable(scene):
         _remember(session_id, user_id, question, answer)
     if scene in ("questions", "plan", "recommend"):
@@ -357,6 +358,7 @@ def stream(scene: str, question: str, chunks=None, session_id: str = None,
                      kb_scope=kb_scope, user_id=user_id, socratic=socratic)
     model = get_model()
     full = ""
+    usage = None
     start = time.time()
     acquired = _SEMAPHORE.acquire(timeout=_SEMAPHORE_TIMEOUT)
     if not acquired:
@@ -366,7 +368,16 @@ def stream(scene: str, question: str, chunks=None, session_id: str = None,
             if chunk.content:
                 full += chunk.content
                 yield chunk.content
-        stats.record(scene, True, int((time.time() - start) * 1000))
+            u = getattr(chunk, "usage_metadata", None)
+            if u:
+                usage = u
+        if usage:
+            tokens = int(usage.get("input_tokens", 0) or 0) + int(usage.get("output_tokens", 0) or 0)
+            est = False
+        else:
+            tokens = max(1, (len(full) + 2) // 3)
+            est = True
+        stats.record(scene, True, int((time.time() - start) * 1000), tokens=tokens, tokens_estimated=est)
     except Exception as e:  # noqa: BLE001
         stats.record(scene, False, int((time.time() - start) * 1000))
         raise RuntimeError(f"模型调用失败: {e}") from e
@@ -384,7 +395,15 @@ def _call_with_limit(fn, scene: str):
     start = time.time()
     try:
         result = fn()
-        stats.record(scene, True, int((time.time() - start) * 1000))
+        usage = getattr(result, "usage_metadata", None)
+        if usage:
+            tokens = int(usage.get("input_tokens", 0) or 0) + int(usage.get("output_tokens", 0) or 0)
+            est = False
+        else:
+            text = result.content if hasattr(result, "content") else str(result or "")
+            tokens = max(1, (len(text) + 2) // 3)
+            est = True
+        stats.record(scene, True, int((time.time() - start) * 1000), tokens=tokens, tokens_estimated=est)
         return result
     except Exception:
         stats.record(scene, False, int((time.time() - start) * 1000))

@@ -253,10 +253,10 @@ def memory_clear(req: MemoryClearRequest, x_internal_token: str | None = Header(
 
 
 @app.get("/ai/stats")
-def ai_stats(hours: int = 24):
-    """LLM 调用观测：最近 N 小时的调用量/成功率/分场景耗时。"""
+def ai_stats(hours: int = 24, days: int = 0):
+    """LLM 调用观测：最近 N 小时的调用量/成功率/token，days>0 时附带按天趋势。"""
     from app import stats
-    return stats.aggregate(hours)
+    return stats.aggregate(hours, days=days)
 
 
 if __name__ == "__main__":
