@@ -31,7 +31,12 @@ public class FileController {
                          HttpServletResponse response) throws Exception {
         String ext = objectName.contains(".")
                 ? objectName.substring(objectName.lastIndexOf('.') + 1).toLowerCase() : "";
-        response.setContentType(CONTENT_TYPES.getOrDefault(ext, "application/octet-stream"));
+        String contentType = CONTENT_TYPES.getOrDefault(ext, "application/octet-stream");
+        // 文本类必须显式声明 UTF-8，否则浏览器按系统本地代码页（中文 Windows 为 GBK）解码，中文显示乱码
+        if (contentType.startsWith("text/")) {
+            contentType += ";charset=utf-8";
+        }
+        response.setContentType(contentType);
         try {
             response.getOutputStream().write(fileStorage.download(bucket, objectName));
         } catch (Exception e) {
