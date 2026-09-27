@@ -4,7 +4,7 @@
 - GET  /ai/health          健康检查，返回模型配置摘要
 - POST /ai/complete        非流式生成 {scene, question, chunks?, sessionId?, kbId?, kbIds?, note?} -> {content, sources}
 - POST /ai/stream          流式生成（SSE）{scene, question, chunks?, sessionId?, kbId?, kbIds?, note?}
-                           -> data: {"delta": "..."} ... data: {"done": true, "sources": "1,2"}
+                           -> data: {"delta": "..."} ... data: {"done": true, "sources": "1,2", "followups": "[\"...\"]"}
 - GET  /ai/history/{id}    会话记忆
 - POST /ai/memory/clear    清空某会话记忆 {sessionId}（Java 删会话时联动调用，需内部 token）
 - GET  /ai/stats           LLM 调用观测
@@ -150,10 +150,13 @@ async def stream(req: StreamRequest):
                                        kb_name=req.kbName, kb_scope=req.kbScope,
                                        socratic=req.socratic):
                 yield {"event": "message", "data": json.dumps({"delta": delta}, ensure_ascii=False)}
-            # sources：本服务自行检索时产出的引用编号；sourceChunks：对齐的 chunkId，供「点引用跳原文」
+            # sources：本服务自行检索时产出的引用编号；sourceChunks：对齐的 chunkId，供「点引用跳原文」；
+            # followups：追问推荐（JSON 数组串），Java 落库后由前端渲染可点问的追问 chips
             yield {"event": "message",
                    "data": json.dumps({"done": True, "sources": meta.get("sources", ""),
-                                       "sourceChunks": meta.get("sourceChunks", "")}, ensure_ascii=False)}
+                                       "sourceChunks": meta.get("sourceChunks", ""),
+                                       "followups": json.dumps(meta.get("followups") or [], ensure_ascii=False)},
+                                      ensure_ascii=False)}
         except RuntimeError as e:
             logger.error("stream 失败: %s", e)
             yield {"event": "error", "data": json.dumps({"error": str(e)})}

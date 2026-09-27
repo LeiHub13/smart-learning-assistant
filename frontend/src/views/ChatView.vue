@@ -93,13 +93,19 @@
                 </div>
               </template>
             </div>
+            <!-- 追问推荐：回答结束后自动给出 2~3 个可继续问的问题，点一下直接提问 -->
+            <div v-if="m.role === 'assistant' && m.followups && m.followups.length && !(streaming && i === messages.length - 1)"
+                 class="followups">
+              <span class="fu-label">继续问</span>
+              <button v-for="(q, qi) in m.followups" :key="qi" class="fu-chip" :title="q" @click="send(q)">{{ q }}</button>
+            </div>
           </div>
         </div>
       </div>
       <div class="input-bar">
         <textarea v-model="input" :placeholder="socratic ? '输入你的思考或回答…（引导模式）' : '输入问题，Enter 发送'" :disabled="streaming"
-                  @keydown.enter.exact.prevent="send"></textarea>
-        <button class="btn" :disabled="streaming || !input.trim()" @click="send">
+                  @keydown.enter.exact.prevent="send()"></textarea>
+        <button class="btn" :disabled="streaming || !input.trim()" @click="send()">
           {{ streaming ? '生成中…' : '发送' }}
         </button>
       </div>
@@ -309,7 +315,9 @@ const doDelete = async () => {
 
 const openSession = async (id) => {
   sessionId.value = id
-  messages.value = await api('/api/chat/sessions/' + id + '/messages')
+  // followups 在库里是 JSON 数组串，统一解析成字符串数组供渲染
+  messages.value = (await api('/api/chat/sessions/' + id + '/messages'))
+    .map((m) => ({ ...m, followups: parseFollowups(m.followups) }))
   // 这个会话的回复正在后台流式生成：把进行中的那条回复重新挂回列表（带上已生成的部分），
   // 后续增量继续写进它。否则切走再切回时只能看到提问、看不到正在生成的回复。
   if (activeStream.sid === id && activeStream.target) {
@@ -318,6 +326,7 @@ const openSession = async (id) => {
       content: activeStream.target.content,
       sources: activeStream.target.sources || '',
       sourceChunks: activeStream.target.sourceChunks || '',
+      followups: activeStream.target.followups || [],
       actions: activeStream.target.actions || []
     }
     messages.value.push(seeded)
@@ -353,8 +362,19 @@ const openSession = async (id) => {
   scrollDown()
 }
 
-const send = async () => {
-  const text = input.value.trim()
+/* 追问推荐：done 事件与历史消息中的 followups 均为 JSON 数组串，统一解析为字符串数组 */
+const parseFollowups = (raw) => {
+  try {
+    const arr = JSON.parse(raw || '[]')
+    return Array.isArray(arr) ? arr.filter((s) => typeof s === 'string' && s.trim()).slice(0, 3) : []
+  } catch {
+    return []
+  }
+}
+
+const send = async (textArg) => {
+  // 追问 chips 直接传问题文本发起提问；其余入口（输入框/回车/直接讲解）不带参，走输入框内容
+  const text = (typeof textArg === 'string' ? textArg : input.value).trim()
   if (!text || streaming.value) return
   if (mode.value === 'kb' && !kbId.value) {
     showHint('请先选择知识库再提问')
@@ -379,6 +399,7 @@ const send = async () => {
         if (activeStream.target) {
           activeStream.target.sources = (done && done.sources) || ''
           activeStream.target.sourceChunks = (done && done.sourceChunks) || ''
+          activeStream.target.followups = parseFollowups(done && done.followups)
           activeStream.target.actions = (done && done.actions) || []
         }
       })
@@ -483,6 +504,18 @@ const cancelAction = async (m, a) => {
 .src-item.flash { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(9,105,218,.18); }
 .src-doc { font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 3px; }
 .src-txt { font-size: 12.5px; color: #57606a; line-height: 1.7; }
+
+/* 追问推荐 chips：沿用待确认动作的浅蓝配色，点击直接发起该问题 */
+.followups {
+  margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+}
+.fu-label { font-size: 12px; color: var(--muted); }
+.fu-chip {
+  font-size: 12.5px; color: var(--primary); background: #ddf4ff;
+  border: none; border-radius: 999px; padding: 4px 12px; cursor: pointer;
+  text-align: left; line-height: 1.5; transition: background .15s ease;
+}
+.fu-chip:hover { background: #c9e7ff; }
 
 /* 苏格拉底引导模式 */
 .chat-toolbar {

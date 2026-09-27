@@ -212,6 +212,7 @@ public class ChatService {
                     ? ChatModel.SourceRefs.empty() : refs;
             String sourceRefs = r.refs() == null ? "" : r.refs().trim();
             String chunkIds = r.chunkIds() == null ? "" : r.chunkIds().trim();
+            String followups = r.followups() == null ? "" : r.followups().trim();
             ChatMessage aiMsg = new ChatMessage();
             aiMsg.setSessionId(sessionId);
             aiMsg.setRole("assistant");
@@ -219,6 +220,8 @@ public class ChatService {
             aiMsg.setSources(sourceRefs.isEmpty() ? null : sourceRefs);
             // 与 sources 序号对齐的 chunkId 串：前端「点引用跳原文」按它取片段原文
             aiMsg.setSourceChunks(chunkIds.isEmpty() ? null : chunkIds);
+            // 追问推荐（JSON 数组串）：前端渲染可点问的追问 chips
+            aiMsg.setFollowups(followups.isEmpty() ? null : followups);
             aiMsg.setCreatedAt(LocalDateTime.now());
             messageMapper.insert(aiMsg);
             onDone.accept(r);

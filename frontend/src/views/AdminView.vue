@@ -99,7 +99,7 @@ const SCENE_LABELS = {
   rag_qa: '知识库答疑', free: '自由对话', agent: '智能答疑', lecture: '讲义生成',
   questions: 'AI 出题', review: '主观题批改', advice: '复习建议', rewrite: '查询改写',
   rerank: '相关性重排', plan: '学习计划', report: '学习报告', recommend: '今日推荐',
-  doc_overview: '文档速览', unknown: '未知场景'
+  doc_overview: '文档速览', followup: '追问推荐', unknown: '未知场景'
 }
 const sceneLabel = (s) => SCENE_LABELS[s] || s
 

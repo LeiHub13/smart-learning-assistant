@@ -264,6 +264,46 @@ def _remember(session_id: str, user_id, question: str, answer: str) -> None:
                          daemon=True, name="profile-extract").start()
 
 
+# 追问推荐：答疑回答结束后基于本轮问答再起一次轻量调用，产出 2~3 个可继续点问的追问。
+# 属旁路增强：失败只回落为空列表，绝不影响主回答链路；单独记 followup 场景的调用统计。
+FOLLOWUP_QUESTION_LIMIT = 40   # 单条追问截断长度（chips 保持短句）
+FOLLOWUP_CONTEXT_LIMIT = 600   # 问题/回答送入提示词的截断长度
+
+
+def suggest_followups(question: str, answer: str, summary: str = "") -> list:
+    """根据本轮答疑生成 2~3 条追问建议（字符串数组），供前端渲染追问 chips。"""
+    try:
+        prompt = (
+            "你是学习助手的追问推荐器。根据下面这轮答疑，站在学生角度提出 2~3 个最值得继续追问的问题，"
+            "帮助进一步理解、澄清或应用刚才的内容。要求：中文疑问句、每条不超过 30 字、彼此不重复、"
+            "不要与原问题重复。只输出 JSON 数组，不要输出任何其他文字：[\"追问1\",\"追问2\",\"追问3\"]\n"
+            + (f"【此前对话摘要】{summary.strip()}\n" if summary and summary.strip() else "")
+            + f"【学生的问题】{question[:FOLLOWUP_CONTEXT_LIMIT]}\n【助手的回答】{answer[:FOLLOWUP_CONTEXT_LIMIT]}"
+        )
+        text = _call_with_limit(lambda: get_model().invoke([HumanMessage(prompt)]).content, "followup")
+        rows = json.loads(_ensure_json_array(text))
+        if not isinstance(rows, list):
+            return []
+        out = []
+        for r in rows:
+            if isinstance(r, str) and r.strip():
+                out.append(r.strip().replace("\n", " ")[:FOLLOWUP_QUESTION_LIMIT])
+            if len(out) == 3:
+                break
+        return out
+    except Exception as e:  # noqa: BLE001
+        logger.warning("追问推荐生成失败（忽略）: %s", e)
+        return []
+
+
+def _attach_followups(meta: dict | None, question: str, answer: str, session_id: str | None) -> None:
+    """把追问建议写入 meta（经 SSE done 事件回传 Java）；meta 未传时静默跳过。"""
+    if meta is None:
+        return
+    meta["followups"] = suggest_followups(
+        question, answer, summary=memory.summary(session_id) if session_id else "")
+
+
 SOCRATIC_PROMPT = (
     "\n\n【苏格拉底引导模式（已开启）】\n"
     "你现在必须采用苏格拉底式引导教学，绝不在学生思考前直接给出完整答案或结论性讲解：\n"
@@ -395,6 +435,8 @@ def stream(scene: str, question: str, chunks=None, session_id: str = None,
         _SEMAPHORE.release()
     if _memorable(scene):
         _remember(session_id, user_id, question, full)
+        # 追问推荐随 meta 走 done 事件回传（agent 场景在 agent.stream_agent 收尾处同样挂载）
+        _attach_followups(meta, question, full, session_id)
 
 
 def _call_with_limit(fn, scene: str):

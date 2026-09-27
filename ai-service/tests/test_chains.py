@@ -102,3 +102,50 @@ def test_doc_overview_prompt_shape():
     assert "points" in msgs[0].content and "examPoints" in msgs[0].content
     assert "不要输出任何其他文字" in msgs[0].content
     assert msgs[-1].content.startswith("【资料标题】")
+
+
+def test_suggest_followups_parses_and_truncates(monkeypatch):
+    """追问推荐：解析 JSON 数组、首尾清理、超长截断、最多 3 条，并以 followup 场景记统计。"""
+    seen = {}
+
+    def fake_call(fn, scene):
+        seen["scene"] = scene
+        return ('["  什么是递归的终止条件？ ", "递归和循环怎么选？",'
+                ' "' + "长" * 45 + '", "第四条被丢弃"]')
+
+    monkeypatch.setattr(chains, "_call_with_limit", fake_call)
+    out = chains.suggest_followups("讲讲递归", "递归是……")
+    assert seen["scene"] == "followup"
+    assert out == ["什么是递归的终止条件？", "递归和循环怎么选？", "长" * 40]
+
+
+def test_suggest_followups_failure_returns_empty(monkeypatch):
+    """追问推荐是旁路增强：模型失败/输出非法时回落为空列表，绝不抛错影响主回答。"""
+    def boom(fn, scene):
+        raise RuntimeError("上游挂了")
+    monkeypatch.setattr(chains, "_call_with_limit", boom)
+    assert chains.suggest_followups("问题", "回答") == []
+    monkeypatch.setattr(chains, "_call_with_limit", lambda fn, scene: "模型没输出 JSON")
+    assert chains.suggest_followups("问题", "回答") == []
+
+
+def test_stream_attaches_followups_into_meta(monkeypatch):
+    """答疑流收尾须把追问建议挂进 meta（经 done 事件回传 Java 的载体）；自由/知识库两场景一致。"""
+    class _Chunk:
+        content = "答案正文"
+        usage_metadata = None
+
+    class _Model:
+        def stream(self, msgs):
+            yield _Chunk()
+
+    monkeypatch.setattr(chains, "get_model", lambda: _Model())
+
+    def fake_attach(meta, question, answer, session_id):
+        meta["followups"] = ["追问1", "追问2"]
+
+    monkeypatch.setattr(chains, "_attach_followups", fake_attach)
+    for scene in ("free", "rag_qa"):
+        meta = {}
+        list(chains.stream(scene, "问题", chunks=["资料"], meta=meta))
+        assert meta["followups"] == ["追问1", "追问2"]

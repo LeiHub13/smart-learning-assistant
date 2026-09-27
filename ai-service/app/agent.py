@@ -632,3 +632,6 @@ def stream_agent(model, question: str, chunks=None, session_id: str = None,
     from app import stats
     stats.record("agent", True, int((time.time() - start) * 1000), tokens=usage.tokens)
     _remember(session_id, user_id, question, full)
+    # 追问推荐与 chains.stream 同约定：挂到 meta，由 done 事件回传 Java
+    from app import chains
+    chains._attach_followups(meta, question, full, session_id)

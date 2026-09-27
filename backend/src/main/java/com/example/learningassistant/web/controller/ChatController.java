@@ -109,6 +109,7 @@ public class ChatController {
                     safeSend(emitter, clientGone, Map.of(
                             "sources", r.refs() == null ? "" : r.refs(),
                             "sourceChunks", r.chunkIds() == null ? "" : r.chunkIds(),
+                            "followups", r.followups() == null ? "" : r.followups(),
                             "actions", actions));
                     safeComplete(emitter, clientGone);
                 });

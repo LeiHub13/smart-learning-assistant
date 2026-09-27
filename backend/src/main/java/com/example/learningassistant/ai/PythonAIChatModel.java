@@ -26,6 +26,7 @@ import java.util.function.Consumer;
  *   GEN_LECTURE / GEN_QUESTIONS / REVIEW_SUBJECTIVE / ADVICE / PLAN / REPORT / RECOMMEND -> /ai/complete
  * 知识库答疑：system 中的 KB_ID 随请求传给 Python，检索链路（查询改写 -> 向量召回 -> 重排）
  * 全在 ai-service 内完成，引用编号 sources 由流式 done 事件回传（Java 落库）。
+ * 追问推荐：回答生成完由 ai-service 附加生成，followups（JSON 数组串）同经 done 事件回传并落库。
  * 检索范围：system 中的 KB_IDS（本课程全部知识库 id 逗号串）随请求下发，缺省表示只搜 KB_ID 单库。
  * 选中知识库：system 中的 KB_NAME / KB_SCOPE（名称与范围）透传给 Python 拼进系统提示，
  * 让 Agent 能回答「当前选中的是哪个知识库」。
@@ -81,9 +82,10 @@ public class PythonAIChatModel implements ChatModel {
     public void stream(List<AIChatMessage> messages, Consumer<String> onDelta, Consumer<SourceRefs> onDone, Consumer<Throwable> onError) {
         RequestPayload payload = toPayload(messages);
         Thread streamThread = new Thread(() -> {
-            HttpURLConnection conn = null;
-            String sources = "";
-            String chunkIds = "";
+        HttpURLConnection conn = null;
+        String sources = "";
+        String chunkIds = "";
+        String followups = "";
             try {
                 conn = (HttpURLConnection) URI.create(baseUrl + "/ai/stream").toURL().openConnection();
                 conn.setRequestMethod("POST");
@@ -118,6 +120,9 @@ public class PythonAIChatModel implements ChatModel {
                             sources = s == null ? "" : String.valueOf(s);
                             Object sc = d.get("sourceChunks");
                             chunkIds = sc == null ? "" : String.valueOf(sc);
+                            // 追问推荐：JSON 数组串原样透传（解析交给前端）
+                            Object fu = d.get("followups");
+                            followups = fu == null ? "" : String.valueOf(fu);
                             break;
                         } else if (d.containsKey("error")) {
                             throw new IllegalStateException("ai-service: " + d.get("error"));
@@ -126,7 +131,7 @@ public class PythonAIChatModel implements ChatModel {
                         log.warn("SSE 行解析跳过: {}", data);
                     }
                 }
-                onDone.accept(new SourceRefs(sources, chunkIds));
+                onDone.accept(new SourceRefs(sources, chunkIds, followups));
             } catch (Exception e) {
                 onError.accept(e);
             } finally {
