@@ -41,6 +41,7 @@ public class KbService {
     private final MessagePublisher messagePublisher;
     private final com.example.learningassistant.ai.ChatModelFactory modelFactory;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final com.example.learningassistant.course.mapper.CourseMapper courseMapper;
 
     public static final String TOPIC_DOC_INDEX = "kb.document.index";
 
@@ -120,8 +121,20 @@ public class KbService {
      * @throws com.example.learningassistant.ai.PythonRagClient.RagException 解析失败，message 为可读原因
      */
     public Document indexUploadedDocument(Long kbId, String fileName, String contentType, byte[] data) {
-        return indexChunks(kbId, fileName, contentType,
+        Document doc = indexChunks(kbId, fileName, contentType,
                 ragClient.parseChunks(fileName, contentType, data), data.length);
+        // 原件存对象存储（MinIO/local）：文档管理页可跳转查看原文件；失败不阻塞入库（文本检索不受影响）
+        // 注意对象名不能含 "/"：FileController 的 {objectName:.+} 不跨段，扁平命名与头像约定一致
+        try {
+            String objectName = "kb" + kbId + "-" + doc.getId() + "-" + fileName.replaceAll("[\\\\/\\r\\n]+", "_");
+            fileStorage.upload("kb-docs", objectName, data, contentType);
+            doc.setFileUrl(fileStorage.url("kb-docs", objectName));
+            documentMapper.updateById(doc);
+            log.info("文档 {} 原件已存对象存储: {}", doc.getId(), doc.getFileUrl());
+        } catch (Exception e) {
+            log.warn("文档 {} 原件存储失败（不影响文本检索）: {}", doc.getId(), e.getMessage());
+        }
+        return doc;
     }
 
     private Document indexChunks(Long kbId, String fileName, String fileType,
@@ -267,16 +280,66 @@ public class KbService {
     }
 
     public void deleteDocument(Long docId) {
+        Document doc = documentMapper.selectById(docId);
         List<Chunk> chunks = chunkMapper.selectList(new LambdaQueryWrapper<Chunk>().eq(Chunk::getDocId, docId));
         for (Chunk c : chunks) {
             chunkMapper.deleteById(c.getId());
         }
         documentMapper.deleteById(docId);
+        // 对象存储里的原件一并清理（fileUrl 形如 /files/{bucket}/{objectName}）
+        if (doc != null && doc.getFileUrl() != null && doc.getFileUrl().startsWith("/files/")) {
+            String rest = doc.getFileUrl().substring("/files/".length());
+            int slash = rest.indexOf('/');
+            if (slash > 0) {
+                try {
+                    fileStorage.delete(rest.substring(0, slash), rest.substring(slash + 1));
+                } catch (Exception e) {
+                    log.warn("文档 {} 原件删除失败（不影响库内清理）: {}", docId, e.getMessage());
+                }
+            }
+        }
         try {
             ragClient.delete(docId, null);
         } catch (Exception e) {
             log.warn("文档 {} 向量删除失败（不影响正文已删除）: {}", docId, e.getMessage());
         }
+    }
+
+    /**
+     * 文档管理：跨课程/知识库汇总全部文档，带课程与知识库名（登录即可访问，与预览同口径）。
+     */
+    public List<Map<String, Object>> docsAll() {
+        List<Document> docs = documentMapper.selectList(new LambdaQueryWrapper<Document>()
+                .orderByDesc(Document::getCreatedAt));
+        Map<Long, KnowledgeBase> kbById = kbMapper.selectList(null).stream()
+                .collect(java.util.stream.Collectors.toMap(KnowledgeBase::getId, k -> k, (a, b) -> a));
+        java.util.Set<Long> courseIds = kbById.values().stream()
+                .map(KnowledgeBase::getCourseId).filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<Long, String> courseNames = courseIds.isEmpty() ? Map.of()
+                : courseMapper.selectBatchIds(courseIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                com.example.learningassistant.course.entity.Course::getId,
+                                com.example.learningassistant.course.entity.Course::getName, (a, b) -> a));
+        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        for (Document d : docs) {
+            KnowledgeBase kb = kbById.get(d.getKbId());
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("docId", d.getId());
+            m.put("fileName", d.getFileName());
+            m.put("kbId", d.getKbId());
+            m.put("kbName", kb == null ? "（已删知识库）" : kb.getName());
+            m.put("courseId", kb == null ? null : kb.getCourseId());
+            m.put("courseName", kb == null || kb.getCourseId() == null ? "—"
+                    : courseNames.getOrDefault(kb.getCourseId(), "—"));
+            m.put("fileType", d.getFileType());
+            m.put("chunkCount", d.getChunkCount());
+            m.put("hasOverview", d.getOverview() != null);
+            m.put("fileUrl", d.getFileUrl());
+            m.put("createdAt", d.getCreatedAt() == null ? null : d.getCreatedAt().toString());
+            result.add(m);
+        }
+        return result;
     }
 
     public List<Document> documents(Long kbId) {

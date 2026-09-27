@@ -31,6 +31,7 @@ const routes = [
       { path: 'progress', name: 'progress', component: () => import('../views/ProgressView.vue'), meta: { title: '学情分析 - 智学助手' } },
       { path: 'manage', name: 'manage', component: () => import('../views/ManageView.vue'), meta: { title: '我的课程 - 智学助手' } },
       { path: 'hub', name: 'hub', component: () => import('../views/CourseHubView.vue'), meta: { title: '课程 Hub - 智学助手' } },
+      { path: 'docs', name: 'docs', component: () => import('../views/DocsView.vue'), meta: { title: '文档管理 - 智学助手' } },
       { path: 'plans', name: 'plans', component: () => import('../views/PlanView.vue'), meta: { title: '学习计划 - 智学助手' } },
       { path: 'reports', name: 'reports', component: () => import('../views/ReportView.vue'), meta: { title: '学习报告 - 智学助手' } },
       { path: 'notes', name: 'notes', component: () => import('../views/NotesView.vue'), meta: { title: '学习笔记 - 智学助手' } },

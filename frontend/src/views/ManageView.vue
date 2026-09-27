@@ -78,45 +78,7 @@
             </div>
             <div v-if="previewDocId === d.id" class="doc-preview">
               <div v-if="previewLoading" class="loading"><i></i>加载中…</div>
-              <template v-else-if="preview">
-                <div class="ov-card">
-                  <div class="ov-head">
-                    <b>AI 速览</b>
-                    <button class="btn ghost small" :disabled="ovLoading" @click="genOverview(kb.id, d)">
-                      {{ ovLoading ? '生成中…' : (d.overview ? '重新生成' : '生成速览') }}
-                    </button>
-                  </div>
-                  <div v-if="ovLoading" class="loading"><i></i>AI 正在通读全文提炼要点…</div>
-                  <template v-else-if="d.overview && ov(d)">
-                    <div class="ov-summary">{{ ov(d).summary }}</div>
-                    <div class="ov-sec">核心要点</div>
-                    <ul class="ov-list"><li v-for="(p, pi) in ov(d).points" :key="'p' + pi">{{ p }}</li></ul>
-                    <template v-if="ov(d).examPoints && ov(d).examPoints.length">
-                      <div class="ov-sec">可能考点</div>
-                      <ul class="ov-list"><li v-for="(e, ei) in ov(d).examPoints" :key="'e' + ei">{{ e }}</li></ul>
-                    </template>
-                  </template>
-                  <div v-else class="muted small">尚未生成速览——点右上按钮，AI 通读全文提炼要点与可能考点</div>
-                </div>
-                <div class="row" style="justify-content:space-between;margin-bottom:6px">
-                  <span class="muted small">
-                    {{ preview.fileName }} · {{ preview.fileType }} · {{ preview.chunkCount }} 个片段 · {{ (preview.text || '').length }} 字 · {{ preview.parseStatus }}
-                  </span>
-                  <button class="btn ghost small" @click="downloadPreviewText">{{ preview.fileUrl ? '下载文本副本' : '下载文本' }}</button>
-                </div>
-                <div class="row" style="margin-bottom:6px">
-                  <input v-model="pvSearch" type="text" placeholder="在本文档内搜索…" style="max-width:280px" />
-                  <span class="muted small" style="flex:none;white-space:nowrap">{{ pvMatchCount ? (pvMatchIndex + 1) + ' / ' + pvMatchCount : (pvSearch ? '无匹配' : '') }}</span>
-                  <div class="btns">
-                    <button class="btn ghost small" :disabled="!pvMatchCount" @click="pvJump(-1)">上一个</button>
-                    <button class="btn ghost small" :disabled="!pvMatchCount" @click="pvJump(1)">下一个</button>
-                  </div>
-                </div>
-                <div class="pv-text" v-html="pvHtml"></div>
-                <div v-if="preview.fileUrl" style="margin-top:8px">
-                  <a :href="preview.fileUrl" target="_blank" class="link">下载原始文件</a>
-                </div>
-              </template>
+              <DocViewer v-else-if="preview" :kb-id="kb.id" :doc="d" :preview="preview" />
             </div>
           </div>
           <div v-if="uploadingKb === kb.id" style="margin-top:8px">
@@ -178,7 +140,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import DocViewer from '../components/DocViewer.vue'
 import { useRouter } from 'vue-router'
 import { api, getCourses } from '../api'
 import CourseCard from '../components/CourseCard.vue'
@@ -198,14 +161,6 @@ const uploadingKb = ref(null)
 const previewDocId = ref(null)
 const preview = ref(null)
 const previewLoading = ref(false)
-const ovLoading = ref(false)
-
-/* AI 速览：overview 存的是 JSON 串，解析失败按未生成处理 */
-const ov = (d) => {
-  if (!d.overview) return null
-  try { return JSON.parse(d.overview) } catch (e) { return null }
-}
-
 const genOverview = async (kbId2, d) => {
   if (ovLoading.value) return
   ovLoading.value = true
@@ -247,74 +202,6 @@ const doRenameDoc = async (kbId2, d) => {
   } finally {
     renamingDocId.value = null
   }
-}
-
-/* ===== 预览内搜索：命中高亮 + 上/下跳转 ===== */
-const pvSearch = ref('')
-const pvMatchIndex = ref(0)
-
-const pvMatches = computed(() => {
-  const t = preview.value?.text || ''
-  const q = pvSearch.value.trim().toLowerCase()
-  if (!q) return 0
-  let n = 0
-  let i = 0
-  const lower = t.toLowerCase()
-  while ((i = lower.indexOf(q, i)) >= 0) { n++; i += q.length }
-  return n
-})
-const pvMatchCount = computed(() => pvMatches.value)
-
-const pvHtml = computed(() => {
-  const t = preview.value?.text
-  if (!t) return '（无文本内容：索引未完成或文档为空）'
-  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  const q = pvSearch.value.trim()
-  if (!q) return esc(t)
-  const lower = t.toLowerCase()
-  const ql = q.toLowerCase()
-  let out = ''
-  let i = 0
-  let n = 0
-  while (true) {
-    const j = lower.indexOf(ql, i)
-    if (j < 0) { out += esc(t.slice(i)); break }
-    out += esc(t.slice(i, j))
-    n++
-    out += '<mark class="pv-hit' + (n === pvMatchIndex.value + 1 ? ' on' : '') + '">' + esc(t.slice(j, j + q.length)) + '</mark>'
-    i = j + q.length
-  }
-  return out
-})
-
-const pvJump = (delta) => {
-  const total = pvMatchCount.value
-  if (!total) return
-  pvMatchIndex.value = (pvMatchIndex.value + delta + total) % total
-  nextTick(() => {
-    const el = document.querySelector('.pv-hit.on')
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  })
-}
-
-// 搜索词变化：定位回第一个命中
-watch(pvSearch, () => {
-  pvMatchIndex.value = 0
-  nextTick(() => {
-    const el = document.querySelector('.pv-hit.on')
-    if (el) el.scrollIntoView({ block: 'center' })
-  })
-})
-
-/* 下载预览文本：粘贴文本入库的文档没有原始文件，用 Blob 生成下载 */
-const downloadPreviewText = () => {
-  const t = preview.value?.text || ''
-  const blob = new Blob([t], { type: 'text/plain;charset=utf-8' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = (preview.value.fileName || '文档') + '.txt'
-  a.click()
-  URL.revokeObjectURL(a.href)
 }
 
 const togglePreview = async (kbId, docId) => {

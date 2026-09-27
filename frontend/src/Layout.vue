@@ -129,7 +129,7 @@ const tab = ref('system')
 const mailLogs = ref([])
 let notifyTimer = null
 
-const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeView', 'MistakeBookView', 'FavoritesView', 'ExamView', 'QuestionBankView', 'CourseHubView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'SearchView', 'ProfileView']
+const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeView', 'MistakeBookView', 'FavoritesView', 'ExamView', 'QuestionBankView', 'CourseHubView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'SearchView', 'ProfileView', 'DocsView']
 
 const menus = [
   { key: 'home', title: '首页', path: '/home', icon: 'home' },
@@ -140,6 +140,7 @@ const menus = [
     children: [
       { key: 'manage', title: '我的课程', path: '/manage', icon: 'manage' },
       { key: 'hub', title: '课程 Hub', path: '/hub', icon: 'hub' },
+      { key: 'docs', title: '文档管理', path: '/docs', icon: 'search' },
       { key: 'notes', title: '学习笔记', path: '/notes', icon: 'notes' }
     ]
   },

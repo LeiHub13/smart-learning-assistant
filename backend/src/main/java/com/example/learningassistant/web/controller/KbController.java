@@ -81,6 +81,12 @@ public class KbController {
         return ApiResponse.ok(kbService.renameDocument(kbId, docId, body.get("fileName")));
     }
 
+    /** 文档管理：跨课程/知识库汇总全部文档（含原件跳转地址与速览状态）。 */
+    @GetMapping("/api/kb/docs")
+    public ApiResponse<List<Map<String, Object>>> docsAll() {
+        return ApiResponse.ok(kbService.docsAll());
+    }
+
     @PostMapping("/api/kb/{kbId}/documents")
     public ApiResponse<Map<String, Object>> addDocument(@PathVariable Long kbId, @RequestBody Map<String, String> body) {
         String fileName = body.get("fileName");
