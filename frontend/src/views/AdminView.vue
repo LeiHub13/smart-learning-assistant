@@ -83,6 +83,7 @@ import { LineChart, BarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { api } from '../api'
+import { chartTheme, onThemeChange } from '../theme'
 
 echarts.use([LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
@@ -122,23 +123,23 @@ const fmtTokens = (t) => {
 
 const render = () => {
   if (!d.value?.series?.length) return
+  const th = chartTheme()
+  const tip = { backgroundColor: th.tipBg, borderColor: th.tipLine, textStyle: { color: th.tipText } }
+  const axis = (name) => ({ type: 'value', name, minInterval: 1, nameTextStyle: { color: th.text }, axisLabel: { color: th.text }, splitLine: { lineStyle: { color: th.split } } })
   const dates = d.value.series.map((s) => s.date.slice(5))
   // 用户注册与活跃
   if (uaRef.value) {
     if (!uaChart) uaChart = echarts.init(uaRef.value)
     uaChart.setOption({
-      tooltip: { trigger: 'axis' },
-      legend: { data: ['注册用户', '活跃用户', '学习分钟'], top: 0 },
+      tooltip: { trigger: 'axis', ...tip },
+      legend: { data: ['注册用户', '活跃用户', '学习分钟'], top: 0, textStyle: { color: th.text } },
       grid: { left: 40, right: 20, top: 36, bottom: 28 },
-      xAxis: { type: 'category', data: dates },
-      yAxis: [
-        { type: 'value', name: '人数', minInterval: 1 },
-        { type: 'value', name: '分钟', show: false }
-      ],
+      xAxis: { type: 'category', data: dates, axisLabel: { color: th.text }, axisLine: { lineStyle: { color: th.split } } },
+      yAxis: [axis('人数'), { type: 'value', name: '分钟', show: false }],
       series: [
         { name: '注册用户', type: 'bar', data: d.value.series.map((s) => s.registrations), itemStyle: { color: '#a5b4fc', borderRadius: [3, 3, 0, 0] } },
-        { name: '活跃用户', type: 'line', smooth: true, data: d.value.series.map((s) => s.dau), itemStyle: { color: '#0969da' } },
-        { name: '学习分钟', type: 'line', smooth: true, yAxisIndex: 1, data: d.value.series.map((s) => s.minutes), itemStyle: { color: '#1a7f37' }, lineStyle: { type: 'dashed' } }
+        { name: '活跃用户', type: 'line', smooth: true, data: d.value.series.map((s) => s.dau), itemStyle: { color: th.accent } },
+        { name: '学习分钟', type: 'line', smooth: true, yAxisIndex: 1, data: d.value.series.map((s) => s.minutes), itemStyle: { color: th.success }, lineStyle: { type: 'dashed' } }
       ]
     })
   }
@@ -146,21 +147,20 @@ const render = () => {
   if (llmRef.value) {
     if (!llmChart) llmChart = echarts.init(llmRef.value)
     llmChart.setOption({
-      tooltip: { trigger: 'axis' },
-      legend: { data: ['LLM 调用', 'tokens'], top: 0 },
+      tooltip: { trigger: 'axis', ...tip },
+      legend: { data: ['LLM 调用', 'tokens'], top: 0, textStyle: { color: th.text } },
       grid: { left: 56, right: 56, top: 36, bottom: 28 },
-      xAxis: { type: 'category', data: dates },
-      yAxis: [
-        { type: 'value', name: '调用', minInterval: 1 },
-        { type: 'value', name: 'tokens', show: false }
-      ],
+      xAxis: { type: 'category', data: dates, axisLabel: { color: th.text }, axisLine: { lineStyle: { color: th.split } } },
+      yAxis: [axis('调用'), { type: 'value', name: 'tokens', show: false }],
       series: [
-        { name: 'LLM 调用', type: 'bar', data: d.value.series.map((s) => s.llmCalls), itemStyle: { color: '#0969da', borderRadius: [3, 3, 0, 0] } },
+        { name: 'LLM 调用', type: 'bar', data: d.value.series.map((s) => s.llmCalls), itemStyle: { color: th.accent, borderRadius: [3, 3, 0, 0] } },
         { name: 'tokens', type: 'line', smooth: true, yAxisIndex: 1, data: d.value.series.map((s) => s.llmTokens), itemStyle: { color: '#d97706' } }
       ]
     })
   }
 }
+
+const offTheme = onThemeChange(() => render())
 
 onMounted(async () => {
   try {
@@ -198,6 +198,7 @@ const onResize = () => { uaChart?.resize(); llmChart?.resize() }
 onMounted(() => window.addEventListener('resize', onResize))
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
+  offTheme()
   uaChart?.dispose(); llmChart?.dispose()
 })
 </script>

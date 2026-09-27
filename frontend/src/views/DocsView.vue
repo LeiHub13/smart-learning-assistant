@@ -36,7 +36,7 @@
         <span v-if="!d.fileUrl" class="muted" style="margin-left:6px">（纯文本入库，无原文件）</span>
       </div>
 
-      <div v-if="confirmDel === d.docId" class="row" style="margin-top:8px;background:#ffebe9;border-radius:8px;padding:8px 12px">
+      <div v-if="confirmDel === d.docId" class="row" style="margin-top:8px;background:var(--bad-soft);border-radius:8px;padding:8px 12px">
         <span class="shrink" style="font-size:13px">确认删除「{{ d.fileName }}」？文本、向量索引与原文件将一并清理。</span>
         <span class="row" style="gap:8px">
           <button class="btn danger small" @click="doDelete(d)">确认删除</button>

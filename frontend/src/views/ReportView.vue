@@ -80,5 +80,5 @@ onMounted(load)
 .report-body { padding: 14px; }
 .md { line-height: 1.7; margin-bottom: 14px; }
 .small { font-size: 12px; }
-.muted { color: #888; }
+.muted { color: var(--muted); }
 </style>

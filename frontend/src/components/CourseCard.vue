@@ -55,7 +55,7 @@ const onCardClick = () => {
   flex-direction: column;
   transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
 }
-.pk:hover { transform: translateY(-2px); border-color: #d1d9e0; }
+.pk:hover { transform: translateY(-2px); border-color: var(--border); }
 .pk-click { cursor: pointer; }
 .pk-click:focus-visible { outline: 2px solid rgba(9, 105, 218, .6); outline-offset: 2px; }
 .pk-active, .pk-active:hover {

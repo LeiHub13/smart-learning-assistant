@@ -126,6 +126,7 @@ import { GridComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { api, unreadCount } from '../api'
 import AppIcon from '../components/AppIcon.vue'
+import { chartTheme, onThemeChange } from '../theme'
 
 echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
@@ -232,8 +233,9 @@ const renderChart = () => {
     tickDates = tickDates.filter((d, i) => i % step === 0 || i === tickDates.length - 1)
   }
   const ticks = tickDates.map((d) => new Date(d + 'T00:00:00'))
+  const th = chartTheme()
   chart.setOption({
-    tooltip: { trigger: 'axis' },
+    tooltip: { trigger: 'axis', backgroundColor: th.tipBg, borderColor: th.tipLine, textStyle: { color: th.tipText } },
     grid: { left: 40, right: 16, top: 20, bottom: 24 },
     xAxis: {
       type: 'time',
@@ -244,10 +246,12 @@ const renderChart = () => {
         rotate: 90,
         fontSize: 10,
         margin: 11,
+        color: th.text,
         formatter: (v) => { const d = new Date(v); return (d.getMonth() + 1) + '-' + d.getDate() }
-      }
+      },
+      axisLine: { lineStyle: { color: th.split } }
     },
-    yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' } },
+    yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%', color: th.text }, splitLine: { lineStyle: { color: th.split } } },
     series: seriesList.value.map((s) => {
       const active = activeId.value === s.id
       const dim = activeId.value != null && !active
@@ -309,7 +313,10 @@ onMounted(async () => {
   }
 })
 
+const offTheme = onThemeChange(() => renderChart())
+
 onBeforeUnmount(() => {
+  offTheme()
   window.removeEventListener('resize', onResize)
   if (chart) { chart.dispose(); chart = null }
 })
@@ -332,8 +339,8 @@ onBeforeUnmount(() => {
   cursor: pointer; font-family: inherit; font-size: 12px; color: inherit;
   text-align: left; transition: background 0.2s ease;
 }
-.tl-item:hover { background: rgba(0,0,0,0.04); }
-.tl-item.active { background: rgba(0,0,0,0.07); font-weight: 700; }
+.tl-item:hover { background: var(--hover); }
+.tl-item.active { background: var(--active); font-weight: 700; }
 .tl-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .tl-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tl-tip { font-size: 10px; color: var(--muted); margin-top: 2px; padding-left: 8px; }
@@ -355,7 +362,7 @@ onBeforeUnmount(() => {
 .rc-snippet summary { cursor: pointer; user-select: none; list-style: none; font-size: 12px; font-weight: 600; color: var(--primary); }
 .rc-snippet summary::-webkit-details-marker { display: none; }
 .rc-snippet[open] summary { margin-bottom: 4px; }
-.rc-snippet-txt { font-size: 12px; color: #57606a; line-height: 1.7; background: var(--soft); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.rc-snippet-txt { font-size: 12px; color: var(--muted); line-height: 1.7; background: var(--soft); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
 .heatmap { display: grid; grid-template-rows: repeat(7, 13px); grid-auto-flow: column; grid-auto-columns: 13px; gap: 3px; }
 .hm-cell { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
 .hm-cell.pad { visibility: hidden; }
@@ -380,4 +387,11 @@ onBeforeUnmount(() => {
 .hm-2 { background: #40c463; }
 .hm-3 { background: #30a14e; }
 .hm-4 { background: #216e39; }
+
+/* 深色热力图梯度（GitHub Dark 贡献色） */
+html.dark .hm-0 { background: #1c2128; }
+html.dark .hm-1 { background: #033a16; }
+html.dark .hm-2 { background: #196c2e; }
+html.dark .hm-3 { background: #2ea043; }
+html.dark .hm-4 { background: #56d364; }
 </style>

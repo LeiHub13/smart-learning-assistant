@@ -198,7 +198,7 @@ onUnmounted(() => {
 }
 .hall-title h3 { margin-bottom: 2px; }
 .hall-status { font-size: 12.5px; color: var(--muted); }
-.hall-status.off { color: #d97706; }
+.hall-status.off { color: var(--warn); }
 
 /* 复用全局 .m/.av/.bub 气泡。wrap 只做宽度约束（block，禁止再嵌套 flex：
    .bub 的全局 max-width:76% 以 wrap 为基准，wrap 一旦是收缩的 flex 容器，

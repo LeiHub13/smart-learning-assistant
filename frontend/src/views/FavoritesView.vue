@@ -162,7 +162,7 @@ const markOption = (q, k) => {
 .fi-no {
   width: 22px; height: 22px; border-radius: 7px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  background: #ddf4ff; color: var(--accent-deep);
+  background: var(--accent-subtle); color: var(--accent-deep);
   font-size: 12px; font-weight: 700; font-family: "SF Mono", Consolas, monospace;
 }
 .fi-unfav { margin-left: auto; }
@@ -173,32 +173,32 @@ const markOption = (q, k) => {
 .opt-row {
   display: flex; align-items: center; gap: 9px;
   padding: 8px 12px; border-radius: 10px;
-  border: 1px solid var(--border); background: #fff;
-  font-size: 13.5px; color: #57606a; line-height: 1.6;
+  border: 1px solid var(--border); background: var(--card);
+  font-size: 13.5px; color: var(--muted); line-height: 1.6;
 }
 .opt-row i {
   flex-shrink: 0; width: 20px; height: 20px; border-radius: 6px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: #fff; border: 1px solid #d1d9e0;
+  background: var(--card); border: 1px solid var(--border);
   font-style: normal; font-size: 11px; font-weight: 700; color: var(--primary);
 }
 .opt-v { flex: 1; min-width: 0; }
 .opt-flag { flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
-.opt-row.correct { background: #f2faf4; border-color: #c3e6cd; color: #1f5c34; }
-.opt-row.correct i { background: #e2f4e7; border-color: #b7dfc2; color: #1f7a41; }
-.opt-flag.ok { background: #dff3e5; color: #1f7a41; }
-.opt-row.wrong { background: #fdf3f2; border-color: #f2d2ce; color: #8c3a33; }
-.opt-row.wrong i { background: #fbe6e4; border-color: #f0c8c3; color: #b3423a; }
-.opt-flag.bad { background: #f9e2e0; color: #b3423a; }
+.opt-row.correct { background: var(--ok-soft); border-color: var(--ok-line); color: var(--ok-strong); }
+.opt-row.correct i { background: var(--ok-soft); border-color: var(--ok-line); color: var(--ok-strong); }
+.opt-flag.ok { background: var(--ok-soft); color: var(--ok-strong); }
+.opt-row.wrong { background: var(--bad-soft); border-color: var(--bad-line); color: var(--bad-strong); }
+.opt-row.wrong i { background: var(--bad-soft); border-color: var(--bad-line); color: var(--bad-strong); }
+.opt-flag.bad { background: var(--bad-soft); color: var(--bad-strong); }
 
 /* 答案对比 */
-.fi-cmp { border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: #fff; margin-bottom: 10px; }
+.fi-cmp { border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: var(--card); margin-bottom: 10px; }
 .cmp-row { display: flex; gap: 12px; padding: 9px 14px; font-size: 13.5px; line-height: 1.7; }
-.cmp-row + .cmp-row { border-top: 1px solid #eaeef2; }
+.cmp-row + .cmp-row { border-top: 1px solid var(--border); }
 .cmp-lab { flex-shrink: 0; width: 62px; font-size: 12px; font-weight: 700; color: var(--muted); padding-top: 2px; }
 .cmp-val { flex: 1; min-width: 0; word-break: break-word; }
-.cmp-val.bad { color: #b3423a; font-weight: 600; }
-.cmp-val.ok { color: #1f7a41; font-weight: 700; }
+.cmp-val.bad { color: var(--bad-strong); font-weight: 600; }
+.cmp-val.ok { color: var(--ok-strong); font-weight: 700; }
 
 /* 解析折叠 */
 .fi-analysis summary {
@@ -209,12 +209,12 @@ const markOption = (q, k) => {
   border: 1px solid var(--border); transition: background .18s ease;
 }
 .fi-analysis summary::-webkit-details-marker { display: none; }
-.fi-analysis summary:hover { background: #f3f4f6; }
+.fi-analysis summary:hover { background: var(--hover); }
 .fi-chev { transition: transform .2s ease; }
 .fi-analysis[open] summary { margin-bottom: 8px; }
 .fi-analysis[open] .fi-chev { transform: rotate(180deg); }
 .fi-ans-txt {
-  font-size: 13.5px; line-height: 1.75; color: #5b5b57;
+  font-size: 13.5px; line-height: 1.75; color: var(--muted);
   background: var(--soft); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px;
 }
 
@@ -223,7 +223,7 @@ const markOption = (q, k) => {
 .fi-empty-ico {
   display: inline-flex; align-items: center; justify-content: center;
   width: 54px; height: 54px; border-radius: 18px; margin-bottom: 14px;
-  background: #f7f4ee; color: #b9a893;
+  background: var(--soft); color: var(--muted);
 }
 .fi-empty-t { font-size: 15px; font-weight: 700; margin-bottom: 5px; }
 .fi-empty-d { font-size: 13px; color: var(--muted); }

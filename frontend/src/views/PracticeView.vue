@@ -135,6 +135,7 @@ import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { api, getCourses } from '../api'
+import { chartTheme, isDarkTheme, onThemeChange } from '../theme'
 import { fmtTime, parseOptions, parseReview } from '../utils'
 
 echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
@@ -227,17 +228,21 @@ const renderChart = () => {
     chart = null
   }
   if (!chart) chart = echarts.init(chartRef.value)
+  const th = chartTheme()
   chart.setOption({
     tooltip: {
       trigger: 'axis',
+      backgroundColor: th.tipBg,
+      borderColor: th.tipLine,
+      textStyle: { color: th.tipText },
       formatter: (ps) => {
         const t = trend.value[ps[0].dataIndex]
         return `${t.date}<br/>${t.title}<br/>得分：${t.score} / ${t.totalScore}<br/>正确率：${t.rate}%`
       }
     },
     grid: { left: 44, right: 24, top: 24, bottom: 28 },
-    xAxis: { type: 'category', data: trend.value.map((t) => t.date) },
-    yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' } },
+    xAxis: { type: 'category', data: trend.value.map((t) => t.date), axisLabel: { color: th.text }, axisLine: { lineStyle: { color: th.split } } },
+    yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%', color: th.text }, splitLine: { lineStyle: { color: th.split } } },
     series: [{
       name: '正确率',
       type: 'line',
@@ -247,7 +252,7 @@ const renderChart = () => {
       data: trend.value.map((t) => t.rate),
       lineStyle: { width: 2.5 },
       areaStyle: { opacity: 0.12 },
-      itemStyle: { color: '#1a1a1a' }
+      itemStyle: { color: isDarkTheme() ? th.accent : '#1a1a1a' }
     }]
   })
 }
@@ -256,7 +261,10 @@ watch(courseId, () => {
   refreshTrend()
 })
 
+const offTheme = onThemeChange(() => renderChart())
+
 onBeforeUnmount(() => {
+  offTheme()
   if (chart) { chart.dispose(); chart = null }
 })
 

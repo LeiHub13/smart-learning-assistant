@@ -128,8 +128,8 @@ onMounted(async () => {
 <style scoped>
 .editor { margin-top: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
 /* 内容走 mdToHtml 渲染：段落/表格等结构由 Markdown 负责，不再用 pre-wrap */
-.note-content { line-height: 1.8; color: #334155; margin: 10px 0; }
-.note-preview { color: #94a3b8; margin: 8px 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-content { line-height: 1.8; color: var(--text); margin: 10px 0; }
+.note-preview { color: var(--muted); margin: 8px 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note-card { transition: box-shadow .2s ease; }
 .note-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.06); }
 .note-head { justify-content: space-between; cursor: pointer; user-select: none; }

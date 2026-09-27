@@ -160,11 +160,13 @@ const genQuestions = async () => {
 </script>
 
 <style scoped>
-.md { line-height: 1.8; color: #334155; }
-.md :deep(h1), .md :deep(h2), .md :deep(h3), .md :deep(h4) { margin: 14px 0 6px; font-weight: 800; color: #1a1a1a; }
-.md :deep(strong) { color: #1a1a1a; }
+.md { line-height: 1.8; color: var(--text); }
+.md :deep(h1), .md :deep(h2), .md :deep(h3), .md :deep(h4) { margin: 14px 0 6px; font-weight: 800; color: var(--text); }
+.md :deep(strong) { color: var(--text); }
 .md :deep(code) { background: #f4f1ea; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
 .md :deep(pre) { background: #f4f1ea; border-radius: 8px; padding: 12px 14px; overflow-x: auto; white-space: pre-wrap; margin: 8px 0; }
 .md :deep(pre code) { background: none; padding: 0; }
-.md :deep(blockquote) { margin: 8px 0; padding: 4px 12px; border-left: 3px solid #d6d0c2; color: #64748b; }
+.md :deep(blockquote) { margin: 8px 0; padding: 4px 12px; border-left: 3px solid var(--border); color: var(--muted); }
+
+html.dark .md :deep(code), html.dark .md :deep(pre) { background: var(--soft); }
 </style>

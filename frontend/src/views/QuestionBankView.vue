@@ -268,5 +268,5 @@ const doDelete = async () => {
 .stem { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nowrap { white-space: nowrap; }
 .pager { margin-top: 8px; display: flex; align-items: center; gap: 10px; }
-.link.danger { color: #b91c1c; margin-left: 8px; }
+.link.danger { color: var(--bad-strong); margin-left: 8px; }
 </style>

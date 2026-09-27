@@ -100,7 +100,7 @@ if (q.value) doSearch()
 .hit:last-child { border-bottom: none; }
 .hit .link { margin-left: 8px; font-size: 12px; cursor: pointer; }
 .doc-text {
-  white-space: pre-wrap; font-size: 13px; color: #334155; background: var(--soft);
+  white-space: pre-wrap; font-size: 13px; color: var(--text); background: var(--soft);
   border-radius: 8px; padding: 8px 10px; margin-top: 4px;
 }
 </style>

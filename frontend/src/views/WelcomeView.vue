@@ -158,7 +158,7 @@ const goFeatures = () => document.getElementById('wl-features')?.scrollIntoView(
 .wl-gh {
   width: 34px; height: 34px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--ink-3); background: #fff; border: 1px solid var(--line);
+  color: var(--ink-3); background: var(--bg); border: 1px solid var(--line);
   transition: color .15s ease, background .15s ease;
 }
 .wl-gh:hover { color: var(--ink); background: var(--soft); }
@@ -181,7 +181,7 @@ const goFeatures = () => document.getElementById('wl-features')?.scrollIntoView(
   border: 1px solid rgba(31, 35, 40, .15);
   background: var(--soft); color: var(--ink);
 }
-.wl-btn-secondary:hover { background: #f3f4f6; border-color: rgba(31, 35, 40, .25); }
+.wl-btn-secondary:hover { background: var(--hover); border-color: rgba(31, 35, 40, .25); }
 
 /* ===== 主视觉 ===== */
 .wl-hero { max-width: 1120px; margin: 0 auto; padding: 84px 24px 60px; text-align: center; }
@@ -229,7 +229,7 @@ const goFeatures = () => document.getElementById('wl-features')?.scrollIntoView(
   width: 36px; height: 36px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   margin-bottom: 12px;
-  background: #ddf4ff; color: var(--blue);
+  background: var(--accent-subtle); color: var(--blue);
 }
 .wl-ico-1 { background: #dafbe1; color: #1a7f37; }
 .wl-ico-2 { background: #fff1e5; color: #bc4c00; }
@@ -287,4 +287,21 @@ const goFeatures = () => document.getElementById('wl-features')?.scrollIntoView(
   .wl-cta-band { padding: 16px 20px 56px; }
   .wl-cta-card { padding: 32px 20px; }
 }
+
+/* ===== 深色模式 ===== */
+html.dark .wl-wrap {
+  --bg: #0d1117; --soft: #161b22; --line: #3d444d;
+  --ink: #e6edf3; --ink-2: #9198a1; --ink-3: #9198a1; --ink-4: #6e7681;
+  --blue: #4493f8; --green: #238636;
+}
+html.dark .wl-nav { background: rgba(13, 17, 23, .92); }
+html.dark .wl-btn-secondary:hover { background: #21262d; border-color: rgba(240,246,252,.2); }
+html.dark .wl-btn-primary { border-color: transparent; }
+html.dark .wl-feat { background: var(--soft); }
+html.dark .wl-feat:hover { background: #1c2128; border-color: #6e7681; }
+html.dark .wl-ico-1 { background: rgba(63,185,80,.16); color: #3fb950; }
+html.dark .wl-ico-2 { background: rgba(210,153,34,.16); color: #d29922; }
+html.dark .wl-ico-3 { background: rgba(248,81,73,.16); color: #f85149; }
+html.dark .wl-ico-4 { background: rgba(163,113,247,.16); color: #d2a8ff; }
+html.dark .wl-ico-5 { background: rgba(187,128,9,.2); color: #e3b341; }
 </style>

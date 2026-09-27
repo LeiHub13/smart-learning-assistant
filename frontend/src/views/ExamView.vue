@@ -301,4 +301,6 @@ onMounted(async () => {
 .rv-line i.miss { color: var(--danger); }
 .rv-p { font-weight: 600; }
 .rv-n { color: var(--muted); }
+
+html.dark .bank > div.picked { background: var(--soft); }
 </style>

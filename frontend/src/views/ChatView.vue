@@ -3,7 +3,7 @@
     <div class="side card">
       <h3>会话</h3>
       <button class="btn small" style="margin:8px 0" @click="onNewSession">+ 新建会话</button>
-      <div v-if="hint" style="margin-bottom:8px;font-size:12px;color:#d97706">{{ hint }}</div>
+      <div v-if="hint" style="margin-bottom:8px;font-size:12px;color:var(--warn)">{{ hint }}</div>
       <div class="mode-tabs">
         <button :class="{ on: mode === 'kb' }" @click="setMode('kb')">知识库答疑</button>
         <button :class="{ on: mode === 'free' }" @click="setMode('free')">自由对话</button>
@@ -482,11 +482,11 @@ const cancelAction = async (m, a) => {
 /* 待确认动作卡片：沿用 .sources 配色，仅补两条布局规则 */
 .agent-action { margin-top: 8px; }
 .agent-action-summary {
-  font-size: 12px; color: var(--primary); background: #ddf4ff;
+  font-size: 12px; color: var(--primary); background: var(--accent-subtle);
   border-radius: 8px 8px 0 0; padding: 6px 10px; line-height: 1.7;
 }
 .agent-action-ops {
-  display: flex; gap: 8px; background: #ddf4ff;
+  display: flex; gap: 8px; background: var(--accent-subtle);
   border-radius: 0 0 8px 8px; padding: 6px 10px;
 }
 
@@ -495,15 +495,15 @@ const cancelAction = async (m, a) => {
   cursor: pointer; font-weight: 700; margin: 0 3px; padding: 1px 6px;
   border: 1px solid currentColor; border-radius: 6px; transition: background .15s ease;
 }
-.src-chip:hover { background: #fff; }
+.src-chip:hover { background: var(--bg); }
 .src-panel { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
 .src-item {
-  background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
   transition: border-color .3s ease, box-shadow .3s ease;
 }
 .src-item.flash { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(9,105,218,.18); }
 .src-doc { font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 3px; }
-.src-txt { font-size: 12.5px; color: #57606a; line-height: 1.7; }
+.src-txt { font-size: 12.5px; color: var(--muted); line-height: 1.7; }
 
 /* 追问推荐 chips：沿用待确认动作的浅蓝配色，点击直接发起该问题 */
 .followups {
@@ -529,4 +529,6 @@ const cancelAction = async (m, a) => {
 .socratic-toggle input { width: auto; margin: 0; accent-color: var(--primary); }
 .socratic-toggle:has(input:checked) { color: var(--primary); }
 .socratic-hint { color: var(--muted); }
+
+html.dark .fu-chip:hover { background: rgba(56,139,253,.3); }
 </style>

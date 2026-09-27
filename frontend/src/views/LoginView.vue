@@ -294,7 +294,7 @@ const submit = async () => {
 .tk-gh {
   width: 36px; height: 36px; flex: none; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--ink-3); background: #fff; border: 1px solid var(--line);
+  color: var(--ink-3); background: var(--bg); border: 1px solid var(--line);
   transition: color .15s ease, background .15s ease;
 }
 .tk-gh:hover { color: var(--ink); background: var(--soft); }
@@ -329,7 +329,7 @@ const submit = async () => {
 .tk-feat-ico {
   width: 30px; height: 30px; flex: none; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  background: #ddf4ff; color: var(--blue);
+  background: var(--accent-subtle); color: var(--blue);
 }
 .tk-feat:nth-child(2) .tk-feat-ico { background: #dafbe1; color: #1a7f37; }
 .tk-feat:nth-child(3) .tk-feat-ico { background: #fff1e5; color: #bc4c00; }
@@ -351,7 +351,7 @@ const submit = async () => {
 }
 .tk-card {
   width: 100%; max-width: 396px;
-  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px;
   padding: 28px 32px 30px;
   box-shadow: 0 1px 3px rgba(31, 35, 40, .06);
 }
@@ -369,7 +369,7 @@ const submit = async () => {
 }
 .tk-tabs button:hover { color: var(--ink); }
 .tk-tabs button.on {
-  background: #fff; color: var(--ink); font-weight: 600;
+  background: var(--bg); color: var(--ink); font-weight: 600;
   box-shadow: 0 1px 2px rgba(31, 35, 40, .1);
 }
 
@@ -383,7 +383,7 @@ const submit = async () => {
 }
 .tk-input {
   width: 100%; height: 40px; padding: 0 12px;
-  background: #fff; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
   color: var(--ink); font-size: 14px; font-family: inherit; outline: none;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
@@ -394,15 +394,15 @@ const submit = async () => {
 .tk-error {
   margin: 14px 0 2px; padding: 10px 14px; border-radius: 6px;
   font-size: 13px; line-height: 1.6;
-  color: #a40e26; background: #ffebe9;
-  border: 1px solid #ffc1bc;
+  color: var(--bad-strong); background: var(--bad-soft);
+  border: 1px solid var(--bad-line);
 }
 
 .tk-success {
   margin: 14px 0 2px; padding: 10px 14px; border-radius: 6px;
   font-size: 13px; line-height: 1.6;
-  color: #116329; background: #dafbe1;
-  border: 1px solid #aceebb;
+  color: var(--ok-strong); background: var(--ok-soft);
+  border: 1px solid var(--ok-line);
 }
 
 .tk-forgot-row { margin-top: 10px; display: flex; justify-content: flex-end; }
@@ -422,7 +422,7 @@ const submit = async () => {
   font-size: 13px; font-weight: 500; font-family: inherit; white-space: nowrap; cursor: pointer;
   transition: background .15s ease;
 }
-.tk-code-btn:hover:not(:disabled) { background: #f3f4f6; }
+.tk-code-btn:hover:not(:disabled) { background: var(--hover); }
 .tk-code-btn:disabled { opacity: .55; cursor: not-allowed; }
 
 .tk-btn {
@@ -459,7 +459,7 @@ const submit = async () => {
   font-family: inherit; cursor: pointer;
   transition: background .15s ease, border-color .15s ease;
 }
-.tk-chip:hover { background: #f3f4f6; border-color: rgba(31, 35, 40, .25); }
+.tk-chip:hover { background: var(--hover); border-color: rgba(31, 35, 40, .25); }
 .dc-name { font-size: 12.5px; font-weight: 600; color: var(--ink); white-space: nowrap; }
 .dc-user { font-family: var(--mono); font-size: 11px; color: var(--ink-4); white-space: nowrap; }
 
@@ -490,4 +490,17 @@ const submit = async () => {
   .tk-chip { flex: none; }
   .tk-foot { font-size: 11px; }
 }
+
+/* ===== 深色模式：翻转局部令牌，规则自动跟随 ===== */
+html.dark .tk-wrap {
+  --bg: #0d1117; --soft: #161b22; --line: #3d444d;
+  --ink: #e6edf3; --ink-2: #9198a1; --ink-3: #9198a1; --ink-4: #6e7681;
+  --blue: #4493f8; --green: #238636; --danger: #f85149;
+}
+html.dark .tk-feat:hover { background: #1c2128; }
+html.dark .tk-feat:nth-child(2) .tk-feat-ico { background: rgba(63,185,80,.16); color: #3fb950; }
+html.dark .tk-feat:nth-child(3) .tk-feat-ico { background: rgba(210,153,34,.16); color: #d29922; }
+html.dark .tk-feat:nth-child(4) .tk-feat-ico { background: rgba(163,113,247,.16); color: #d2a8ff; }
+html.dark .tk-input:focus { box-shadow: 0 0 0 3px rgba(56,139,253,.3); }
+html.dark .tk-btn, html.dark .tk-chip, html.dark .tk-code-btn { border-color: rgba(240,246,252,.1); }
 </style>

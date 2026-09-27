@@ -35,6 +35,9 @@
         <template #prefix><AppIcon name="search" :size="14" /></template>
       </el-input>
       <div class="tb-right">
+        <button class="theme-btn" :title="dark ? '切换到浅色模式' : '切换到深色模式'" @click.stop="toggleTheme">
+          <AppIcon :name="dark ? 'sun' : 'moon'" :size="17" />
+        </button>
         <div class="bell" @click.stop="toggleBell">
           <AppIcon name="bell" :size="17" />
           <span v-if="unread" class="badge">{{ unread > 99 ? '99+' : unread }}</span>
@@ -117,6 +120,7 @@ import { ElInput } from 'element-plus'
 import 'element-plus/es/components/input/style/css'
 import { api, getToken, clearToken, resetApiCache, listNotifications, unreadCount, markRead, markAllRead } from './api'
 import AppIcon from './components/AppIcon.vue'
+import { isDarkTheme, toggleTheme as switchTheme } from './theme'
 
 const route = useRoute()
 const router = useRouter()
@@ -127,6 +131,7 @@ const notifies = ref([])
 const bellOpen = ref(false)
 const tab = ref('system')
 const mailLogs = ref([])
+const dark = ref(isDarkTheme())
 let notifyTimer = null
 
 const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeView', 'MistakeBookView', 'FavoritesView', 'ExamView', 'QuestionBankView', 'CourseHubView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'SearchView', 'ProfileView', 'DocsView']
@@ -201,6 +206,8 @@ const switchTo = (path) => {
 }
 
 const go = (path) => router.push(path)
+
+const toggleTheme = () => { switchTheme(); dark.value = isDarkTheme() }
 
 const searchQ = ref('')
 const doSearch = () => {
@@ -336,43 +343,49 @@ img.avatar { object-fit: cover; padding: 0; }
   background: var(--soft); border-radius: 10px; padding: 0 10px;
   box-shadow: 0 0 0 1px var(--border) inset;
 }
-.global-search :deep(.el-input__wrapper.is-focus) { background: #fff; box-shadow: 0 0 0 1px var(--accent) inset; }
+.global-search :deep(.el-input__wrapper.is-focus) { background: var(--bg); box-shadow: 0 0 0 1px var(--accent) inset; }
 .global-search :deep(.el-input__inner) { height: 32px; font-size: 13px; }
 .global-search :deep(.el-input__prefix-inner > :first-child) { margin-right: 4px; }
-.tab-bar { display: flex; border-bottom: 1px solid #eaeef2; }
-.tab-bar span { flex: 1; text-align: center; padding: 10px 0 9px; font-size: 13px; font-weight: 700; color: #999; cursor: pointer; }
+.tab-bar { display: flex; border-bottom: 1px solid var(--border); }
+.tab-bar span { flex: 1; text-align: center; padding: 10px 0 9px; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; }
 .tab-bar span.on { color: var(--primary); box-shadow: inset 0 -2px 0 var(--primary); }
 .mail-tag { font-size: 10px; border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
-.mail-tag.ok { background: #eef7ee; color: #2e7d32; }
-.mail-tag.bad { background: #fdeeee; color: #c62828; }
-.muted { color: #aaa; }
+.mail-tag.ok { background: var(--ok-soft); color: var(--ok-strong); }
+.mail-tag.bad { background: var(--bad-soft); color: var(--bad-strong); }
+.muted { color: var(--muted); }
 .tb-user { cursor: pointer; border-radius: 10px; padding: 4px 6px; transition: background .2s ease; }
-.tb-user:hover { background: rgba(26,26,26,.05); }
+.tb-user:hover { background: var(--hover); }
+.theme-btn {
+  border: none; background: transparent; color: var(--muted); cursor: pointer;
+  width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  border-radius: 10px; padding: 0; transition: background .2s ease, color .2s ease;
+}
+.theme-btn:hover { background: var(--hover); color: var(--text); }
 .bell {
   position: relative; cursor: pointer; font-size: 17px; width: 34px; height: 34px;
   display: flex; align-items: center; justify-content: center;
   border-radius: 10px; transition: background .2s ease;
 }
-.bell:hover { background: rgba(26,26,26,.05); }
-.bell .badge { position: absolute; top: 1px; right: 0; background: #d1242f; color: #fff; font-size: 10px; border-radius: 8px; padding: 0 5px; line-height: 14px; box-shadow: 0 0 0 2px #fff; }
+.bell:hover { background: var(--hover); }
+.bell .badge { position: absolute; top: 1px; right: 0; background: #d1242f; color: #fff; font-size: 10px; border-radius: 8px; padding: 0 5px; line-height: 14px; box-shadow: 0 0 0 2px var(--bg); }
 .notify-pop {
   position: absolute; top: 42px; right: -10px; width: 320px; max-height: 400px; overflow: auto;
-  background: #fff; border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.14);
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.14);
   padding: 6px 0; z-index: 100;
   animation: pop-in .16s ease;
 }
 @keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
-.notify-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px 9px; border-bottom: 1px solid #eaeef2; }
+.notify-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px 9px; border-bottom: 1px solid var(--border); }
 .notify-head b { font-size: 14px; letter-spacing: -.01em; }
 .notify-head a { color: var(--primary); font-size: 12px; cursor: pointer; }
 .notify-head a:hover { text-decoration: underline; }
-.notify-empty { padding: 24px; text-align: center; color: #999; font-size: 13px; }
-.notify-item { padding: 9px 14px; border-bottom: 1px solid #eaeef2; cursor: pointer; transition: background .15s ease; }
-.notify-item.unread { background: #f6f8fa; }
+.notify-empty { padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
+.notify-item { padding: 9px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s ease; }
+.notify-item.unread { background: var(--soft); }
 .notify-item.unread .notify-title::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--primary); margin-right: 6px; vertical-align: 1px; }
-.notify-item:hover { background: #f3f4f6; }
+.notify-item:hover { background: var(--hover); }
 .notify-title { font-weight: 600; font-size: 13px; }
-.notify-content { font-size: 12px; color: #666; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notify-content { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ===== 通知详情弹窗 ===== */
 .notify-modal {
@@ -394,22 +407,22 @@ img.avatar { object-fit: cover; padding: 0; }
 .nm-head { display: flex; align-items: flex-start; gap: 10px; }
 .nm-tag {
   flex: none; margin-top: 2px; padding: 3px 10px; border-radius: 999px;
-  background: #ddf4ff; color: var(--primary); border: 1px solid #c9e3ff;
+  background: var(--accent-subtle); color: var(--primary); border: 1px solid transparent;
   font-size: 11px; font-weight: 600;
 }
-.nm-tag.bad { background: #fdf1f0; color: #b3261e; border-color: #f3c8c2; }
+.nm-tag.bad { background: var(--bad-soft); color: var(--bad-strong); border-color: var(--bad-line); }
 .nm-title-wrap { flex: 1; min-width: 0; }
 .nm-title { display: block; font-size: 15px; font-weight: 700; letter-spacing: -.01em; line-height: 1.4; }
-.nm-meta { display: block; margin-top: 3px; font-size: 12px; color: #818b98; }
+.nm-meta { display: block; margin-top: 3px; font-size: 12px; color: var(--muted); }
 .nm-close {
   flex: none; width: 26px; height: 26px; border: none; border-radius: 8px;
-  background: transparent; color: #999; font-size: 18px; line-height: 1; cursor: pointer;
+  background: transparent; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer;
   transition: background .15s ease, color .15s ease;
 }
-.nm-close:hover { background: #f3f4f6; color: #333; }
+.nm-close:hover { background: var(--hover); color: var(--text); }
 .nm-body {
-  margin-top: 12px; padding-top: 12px; border-top: 1px dashed #eaeef2;
-  font-size: 13.5px; line-height: 1.8; color: #444;
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);
+  font-size: 13.5px; line-height: 1.8; color: var(--text);
   white-space: pre-wrap; word-break: break-word;
 }
 .nm-foot { margin-top: 14px; display: flex; justify-content: flex-end; }
@@ -434,16 +447,20 @@ img.avatar { object-fit: cover; padding: 0; }
 .sub-item {
   display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
   padding: 7px 8px 7px 14px; border: none; border-radius: 8px;
-  background: transparent; color: #565b6e; font-size: 13px; cursor: pointer;
+  background: transparent; color: var(--muted); font-size: 13px; cursor: pointer;
   position: relative; transition: .2s ease;
 }
 .sub-item:hover { background: var(--soft); color: var(--text); }
-.sub-item.on { background: #ddf4ff; color: var(--primary); font-weight: 600; }
+.sub-item.on { background: var(--accent-subtle); color: var(--primary); font-weight: 600; }
 .sub-item.on::before {
   content: ''; position: absolute; left: 5px; top: 50%; transform: translateY(-50%);
   width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
 }
 .sub-ico { display: inline-flex; opacity: .8; }
+
+/* html.dark 前缀可命中 scoped 规则（编译后带 data-v 属性），只放令牌盖不住的个别色 */
+html.dark .sess-btn:hover { background: rgba(240,246,252,.12); }
+html.dark .sess.on .sess-btn:hover { background: rgba(56,139,253,.35); }
 
 @media (max-width: 768px) {
   /* 顶栏导航模式下拍平：隐藏分组头，子项直接平铺进横条 */
@@ -454,7 +471,7 @@ img.avatar { object-fit: cover; padding: 0; }
     padding: 8px 10px; font-size: 11px;
   }
   .sub-item.on::before { display: none; }
-  .sub-item.on { background: #ddf4ff; }
+  .sub-item.on { background: var(--accent-subtle); }
   .sub-ico {
     width: 22px; height: 22px; border-radius: 6px;
     align-items: center; justify-content: center;

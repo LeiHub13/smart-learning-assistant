@@ -193,7 +193,7 @@ onMounted(() => {
 .task.done { opacity: .7; background: #f7f2ec; }
 .cb { font-size: 18px; }
 .small { font-size: 12px; }
-.muted { color: #888; }
+.muted { color: var(--muted); }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 12px; }
 .cal-h { text-align: center; font-size: 12px; color: var(--muted); }
 .cal-cell {
@@ -205,5 +205,9 @@ onMounted(() => {
 .cal-cell i { font-style: normal; font-size: 11px; }
 .cal-cell.c0 { background: var(--soft); }
 .cal-cell.c1 { background: #fdf3e4; border-color: #e8c98f; }
-.cal-cell.c2 { background: #eef7ee; border-color: #b5d8b5; }
+.cal-cell.c2 { background: var(--ok-soft); border-color: var(--ok-line); }
+
+html.dark .progress-bar { background: var(--soft); }
+html.dark .task.done { background: var(--soft); }
+html.dark .cal-cell.c1 { background: rgba(210,153,34,.14); border-color: rgba(210,153,34,.45); }
 </style>

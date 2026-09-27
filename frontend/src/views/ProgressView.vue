@@ -195,9 +195,9 @@ const load = async () => {
 .rc-icon { font-size: 20px; line-height: 1.4; }
 .rc-title { font-weight: 700; font-size: 14px; }
 .rc-reason { font-size: 13px; color: var(--muted); margin-top: 2px; line-height: 1.6; }
-.md { line-height: 1.9; color: #334155; }
+.md { line-height: 1.9; color: var(--text); }
 .md :deep(h2), .md :deep(h3), .md :deep(h4) { margin: 8px 0 4px; font-weight: 800; }
-.md :deep(strong) { color: #1a1a1a; }
+.md :deep(strong) { color: var(--text); }
 .md :deep(code) { background: #f4f1ea; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
 .heatmap { display: grid; grid-template-rows: repeat(7, 12px); grid-auto-flow: column; gap: 3px; margin: 12px 0 4px; width: fit-content; }
 .hm-cell { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
@@ -210,10 +210,10 @@ const load = async () => {
 
 .wb-list { display: flex; flex-direction: column; gap: 16px; }
 .wb-card {
-  border: 1px solid #e3dfd8;
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 16px 18px;
-  background: #fff;
+  background: var(--card);
   box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.04);
 }
 .wb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -221,22 +221,22 @@ const load = async () => {
   font-size: 12px; font-weight: 800; color: #fff; background: linear-gradient(135deg, #e06c5a, #c94f4f);
   border-radius: 20px; padding: 2px 10px; font-family: "SF Mono", Consolas, monospace; letter-spacing: 0.04em;
 }
-.wb-time { margin-left: auto; font-size: 12px; color: #9a968d; }
+.wb-time { margin-left: auto; font-size: 12px; color: var(--muted); }
 .wb-stem {
-  font-size: 14px; line-height: 1.75; color: #2c2c2c;
-  background: #faf9f6; border: 1px solid #eeeae2; border-radius: 10px;
+  font-size: 14px; line-height: 1.75; color: var(--text);
+  background: var(--canvas); border: 1px solid var(--border); border-radius: 10px;
   padding: 12px 14px; margin-bottom: 14px;
 }
 .wb-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .wb-ans { border-radius: 10px; padding: 12px 14px; }
-.wb-ans.wrong { background: #fdf1f0; border: 1px solid #f0cecb; }
-.wb-ans.right { background: #f1f8f1; border: 1px solid #cfe4d1; }
+.wb-ans.wrong { background: var(--bad-soft); border: 1px solid var(--bad-line); }
+.wb-ans.right { background: var(--ok-soft); border: 1px solid var(--ok-line); }
 .wb-ans-label {
   display: flex; align-items: center; gap: 6px;
   font-size: 12px; font-weight: 700; margin-bottom: 6px;
 }
-.wb-ans.wrong .wb-ans-label { color: #c94f4f; }
-.wb-ans.right .wb-ans-label { color: #3a8f52; }
+.wb-ans.wrong .wb-ans-label { color: var(--bad-strong); }
+.wb-ans.right .wb-ans-label { color: var(--ok-strong); }
 .wb-ans-label i {
   width: 16px; height: 16px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -244,9 +244,17 @@ const load = async () => {
 }
 .wb-ans.wrong .wb-ans-label i { background: #d96a5c; }
 .wb-ans.right .wb-ans-label i { background: #4faf6a; }
-.wb-ans-text { font-size: 13.5px; line-height: 1.7; color: #3a3a3a; word-break: break-word; }
+.wb-ans-text { font-size: 13.5px; line-height: 1.7; color: var(--text); word-break: break-word; }
 
 @media (max-width: 480px) {
   .wb-answers { grid-template-columns: 1fr; }
 }
+
+/* 深色：代码底与热力图梯度 */
+html.dark .md :deep(code), html.dark .md :deep(pre) { background: var(--soft); }
+html.dark .hm-0 { background: #1c2128; }
+html.dark .hm-1 { background: #033a16; }
+html.dark .hm-2 { background: #196c2e; }
+html.dark .hm-3 { background: #2ea043; }
+html.dark .hm-4 { background: #56d364; }
 </style>

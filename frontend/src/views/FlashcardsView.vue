@@ -159,7 +159,7 @@ onMounted(async () => {
 
 <style scoped>
 .fc-card {
-  background: #fff; border: 2px solid var(--border); border-radius: 14px;
+  background: var(--card); border: 2px solid var(--border); border-radius: 14px;
   padding: 26px 28px; min-height: 190px; cursor: pointer;
   transition: border-color .2s ease, box-shadow .2s ease;
 }
@@ -167,7 +167,7 @@ onMounted(async () => {
 .fc-card.open { cursor: default; border-color: var(--primary); }
 .fc-tag { font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 12px; }
 .fc-front { font-size: 16px; font-weight: 700; line-height: 1.8; }
-.fc-back { font-size: 14px; line-height: 1.9; color: #1f7a41; white-space: pre-wrap; }
+.fc-back { font-size: 14px; line-height: 1.9; color: var(--ok-strong); white-space: pre-wrap; }
 .fc-hint { margin-top: 18px; font-size: 12px; color: var(--muted); }
 .fc-divider { border-top: 1px dashed var(--border); margin: 14px 0; }
 .fc-ops { display: flex; justify-content: center; gap: 12px; margin-top: 14px; }

@@ -427,7 +427,7 @@ const doDeleteKb = async () => {
   background: var(--soft);
 }
 .pv-text {
-  white-space: pre-wrap; line-height: 1.8; color: #334155;
+  white-space: pre-wrap; line-height: 1.8; color: var(--text);
   max-height: 320px; overflow: auto;
   font-family: Consolas, "Microsoft YaHei", monospace; font-size: 13px;
   background: #faf9f7; border-radius: 8px; padding: 10px 12px;
@@ -436,7 +436,7 @@ const doDeleteKb = async () => {
 .pv-hit.on { background: #ffd33d; outline: 2px solid var(--primary); }
 /* AI 速览卡片 */
 .ov-card {
-  background: #fff; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
   padding: 12px 14px; margin-bottom: 10px;
 }
 .ov-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -444,6 +444,9 @@ const doDeleteKb = async () => {
 .ov-summary { font-size: 13px; line-height: 1.7; font-weight: 600; }
 .ov-sec { font-size: 12px; font-weight: 700; color: var(--muted); margin: 10px 0 4px; }
 .ov-list { margin: 0; padding-left: 18px; }
-.ov-list li { font-size: 13px; line-height: 1.75; color: #334155; }
+.ov-list li { font-size: 13px; line-height: 1.75; color: var(--text); }
 @media (max-width: 900px) { .pk-grid { grid-template-columns: minmax(0, 1fr); } }
+
+html.dark .pv-text { background: var(--soft); }
+html.dark .pv-hit { background: rgba(210,153,34,.4); }
 </style>
