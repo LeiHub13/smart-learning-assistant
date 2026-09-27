@@ -28,6 +28,36 @@
     </div>
 
     <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <h3 style="margin:0">用户列表（{{ uTotal }}）</h3>
+        <div class="row" style="gap:8px">
+          <input v-model="uKeyword" type="text" placeholder="搜索用户名 / 昵称 / 邮箱…" style="max-width:260px" @keyup.enter="loadUsers(1)" />
+          <button class="btn ghost small" @click="loadUsers(1)">搜索</button>
+        </div>
+      </div>
+      <table v-if="uRecords.length">
+        <thead><tr><th>用户名</th><th>昵称</th><th>邮箱</th><th>练习次数</th><th>最近学习</th><th>注册时间</th><th>角色</th></tr></thead>
+        <tbody>
+          <tr v-for="u in uRecords" :key="u.id">
+            <td>{{ u.username }} <span v-if="u.admin" class="tag" style="margin-left:4px">管理员</span></td>
+            <td>{{ u.nickname || '—' }}</td>
+            <td>{{ u.email || '—' }}</td>
+            <td>{{ u.practiceCount }}</td>
+            <td>{{ u.lastStudy || '—' }}</td>
+            <td>{{ (u.createdAt || '').slice(0, 10) }}</td>
+            <td>{{ u.admin ? '管理员' : '普通用户' }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-else class="empty">无匹配用户</div>
+      <div class="u-pager" v-if="uTotal > uSize">
+        <button class="btn ghost small" :disabled="uPage <= 1" @click="loadUsers(uPage - 1)">上一页</button>
+        <span class="muted small">第 {{ uPage }} 页 · 共 {{ Math.ceil(uTotal / uSize) }} 页</span>
+        <button class="btn ghost small" :disabled="uPage >= Math.ceil(uTotal / uSize)" @click="loadUsers(uPage + 1)">下一页</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h3>按场景统计（近 14 天）</h3>
       <table v-if="d && d.byScene && d.byScene.length">
         <thead><tr><th>场景</th><th>调用</th><th>失败</th><th>平均耗时</th><th>tokens</th></tr></thead>
@@ -141,7 +171,28 @@ onMounted(async () => {
   }
   await nextTick()
   render()
+  loadUsers(1)
 })
+
+/* ===== 用户列表 ===== */
+const uRecords = ref([])
+const uTotal = ref(0)
+const uPage = ref(1)
+const uSize = 10
+const uKeyword = ref('')
+
+const loadUsers = async (page = 1) => {
+  try {
+    const q = new URLSearchParams({ page: String(page), size: String(uSize) })
+    if (uKeyword.value.trim()) q.set('keyword', uKeyword.value.trim())
+    const r = await api('/api/admin/users?' + q)
+    uRecords.value = r.records || []
+    uTotal.value = r.total || 0
+    uPage.value = r.page || page
+  } catch (e) {
+    error.value = e.message
+  }
+}
 
 const onResize = () => { uaChart?.resize(); llmChart?.resize() }
 onMounted(() => window.addEventListener('resize', onResize))
@@ -155,4 +206,5 @@ onBeforeUnmount(() => {
 .stat-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .stat-row .stat { flex: 1; min-width: 130px; }
 .chart { width: 100%; height: 300px; }
+.u-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; }
 </style>

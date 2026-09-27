@@ -3,6 +3,8 @@ package com.example.learningassistant.admin.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.example.learningassistant.ai.PythonRagClient;
 import com.example.learningassistant.common.BizException;
+import com.example.learningassistant.practice.entity.Practice;
+import com.example.learningassistant.practice.mapper.PracticeMapper;
 import com.example.learningassistant.study.entity.StudyLog;
 import com.example.learningassistant.study.mapper.StudyLogMapper;
 import com.example.learningassistant.user.entity.User;
@@ -38,6 +40,7 @@ public class AdminService {
 
     private final UserMapper userMapper;
     private final StudyLogMapper studyLogMapper;
+    private final PracticeMapper practiceMapper;
     private final PythonRagClient ragClient;
 
     public boolean isAdmin(String username) {
@@ -155,6 +158,60 @@ public class AdminService {
         result.put("llmAvailable", llm != null);
         result.put("byScene", byScene);
         result.put("series", series);
+        return result;
+    }
+    /**
+     * 用户列表（管理看板）：关键字匹配用户名/昵称/邮箱，分页返回，
+     * 附带每人的练习次数与最近学习日期（来自练习与心跳数据）。
+     */
+    public Map<String, Object> users(String keyword, int page, int size) {
+        int p = Math.max(page, 1);
+        int sz = Math.min(Math.max(size, 1), 50);
+
+        boolean hasKw = keyword != null && !keyword.isBlank();
+        String kw = hasKw ? keyword.trim() : null;
+        // 计数与列表分开建 wrapper：selectCount 与 .select() 列共用会产生非法 SQL
+        long total = userMapper.selectCount(new QueryWrapper<User>()
+                .and(hasKw, w -> w.like("username", kw).or().like("nickname", kw).or().like("email", kw)));
+        List<User> rows = userMapper.selectList(new QueryWrapper<User>()
+                .select("id", "username", "nickname", "email", "created_at")
+                .and(hasKw, w -> w.like("username", kw).or().like("nickname", kw).or().like("email", kw))
+                .orderByDesc("created_at")
+                .last("LIMIT " + sz + " OFFSET " + (long) (p - 1) * sz));
+
+        // 练习次数 / 最近学习日期：两条分组查询汇总成映射，避免逐用户查库
+        Map<Long, Long> practiceCounts = practiceMapper.selectMaps(new QueryWrapper<Practice>()
+                        .select("user_id AS uid", "COUNT(*) AS c")
+                        .groupBy("user_id"))
+                .stream()
+                .collect(Collectors.toMap(m -> ((Number) m.get("uid")).longValue(),
+                        m -> ((Number) m.get("c")).longValue(), (a, b) -> a));
+        Map<Long, String> lastStudy = studyLogMapper.selectMaps(new QueryWrapper<StudyLog>()
+                        .select("user_id AS uid", "MAX(study_date) AS last_date")
+                        .groupBy("user_id"))
+                .stream()
+                .collect(Collectors.toMap(m -> ((Number) m.get("uid")).longValue(),
+                        m -> String.valueOf(m.get("last_date")), (a, b) -> a));
+
+        List<Map<String, Object>> records = new ArrayList<>();
+        for (User u : rows) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", u.getId());
+            m.put("username", u.getUsername());
+            m.put("nickname", u.getNickname());
+            m.put("email", u.getEmail());
+            m.put("createdAt", u.getCreatedAt() == null ? null : u.getCreatedAt().toString());
+            m.put("practiceCount", practiceCounts.getOrDefault(u.getId(), 0L));
+            m.put("lastStudy", lastStudy.get(u.getId()));
+            m.put("admin", isAdmin(u.getUsername()));
+            records.add(m);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("records", records);
+        result.put("total", total);
+        result.put("page", p);
+        result.put("size", sz);
         return result;
     }
 }
