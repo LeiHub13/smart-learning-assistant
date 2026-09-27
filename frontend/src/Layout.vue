@@ -141,6 +141,7 @@ const visibleMenus = computed(() => {
 const menus = [
   { key: 'home', title: '首页', path: '/home', icon: 'home' },
   { key: 'chat', title: '智能答疑', path: '/chat', icon: 'chat' },
+  { key: 'hall', title: '对话厅', path: '/hall', icon: 'hall' },
   { key: 'generate', title: 'AI生成讲义/练习题', path: '/generate', icon: 'sparkles' },
   {
     key: 'course', title: '课程学习', icon: 'manage',

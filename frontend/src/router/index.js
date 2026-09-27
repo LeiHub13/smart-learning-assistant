@@ -22,6 +22,7 @@ const routes = [
     children: [
       { path: 'home', name: 'home', component: () => import('../views/DashboardView.vue'), meta: { title: '首页 - 智学助手' } },
       { path: 'chat', name: 'chat', component: () => import('../views/ChatView.vue'), meta: { title: '智能答疑 - 智学助手' } },
+      { path: 'hall', name: 'hall', component: () => import('../views/HallView.vue'), meta: { title: '对话厅 - 智学助手' } },
       { path: 'generate', name: 'generate', component: () => import('../views/GenerateView.vue'), meta: { title: 'AI 内容生成 - 智学助手' } },
       { path: 'practice', name: 'practice', component: () => import('../views/PracticeView.vue'), meta: { title: '题库练习 - 智学助手' } },
       { path: 'mistakes', name: 'mistakes', component: () => import('../views/MistakeBookView.vue'), meta: { title: '错题本 - 智学助手' } },
