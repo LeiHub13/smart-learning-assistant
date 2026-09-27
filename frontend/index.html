@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>智学助手 - 基于大语言模型的智能学习助手</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="apple-touch-icon" href="/favicon.svg" />
+<meta name="theme-color" content="#0969da" />
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
@@ -64,14 +67,9 @@ body {
   content: ''; position: absolute; left: 20px; right: 20px; bottom: 0;
   height: 1px; background: var(--border);
 }
-.sidebar .logo i {
-  width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;
-  background: #24292f;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.sidebar .logo i::before {
-  content: ''; width: 9px; height: 9px; border-radius: 2.5px;
-  background: #fff;
+.sidebar .logo .logo-mark {
+  width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+  display: block;
 }
 .sidebar nav { flex: 1; padding: 12px; overflow-y: auto; }
 .sidebar nav button {
@@ -412,7 +410,7 @@ a.link:hover { text-decoration: underline; }
   }
   .sidebar .logo { padding: 0; font-size: 14px; gap: 8px; flex-shrink: 0; }
   .sidebar .logo::after { display: none; }
-  .sidebar .logo i { width: 20px; height: 20px; }
+  .sidebar .logo .logo-mark { width: 20px; height: 20px; }
   .sidebar nav {
     flex: 1; display: flex; gap: 4px; padding: 0;
     overflow-x: auto; scrollbar-width: none;

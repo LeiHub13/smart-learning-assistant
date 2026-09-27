@@ -1,6 +1,6 @@
 <template>
   <aside class="sidebar">
-    <div class="logo"><i></i>智学助手</div>
+    <div class="logo"><svg class="logo-mark" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#0969da"/><path d="M32 12 L58 23.2 L32 34.4 L6 23.2 Z" fill="#ffffff"/><path d="M18 26.8 V38 c0 5.2 6.3 9.2 14 9.2 s14 -4 14 -9.2 V26.8 L32 33.6 Z" fill="#ffffff" opacity=".92"/><path d="M55.5 25 v11.5" stroke="#ffd33d" stroke-width="3" stroke-linecap="round" fill="none"/><circle cx="55.5" cy="40" r="2.8" fill="#ffd33d"/></svg>智学助手</div>
     <nav>
       <template v-for="m in menus" :key="m.key">
         <!-- 分组：点击展开/收起，子项缩进 -->
