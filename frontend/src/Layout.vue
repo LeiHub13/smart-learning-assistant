@@ -132,7 +132,12 @@ let notifyTimer = null
 const keepAliveViews = ['DashboardView', 'ChatView', 'GenerateView', 'PracticeView', 'MistakeBookView', 'FavoritesView', 'ExamView', 'QuestionBankView', 'CourseHubView', 'ProgressView', 'ManageView', 'PlanView', 'ReportView', 'NotesView', 'SearchView', 'ProfileView', 'DocsView']
 
 const isAdmin = computed(() => me.value?.isAdmin === 'true')
-const visibleMenus = computed(() => menus.filter((m) => !m.admin || isAdmin.value))
+// admin 账号是纯管理角色：只保留系统看板，其余功能一律不展示
+const isAdminAccount = computed(() => me.value?.username === 'admin')
+const visibleMenus = computed(() => {
+  if (isAdminAccount.value) return menus.filter((m) => m.admin)
+  return menus.filter((m) => !m.admin)
+})
 const menus = [
   { key: 'home', title: '首页', path: '/home', icon: 'home' },
   { key: 'chat', title: '智能答疑', path: '/chat', icon: 'chat' },

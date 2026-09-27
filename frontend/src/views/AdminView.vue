@@ -33,7 +33,7 @@
         <thead><tr><th>场景</th><th>调用</th><th>失败</th><th>平均耗时</th><th>tokens</th></tr></thead>
         <tbody>
           <tr v-for="s in d.byScene" :key="s.scene">
-            <td>{{ s.scene }}</td>
+            <td>{{ sceneLabel(s.scene) }}</td>
             <td>{{ s.calls }}</td>
             <td>{{ s.failures }}</td>
             <td>{{ s.avgMs }} ms</td>
@@ -64,6 +64,14 @@ const uaRef = ref(null)
 const llmRef = ref(null)
 let uaChart = null
 let llmChart = null
+
+const SCENE_LABELS = {
+  rag_qa: '知识库答疑', free: '自由对话', agent: '智能答疑', lecture: '讲义生成',
+  questions: 'AI 出题', review: '主观题批改', advice: '复习建议', rewrite: '查询改写',
+  rerank: '相关性重排', plan: '学习计划', report: '学习报告', recommend: '今日推荐',
+  doc_overview: '文档速览', unknown: '未知场景'
+}
+const sceneLabel = (s) => SCENE_LABELS[s] || s
 
 const pick = (path) => {
   let v = d.value

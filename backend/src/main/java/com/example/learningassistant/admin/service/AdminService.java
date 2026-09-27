@@ -33,34 +33,28 @@ public class AdminService {
 
     private static final int TREND_DAYS = 14;
 
-    @Value("${app.admin.user-ids:1}")
-    private String adminUserIds;
+    @Value("${app.admin.usernames:admin}")
+    private String adminUsernames;
 
     private final UserMapper userMapper;
     private final StudyLogMapper studyLogMapper;
     private final PythonRagClient ragClient;
 
-    public boolean isAdmin(Long userId) {
-        if (userId == null || adminUserIds == null || adminUserIds.isBlank()) {
+    public boolean isAdmin(String username) {
+        if (username == null || adminUsernames == null || adminUsernames.isBlank()) {
             return false;
         }
-        return Arrays.stream(adminUserIds.split(","))
-                .map(String::trim).filter(s -> !s.isEmpty())
-                .anyMatch(s -> {
-                    try {
-                        return Long.parseLong(s) == userId;
-                    } catch (NumberFormatException e) {
-                        return false;
-                    }
-                });
+        return Arrays.stream(adminUsernames.split(","))
+                .map(String::trim)
+                .anyMatch(s -> s.equalsIgnoreCase(username));
     }
 
     /**
      * 看板聚合：用户规模/注册趋势、活跃度（学习心跳 DAU/时长）、LLM 调用与 token 趋势。
      * LLM 数据来自 ai-service /ai/stats（JSONL 观测），不可达时该块降级为 null。
      */
-    public Map<String, Object> dashboard(Long viewerId) {
-        if (!isAdmin(viewerId)) {
+    public Map<String, Object> dashboard(String viewerName) {
+        if (!isAdmin(viewerName)) {
             throw new BizException("无权访问管理看板");
         }
         LocalDate today = LocalDate.now();

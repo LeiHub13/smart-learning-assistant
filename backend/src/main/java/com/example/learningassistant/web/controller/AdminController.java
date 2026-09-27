@@ -25,6 +25,6 @@ public class AdminController {
     @GetMapping("/dashboard")
     public ApiResponse<Map<String, Object>> dashboard(HttpServletRequest request) {
         AuthUser u = CurrentUser.get(request);
-        return ApiResponse.ok(adminService.dashboard(u.id()));
+        return ApiResponse.ok(adminService.dashboard(u.username()));
     }
 }

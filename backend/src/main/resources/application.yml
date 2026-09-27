@@ -49,8 +49,8 @@ mybatis-plus:
 
 app:
   admin:
-    # 管理员用户 id 白名单（逗号分隔）：系统看板等管理功能的访问门禁
-    user-ids: ${ADMIN_USER_IDS:1}
+    # 管理员用户名白名单（逗号分隔，忽略大小写）：系统看板等管理功能的访问门禁
+    usernames: ${ADMIN_USERNAMES:admin}
   security:
     # 生产环境务必更换并通过环境变量注入
     jwt-secret: learning-assistant-v2-jwt-secret-please-change-me-0123456789

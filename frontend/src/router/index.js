@@ -48,13 +48,37 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to) => {
+// admin 账号（纯管理角色）：仅允许系统看板，其余路由一律重定向回看板。
+// 用户名经 /api/auth/me 拉取一次并按 token 缓存，避免每次导航都请求。
+let adminCache = { token: null, username: null }
+
+const cachedUsername = async () => {
+  const token = getToken()
+  if (!token) return null
+  if (adminCache.token !== token) {
+    try {
+      const r = await fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } })
+      const body = await r.json().catch(() => null)
+      adminCache = { token, username: body && body.data ? body.data.username : null }
+    } catch (e) {
+      adminCache = { token, username: null }
+    }
+  }
+  return adminCache.username
+}
+
+router.beforeEach(async (to) => {
   const logged = !!getToken()
   if (!to.meta.public && !logged) {
     return { path: '/login', query: to.fullPath === '/' ? undefined : { redirect: to.fullPath } }
   }
   if (to.path === '/login' && logged) {
     return { path: '/chat' }
+  }
+  // admin 是纯管理角色：登录后只能进入系统看板
+  const username = await cachedUsername()
+  if (username === 'admin' && to.path !== '/admin') {
+    return { path: '/admin' }
   }
   document.title = to.meta.title || '智学助手'
 })

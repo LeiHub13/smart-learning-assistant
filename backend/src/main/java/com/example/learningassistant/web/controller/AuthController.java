@@ -64,7 +64,7 @@ public class AuthController {
         User user = authService.me(u.id());
         return ApiResponse.ok(Map.of(
                 "id", String.valueOf(user.getId()),
-                "isAdmin", String.valueOf(adminService.isAdmin(user.getId())),
+                "isAdmin", String.valueOf(adminService.isAdmin(user.getUsername())),
                 "username", user.getUsername(),
                 "nickname", user.getNickname() == null ? "" : user.getNickname(),
                 "email", user.getEmail() == null ? "" : user.getEmail(),

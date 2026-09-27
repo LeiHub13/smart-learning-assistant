@@ -43,6 +43,7 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        seedAdmin();
         Long pg13Id = seedUser("pg13", "小明");
         seedUser("xiaozhang", "小张");
         seedUser("xiaodi", "小邸");
@@ -67,6 +68,23 @@ public class DataSeeder implements CommandLineRunner {
         u.setCreatedAt(LocalDateTime.now());
         userMapper.insert(u);
         return u.getId();
+    }
+
+    /**
+     * 种子管理员账号：admin / admin123，仅用于系统看板等管理功能。
+     */
+    private void seedAdmin() {
+        if (userMapper.findByUsername("admin").isPresent()) {
+            return;
+        }
+        User u = new User();
+        u.setTenantId(1L);
+        u.setUsername("admin");
+        u.setPassword(AuthService.hash("admin123"));
+        u.setNickname("系统管理员");
+        u.setCreatedAt(LocalDateTime.now());
+        userMapper.insert(u);
+        log.info("已创建管理员账号 admin（密码 admin123）");
     }
 
     /**
