@@ -53,6 +53,9 @@ const props = defineProps({
   loading: { type: Boolean, default: false }
 })
 
+/* 文档 id：文档管理页的行数据是 docId，我的课程页的实体是 id，两者兼容 */
+const docKey = computed(() => (props.doc.id != null ? props.doc.id : props.doc.docId))
+
 /* AI 速览：overview 存的是 JSON 串，解析失败按未生成处理 */
 const ovLoading = ref(false)
 const ov = computed(() => {
@@ -64,7 +67,7 @@ const genOverview = async () => {
   if (ovLoading.value) return
   ovLoading.value = true
   try {
-    const r = await api('/api/kb/' + props.kbId + '/documents/' + props.doc.id + '/overview', { method: 'POST' })
+    const r = await api('/api/kb/' + props.kbId + '/documents/' + docKey.value + '/overview', { method: 'POST' })
     props.doc.overview = JSON.stringify(r)
   } catch (e) {
     props.doc.overview = null
