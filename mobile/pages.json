@@ -1,0 +1,112 @@
+{
+  "pages": [
+    {
+      "path": "pages/chat/chat",
+      "style": { "navigationBarTitleText": "AI 答疑" }
+    },
+    {
+      "path": "pages/hall/hall",
+      "style": { "navigationBarTitleText": "对话厅" }
+    },
+    {
+      "path": "pages/practice/practice",
+      "style": { "navigationBarTitleText": "题库练习" }
+    },
+    {
+      "path": "pages/mistake/mistake",
+      "style": { "navigationBarTitleText": "错题本" }
+    },
+    {
+      "path": "pages/plan/plan",
+      "style": { "navigationBarTitleText": "学习计划" }
+    },
+    {
+      "path": "pages/profile/profile",
+      "style": { "navigationBarTitleText": "我的" }
+    },
+    {
+      "path": "pages/bank/bank",
+      "style": { "navigationBarTitleText": "题库" }
+    },
+    {
+      "path": "pages/notes/notes",
+      "style": { "navigationBarTitleText": "学习笔记" }
+    },
+    {
+      "path": "pages/favorites/favorites",
+      "style": { "navigationBarTitleText": "收藏夹" }
+    },
+    {
+      "path": "pages/generate/generate",
+      "style": { "navigationBarTitleText": "讲义 / 练习题生成" }
+    },
+    {
+      "path": "pages/courses/courses",
+      "style": { "navigationBarTitleText": "课程中心" }
+    },
+    {
+      "path": "pages/dashboard/dashboard",
+      "style": { "navigationBarTitleText": "学情总览" }
+    },
+    {
+      "path": "pages/progress/progress",
+      "style": { "navigationBarTitleText": "学情分析" }
+    },
+    {
+      "path": "pages/report/report",
+      "style": { "navigationBarTitleText": "学习报告" }
+    },
+    {
+      "path": "pages/exam/exam",
+      "style": { "navigationBarTitleText": "在线考试" }
+    },
+    {
+      "path": "pages/login/login",
+      "style": { "navigationBarTitleText": "登录", "navigationStyle": "custom" }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "智能学习助手",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F5F6FA"
+  },
+  "tabBar": {
+    "color": "#9aa0ab",
+    "selectedColor": "#4f6ef7",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/chat/chat",
+        "text": "答疑",
+        "iconPath": "static/tabbar/chat.png",
+        "selectedIconPath": "static/tabbar/chat-on.png"
+      },
+      {
+        "pagePath": "pages/practice/practice",
+        "text": "练习",
+        "iconPath": "static/tabbar/practice.png",
+        "selectedIconPath": "static/tabbar/practice-on.png"
+      },
+      {
+        "pagePath": "pages/mistake/mistake",
+        "text": "错题本",
+        "iconPath": "static/tabbar/mistake.png",
+        "selectedIconPath": "static/tabbar/mistake-on.png"
+      },
+      {
+        "pagePath": "pages/plan/plan",
+        "text": "计划",
+        "iconPath": "static/tabbar/plan.png",
+        "selectedIconPath": "static/tabbar/plan-on.png"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的",
+        "iconPath": "static/tabbar/profile.png",
+        "selectedIconPath": "static/tabbar/profile-on.png"
+      }
+    ]
+  }
+}
