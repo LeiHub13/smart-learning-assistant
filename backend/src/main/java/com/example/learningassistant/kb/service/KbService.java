@@ -286,6 +286,26 @@ public class KbService {
     }
 
     /**
+     * 文档重命名：仅改展示名（fileName），chunk 与向量索引不受影响。
+     */
+    public Document renameDocument(Long kbId, Long docId, String fileName) {
+        Document doc = documentMapper.selectById(docId);
+        if (doc == null || !doc.getKbId().equals(kbId)) {
+            throw new BizException("文档不存在");
+        }
+        String name = fileName == null ? "" : fileName.trim();
+        if (name.isEmpty()) {
+            throw new BizException("文档名不能为空");
+        }
+        if (name.length() > 200) {
+            name = name.substring(0, 200);
+        }
+        doc.setFileName(name);
+        documentMapper.updateById(doc);
+        return doc;
+    }
+
+    /**
      * 文档预览：按 chunk 顺序还原全文（所有文档统一以 chunk 落库，文本型/上传型通吃）。
      */
     public Map<String, Object> previewDocument(Long kbId, Long docId) {

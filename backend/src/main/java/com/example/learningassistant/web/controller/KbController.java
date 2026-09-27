@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -71,6 +72,13 @@ public class KbController {
     @PostMapping("/api/kb/{kbId}/documents/{docId}/overview")
     public ApiResponse<Map<String, Object>> overview(@PathVariable Long kbId, @PathVariable Long docId) {
         return ApiResponse.ok(kbService.generateOverview(kbId, docId));
+    }
+
+    /** 文档重命名：仅改展示名，chunk 与向量索引不受影响。 */
+    @PutMapping("/api/kb/{kbId}/documents/{docId}/rename")
+    public ApiResponse<Document> rename(@PathVariable Long kbId, @PathVariable Long docId,
+                                        @RequestBody Map<String, String> body) {
+        return ApiResponse.ok(kbService.renameDocument(kbId, docId, body.get("fileName")));
     }
 
     @PostMapping("/api/kb/{kbId}/documents")

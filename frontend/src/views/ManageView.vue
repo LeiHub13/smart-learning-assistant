@@ -65,8 +65,11 @@
           </div>
           <div v-for="d in kb.docs" :key="d.id" class="ans" style="margin:4px 0">
             <div class="row" style="justify-content:space-between">
-              <span class="shrink">📄 {{ d.fileName }} · {{ d.chunkCount }} 个片段 <span v-if="d.overview" class="tag">✨速览</span></span>
+              <input v-if="renamingDocId === d.id" v-model="docRenameVal" class="shrink"
+                     @click.stop @keyup.enter="doRenameDoc(kb.id, d)" @keyup.esc="cancelRenameDoc" @blur="doRenameDoc(kb.id, d)" />
+              <span v-else class="shrink">📄 {{ d.fileName }} · {{ d.chunkCount }} 个片段 <span v-if="d.overview" class="tag">✨速览</span></span>
               <span class="row" style="gap:8px">
+                <button class="btn ghost small" title="重命名" @click="startRenameDoc(d)">✎</button>
                 <button class="btn ghost small" @click="togglePreview(kb.id, d.id)">
                   {{ previewDocId === d.id ? '收起预览' : '预览' }}
                 </button>
@@ -95,10 +98,21 @@
                   </template>
                   <div v-else class="muted small">尚未生成速览——点右上按钮，AI 通读全文提炼要点与可能考点</div>
                 </div>
-                <div class="muted small" style="margin-bottom:6px">
-                  {{ preview.fileName }} · {{ preview.fileType }} · {{ preview.chunkCount }} 个片段 · {{ preview.parseStatus }}
+                <div class="row" style="justify-content:space-between;margin-bottom:6px">
+                  <span class="muted small">
+                    {{ preview.fileName }} · {{ preview.fileType }} · {{ preview.chunkCount }} 个片段 · {{ (preview.text || '').length }} 字 · {{ preview.parseStatus }}
+                  </span>
+                  <button class="btn ghost small" @click="downloadPreviewText">{{ preview.fileUrl ? '下载文本副本' : '下载文本' }}</button>
                 </div>
-                <div class="pv-text">{{ preview.text || '（无文本内容：索引未完成或文档为空）' }}</div>
+                <div class="row" style="margin-bottom:6px">
+                  <input v-model="pvSearch" type="text" placeholder="在本文档内搜索…" style="max-width:280px" />
+                  <span class="muted small" style="flex:none;white-space:nowrap">{{ pvMatchCount ? (pvMatchIndex + 1) + ' / ' + pvMatchCount : (pvSearch ? '无匹配' : '') }}</span>
+                  <div class="btns">
+                    <button class="btn ghost small" :disabled="!pvMatchCount" @click="pvJump(-1)">上一个</button>
+                    <button class="btn ghost small" :disabled="!pvMatchCount" @click="pvJump(1)">下一个</button>
+                  </div>
+                </div>
+                <div class="pv-text" v-html="pvHtml"></div>
                 <div v-if="preview.fileUrl" style="margin-top:8px">
                   <a :href="preview.fileUrl" target="_blank" class="link">下载原始文件</a>
                 </div>
@@ -164,7 +178,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, getCourses } from '../api'
 import CourseCard from '../components/CourseCard.vue'
@@ -203,6 +217,104 @@ const genOverview = async (kbId2, d) => {
   } finally {
     ovLoading.value = false
   }
+}
+
+/* ===== 文档重命名：行内编辑，enter/blur 确认、esc 取消 ===== */
+const renamingDocId = ref(null)
+const docRenameVal = ref('')
+
+const startRenameDoc = (d) => {
+  renamingDocId.value = d.id
+  docRenameVal.value = d.fileName
+}
+
+const cancelRenameDoc = () => { renamingDocId.value = null }
+
+const doRenameDoc = async (kbId2, d) => {
+  if (renamingDocId.value !== d.id) return
+  const name = docRenameVal.value.trim()
+  if (!name || name === d.fileName) {
+    cancelRenameDoc()
+    return
+  }
+  try {
+    const up = await api('/api/kb/' + kbId2 + '/documents/' + d.id + '/rename', { method: 'PUT', body: { fileName: name } })
+    d.fileName = up.fileName
+    if (preview.value && preview.value.docId === d.id) preview.value.fileName = up.fileName
+    showHint('已重命名为「' + up.fileName + '」')
+  } catch (e) {
+    showHint(e.message)
+  } finally {
+    renamingDocId.value = null
+  }
+}
+
+/* ===== 预览内搜索：命中高亮 + 上/下跳转 ===== */
+const pvSearch = ref('')
+const pvMatchIndex = ref(0)
+
+const pvMatches = computed(() => {
+  const t = preview.value?.text || ''
+  const q = pvSearch.value.trim().toLowerCase()
+  if (!q) return 0
+  let n = 0
+  let i = 0
+  const lower = t.toLowerCase()
+  while ((i = lower.indexOf(q, i)) >= 0) { n++; i += q.length }
+  return n
+})
+const pvMatchCount = computed(() => pvMatches.value)
+
+const pvHtml = computed(() => {
+  const t = preview.value?.text
+  if (!t) return '（无文本内容：索引未完成或文档为空）'
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const q = pvSearch.value.trim()
+  if (!q) return esc(t)
+  const lower = t.toLowerCase()
+  const ql = q.toLowerCase()
+  let out = ''
+  let i = 0
+  let n = 0
+  while (true) {
+    const j = lower.indexOf(ql, i)
+    if (j < 0) { out += esc(t.slice(i)); break }
+    out += esc(t.slice(i, j))
+    n++
+    out += '<mark class="pv-hit' + (n === pvMatchIndex.value + 1 ? ' on' : '') + '">' + esc(t.slice(j, j + q.length)) + '</mark>'
+    i = j + q.length
+  }
+  return out
+})
+
+const pvJump = (delta) => {
+  const total = pvMatchCount.value
+  if (!total) return
+  pvMatchIndex.value = (pvMatchIndex.value + delta + total) % total
+  nextTick(() => {
+    const el = document.querySelector('.pv-hit.on')
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+}
+
+// 搜索词变化：定位回第一个命中
+watch(pvSearch, () => {
+  pvMatchIndex.value = 0
+  nextTick(() => {
+    const el = document.querySelector('.pv-hit.on')
+    if (el) el.scrollIntoView({ block: 'center' })
+  })
+})
+
+/* 下载预览文本：粘贴文本入库的文档没有原始文件，用 Blob 生成下载 */
+const downloadPreviewText = () => {
+  const t = preview.value?.text || ''
+  const blob = new Blob([t], { type: 'text/plain;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = (preview.value.fileName || '文档') + '.txt'
+  a.click()
+  URL.revokeObjectURL(a.href)
 }
 
 const togglePreview = async (kbId, docId) => {
@@ -433,6 +545,8 @@ const doDeleteKb = async () => {
   font-family: Consolas, "Microsoft YaHei", monospace; font-size: 13px;
   background: #faf9f7; border-radius: 8px; padding: 10px 12px;
 }
+.pv-hit { background: #fff3b8; border-radius: 3px; padding: 0 1px; }
+.pv-hit.on { background: #ffd33d; outline: 2px solid var(--primary); }
 /* AI 速览卡片 */
 .ov-card {
   background: #fff; border: 1px solid var(--border); border-radius: 10px;
