@@ -26,5 +26,7 @@ public class Document {
     private Integer chunkCount;
     /** parse_status: PENDING / PARSING / SUCCESS / FAILED */
     private String parseStatus;
+    /** AI 速览 JSON 串（{summary, points[], examPoints[]}），索引完成后后台生成；NULL=未生成 */
+    private String overview;
     private LocalDateTime createdAt;
 }

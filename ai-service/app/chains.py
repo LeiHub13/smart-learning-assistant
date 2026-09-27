@@ -96,6 +96,15 @@ def _build_messages(scene: str, question: str, chunks, note: str = None,
                           + _kb_suffix(kb_name, kb_scope) + _note_suffix(note) + socratic_suffix),
             HumanMessage(question),
         ]
+    if scene == "doc_overview":
+        return [
+            SystemMessage(
+                "你是课程资料分析助手。通读以下课程资料文本，只输出 JSON 对象，不要输出任何其他文字："
+                "{\"summary\":\"一句话概括（40 字内）\",\"points\":[\"核心要点，3-6 条，每条一句话\"],"
+                "\"examPoints\":[\"可能的考点与考察方式，2-4 条\"]}"
+            ),
+            HumanMessage(question),
+        ]
     if scene == "lecture":
         return [
             SystemMessage(
@@ -324,6 +333,8 @@ def complete(scene: str, question: str, chunks=None, session_id: str = None,
         _remember(session_id, user_id, question, answer)
     if scene in ("questions", "plan", "recommend"):
         return _ensure_json_array(answer)
+    if scene == "doc_overview":
+        return _ensure_json_object(answer)
     if scene in ("review", "rerank"):
         return _ensure_json_object(answer) if scene == "review" else _ensure_json_array(answer)
     return answer

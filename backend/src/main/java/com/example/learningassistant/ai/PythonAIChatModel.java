@@ -162,6 +162,8 @@ public class PythonAIChatModel implements ChatModel {
             scene = "questions";
         } else if (system.contains("REVIEW_SUBJECTIVE")) {
             scene = "review";
+        } else if (system.contains("DOC_OVERVIEW")) {
+            scene = "doc_overview";
         } else if (system.contains("ADVICE")) {
             scene = "advice";
         } else if (system.contains("PLAN")) {

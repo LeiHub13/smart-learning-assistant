@@ -65,7 +65,7 @@
           </div>
           <div v-for="d in kb.docs" :key="d.id" class="ans" style="margin:4px 0">
             <div class="row" style="justify-content:space-between">
-              <span class="shrink">📄 {{ d.fileName }} · {{ d.chunkCount }} 个片段</span>
+              <span class="shrink">📄 {{ d.fileName }} · {{ d.chunkCount }} 个片段 <span v-if="d.overview" class="tag">✨速览</span></span>
               <span class="row" style="gap:8px">
                 <button class="btn ghost small" @click="togglePreview(kb.id, d.id)">
                   {{ previewDocId === d.id ? '收起预览' : '预览' }}
@@ -76,6 +76,25 @@
             <div v-if="previewDocId === d.id" class="doc-preview">
               <div v-if="previewLoading" class="loading"><i></i>加载中…</div>
               <template v-else-if="preview">
+                <div class="ov-card">
+                  <div class="ov-head">
+                    <b>AI 速览</b>
+                    <button class="btn ghost small" :disabled="ovLoading" @click="genOverview(kb.id, d)">
+                      {{ ovLoading ? '生成中…' : (d.overview ? '重新生成' : '生成速览') }}
+                    </button>
+                  </div>
+                  <div v-if="ovLoading" class="loading"><i></i>AI 正在通读全文提炼要点…</div>
+                  <template v-else-if="d.overview && ov(d)">
+                    <div class="ov-summary">{{ ov(d).summary }}</div>
+                    <div class="ov-sec">核心要点</div>
+                    <ul class="ov-list"><li v-for="(p, pi) in ov(d).points" :key="'p' + pi">{{ p }}</li></ul>
+                    <template v-if="ov(d).examPoints && ov(d).examPoints.length">
+                      <div class="ov-sec">可能考点</div>
+                      <ul class="ov-list"><li v-for="(e, ei) in ov(d).examPoints" :key="'e' + ei">{{ e }}</li></ul>
+                    </template>
+                  </template>
+                  <div v-else class="muted small">尚未生成速览——点右上按钮，AI 通读全文提炼要点与可能考点</div>
+                </div>
                 <div class="muted small" style="margin-bottom:6px">
                   {{ preview.fileName }} · {{ preview.fileType }} · {{ preview.chunkCount }} 个片段 · {{ preview.parseStatus }}
                 </div>
@@ -165,6 +184,26 @@ const uploadingKb = ref(null)
 const previewDocId = ref(null)
 const preview = ref(null)
 const previewLoading = ref(false)
+const ovLoading = ref(false)
+
+/* AI 速览：overview 存的是 JSON 串，解析失败按未生成处理 */
+const ov = (d) => {
+  if (!d.overview) return null
+  try { return JSON.parse(d.overview) } catch (e) { return null }
+}
+
+const genOverview = async (kbId2, d) => {
+  if (ovLoading.value) return
+  ovLoading.value = true
+  try {
+    const r = await api('/api/kb/' + kbId2 + '/documents/' + d.id + '/overview', { method: 'POST' })
+    d.overview = JSON.stringify(r)
+  } catch (e) {
+    showHint(e.message)
+  } finally {
+    ovLoading.value = false
+  }
+}
 
 const togglePreview = async (kbId, docId) => {
   if (previewDocId.value === docId) {
@@ -342,6 +381,7 @@ const doUpload = async (courseId, kbId) => {
   await api('/api/kb/' + kbId + '/documents/upload', { method: 'POST', body: fd })
   uploadingKb.value = null
   await refreshKbs(courseId)
+  showHint('文档已入库，AI 速览正在后台生成，稍后打开预览即可查看')
 }
 
 const deleteDoc = async (kbId, docId) => {
@@ -393,5 +433,16 @@ const doDeleteKb = async () => {
   font-family: Consolas, "Microsoft YaHei", monospace; font-size: 13px;
   background: #faf9f7; border-radius: 8px; padding: 10px 12px;
 }
+/* AI 速览卡片 */
+.ov-card {
+  background: #fff; border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 10px;
+}
+.ov-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.ov-head b { font-size: 13px; color: var(--primary); }
+.ov-summary { font-size: 13px; line-height: 1.7; font-weight: 600; }
+.ov-sec { font-size: 12px; font-weight: 700; color: var(--muted); margin: 10px 0 4px; }
+.ov-list { margin: 0; padding-left: 18px; }
+.ov-list li { font-size: 13px; line-height: 1.75; color: #334155; }
 @media (max-width: 900px) { .pk-grid { grid-template-columns: minmax(0, 1fr); } }
 </style>

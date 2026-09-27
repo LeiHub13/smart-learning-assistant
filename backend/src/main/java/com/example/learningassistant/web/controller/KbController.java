@@ -67,6 +67,12 @@ public class KbController {
         return ApiResponse.ok(kbService.chunkRefs(chunkIds));
     }
 
+    /** 生成/重新生成文档 AI 速览（通读全文提炼概括、要点、可能考点；同步等待，约十几秒）。 */
+    @PostMapping("/api/kb/{kbId}/documents/{docId}/overview")
+    public ApiResponse<Map<String, Object>> overview(@PathVariable Long kbId, @PathVariable Long docId) {
+        return ApiResponse.ok(kbService.generateOverview(kbId, docId));
+    }
+
     @PostMapping("/api/kb/{kbId}/documents")
     public ApiResponse<Map<String, Object>> addDocument(@PathVariable Long kbId, @RequestBody Map<String, String> body) {
         String fileName = body.get("fileName");

@@ -39,6 +39,8 @@ public class KbService {
     private final FileStorage fileStorage;
     private final PythonRagClient ragClient;
     private final MessagePublisher messagePublisher;
+    private final com.example.learningassistant.ai.ChatModelFactory modelFactory;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     public static final String TOPIC_DOC_INDEX = "kb.document.index";
 
@@ -152,8 +154,104 @@ public class KbService {
         doc.setChunkCount(parts.size());
         documentMapper.updateById(doc);
         requestIndex(kbId, doc.getId());
+        // 索引完成后后台生成 AI 速览（要点/考点），失败静默——用户可在预览面板手动重试
+        triggerOverviewAsync(doc.getId());
         log.info("文档 {} 已分块落库，chunk 数={}", doc.getId(), parts.size());
         return doc;
+    }
+
+    /**
+     * 后台生成文档速览：daemon 线程跑 LLM（约十几秒），不阻塞上传请求；失败只记日志。
+     */
+    private void triggerOverviewAsync(Long docId) {
+        Thread t = new Thread(() -> {
+            try {
+                generateOverview(null, docId);
+                log.info("文档 {} 速览已自动生成", docId);
+            } catch (Exception e) {
+                log.warn("文档 {} 速览自动生成失败（可在预览面板手动重试）: {}", docId, e.getMessage());
+            }
+        }, "doc-overview-" + docId);
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * 生成（或重新生成）文档 AI 速览：通读全文提炼一句话概括、核心要点与可能考点，
+     * 以 JSON 存入 t_document.overview。kbId 传入时校验归属（与预览同口径）。
+     */
+    public Map<String, Object> generateOverview(Long kbId, Long docId) {
+        Document doc = documentMapper.selectById(docId);
+        if (doc == null || (kbId != null && !doc.getKbId().equals(kbId))) {
+            throw new BizException("文档不存在");
+        }
+        List<Chunk> chunks = chunkMapper.selectList(new LambdaQueryWrapper<Chunk>()
+                .eq(Chunk::getDocId, docId)
+                .orderByAsc(Chunk::getIdx));
+        if (chunks.isEmpty()) {
+            throw new BizException("该文档没有可分析的内容");
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Chunk c : chunks) {
+            if (sb.length() >= 4000) {
+                break;
+            }
+            sb.append(c.getContent()).append('\n');
+        }
+        String text = sb.length() > 4000 ? sb.substring(0, 4000) + "…（后文截断）" : sb.toString().trim();
+
+        com.example.learningassistant.ai.ChatModel model = modelFactory.get();
+        String raw = model.complete(List.of(
+                new com.example.learningassistant.ai.AIChatMessage("system",
+                        "DOC_OVERVIEW\n你是课程资料分析助手。通读以下课程资料文本，只输出 JSON 对象："
+                                + "{\"summary\":\"一句话概括（40 字内）\",\"points\":[\"核心要点，3-6 条，每条一句话\"],"
+                                + "\"examPoints\":[\"可能的考点与考察方式，2-4 条\"]}。不要输出 JSON 以外的任何文字。"),
+                new com.example.learningassistant.ai.AIChatMessage("user",
+                        "【资料标题】" + doc.getFileName() + "\n【资料文本】\n" + text)));
+
+        Map<String, Object> clean;
+        try {
+            Map<String, Object> m = objectMapper.readValue(raw, new com.fasterxml.jackson.core.type.TypeReference<>() {
+            });
+            clean = new LinkedHashMap<>();
+            clean.put("summary", clip(m.get("summary"), 120));
+            clean.put("points", clipList(m.get("points"), 6, 100));
+            clean.put("examPoints", clipList(m.get("examPoints"), 4, 100));
+        } catch (Exception e) {
+            log.warn("文档 {} 速览解析失败: {}", docId, e.getMessage());
+            throw new BizException("速览生成失败，请重试");
+        }
+        String overviewJson;
+        try {
+            overviewJson = objectMapper.writeValueAsString(clean);
+        } catch (Exception e) {
+            throw new BizException("速览保存失败，请重试");
+        }
+        doc.setOverview(overviewJson);
+        documentMapper.updateById(doc);
+        return clean;
+    }
+
+    private static String clip(Object raw, int max) {
+        String s = raw == null ? "" : String.valueOf(raw).trim();
+        return s.length() <= max ? s : s.substring(0, max) + "…";
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> clipList(Object raw, int maxItems, int maxLen) {
+        List<String> result = new java.util.ArrayList<>();
+        if (raw instanceof List<?> list) {
+            for (Object o : list) {
+                if (result.size() >= maxItems) {
+                    break;
+                }
+                String s = clip(o, maxLen);
+                if (!s.isEmpty()) {
+                    result.add(s);
+                }
+            }
+        }
+        return result;
     }
 
     /**

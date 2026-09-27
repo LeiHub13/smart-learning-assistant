@@ -92,3 +92,13 @@ def test_socratic_prompt_appended_only_when_enabled():
     assert "苏格拉底引导" not in off[0].content
     rag_on = chains._build_messages("rag_qa", "什么是TCP三次握手？", ["片段A"], socratic=True)
     assert "苏格拉底引导模式" in rag_on[0].content
+
+
+def test_doc_overview_prompt_shape():
+    """文档速览场景：系统提示要求只输出 JSON（summary/points/examPoints）。"""
+    text = "【资料标题】x.md" + chr(10) + "【资料文本】正文"
+    msgs = chains._build_messages("doc_overview", text, None)
+    assert msgs[0].content.count("summary") >= 1
+    assert "points" in msgs[0].content and "examPoints" in msgs[0].content
+    assert "不要输出任何其他文字" in msgs[0].content
+    assert msgs[-1].content.startswith("【资料标题】")

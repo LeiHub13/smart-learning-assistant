@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS t_document (
     file_size    BIGINT DEFAULT 0,
     chunk_count  INT DEFAULT 0,
     parse_status VARCHAR(20),
+    overview     TEXT,
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
