@@ -174,7 +174,7 @@ public class AdminService {
         long total = userMapper.selectCount(new QueryWrapper<User>()
                 .and(hasKw, w -> w.like("username", kw).or().like("nickname", kw).or().like("email", kw)));
         List<User> rows = userMapper.selectList(new QueryWrapper<User>()
-                .select("id", "username", "nickname", "email", "created_at")
+                .select("id", "username", "nickname", "email", "avatar", "created_at")
                 .and(hasKw, w -> w.like("username", kw).or().like("nickname", kw).or().like("email", kw))
                 .orderByDesc("created_at")
                 .last("LIMIT " + sz + " OFFSET " + (long) (p - 1) * sz));
@@ -200,6 +200,7 @@ public class AdminService {
             m.put("username", u.getUsername());
             m.put("nickname", u.getNickname());
             m.put("email", u.getEmail());
+            m.put("avatar", u.getAvatar() == null ? "" : u.getAvatar());
             m.put("createdAt", u.getCreatedAt() == null ? null : u.getCreatedAt().toString());
             m.put("practiceCount", practiceCounts.getOrDefault(u.getId(), 0L));
             m.put("lastStudy", lastStudy.get(u.getId()));

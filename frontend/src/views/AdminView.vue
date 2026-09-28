@@ -39,7 +39,14 @@
         <thead><tr><th>用户名</th><th>昵称</th><th>邮箱</th><th>练习次数</th><th>最近学习</th><th>注册时间</th><th>角色</th></tr></thead>
         <tbody>
           <tr v-for="u in uRecords" :key="u.id">
-            <td>{{ u.username }} <span v-if="u.admin" class="tag" style="margin-left:4px">管理员</span></td>
+            <td>
+              <div class="u-cell">
+                <img v-if="u.avatar" :src="u.avatar" class="u-av" alt="" />
+                <span v-else class="u-av">{{ (u.nickname || u.username || '?').slice(0, 1).toUpperCase() }}</span>
+                <span>{{ u.username }}</span>
+                <span v-if="u.admin" class="tag">管理员</span>
+              </div>
+            </td>
             <td>{{ u.nickname || '—' }}</td>
             <td>{{ u.email || '—' }}</td>
             <td>{{ u.practiceCount }}</td>
@@ -208,4 +215,6 @@ onBeforeUnmount(() => {
 .stat-row .stat { flex: 1; min-width: 130px; }
 .chart { width: 100%; height: 300px; }
 .u-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; }
+.u-cell { display: flex; align-items: center; gap: 6px; }
+.u-av { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: none; display: inline-flex; align-items: center; justify-content: center; background: var(--accent-subtle); color: var(--primary); font-size: 12px; font-weight: 600; }
 </style>
