@@ -8,6 +8,8 @@ services:
     container_name: la-mysql
     restart: unless-stopped
     environment:
+      # 时区：MySQL NOW()/CURRENT_TIMESTAMP 与存量数据统一北京时间为准（全库曾以 UTC 落库，切换时做过 +8h 校正）
+      TZ: Asia/Shanghai
       MYSQL_DATABASE: ${DB_NAME:-learning_assistant}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
@@ -65,6 +67,8 @@ services:
     container_name: la-backend
     restart: unless-stopped
     environment:
+      # 时区：JVM 默认时区决定 LocalDateTime.now() 落库的墙钟时间
+      TZ: Asia/Shanghai
       # 数据库：连接 compose 内的 mysql 服务（镜像内 schema.sql 自动建表）
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME:-learning_assistant}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
@@ -117,6 +121,8 @@ services:
     container_name: la-ai
     restart: unless-stopped
     environment:
+      # 时区：会话记忆/统计打点的时间戳与北京时间对齐
+      TZ: Asia/Shanghai
       AI_PROVIDER: ${AI_PROVIDER:-agnes}
       AI_API_KEY: ${AI_API_KEY:?请在根目录 .env 配置 AI_API_KEY}
       AI_BASE_URL: ${AI_BASE_URL:-https://apihub.agnes-ai.com/v1}
