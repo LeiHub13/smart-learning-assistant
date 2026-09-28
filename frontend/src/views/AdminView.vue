@@ -17,6 +17,30 @@
     </div>
 
     <div class="card">
+      <h3>发布公告</h3>
+      <div class="ann-form">
+        <input v-model="aTitle" type="text" maxlength="100" placeholder="公告标题（≤100 字）" @keyup.enter="publish" />
+        <textarea v-model="aContent" rows="4" maxlength="5000" placeholder="公告内容，发布后将推送到全部用户的铃铛通知…"></textarea>
+        <div class="row" style="justify-content:flex-end;gap:8px">
+          <span v-if="aMsg" class="muted small">{{ aMsg }}</span>
+          <button class="btn" :disabled="aPublishing || !aTitle.trim() || !aContent.trim()" @click="publish">
+            {{ aPublishing ? '发布中…' : '发布公告' }}
+          </button>
+        </div>
+      </div>
+      <div v-if="aList.length" class="ann-history">
+        <div class="muted small" style="margin:6px 0 4px">最近公告</div>
+        <div v-for="a in aList" :key="a.id" class="ann-item">
+          <div class="ann-head">
+            <b>{{ a.title }}</b>
+            <span class="muted small">{{ (a.createdAt || '').replace('T', ' ').slice(0, 16) }} · {{ a.adminName || '管理员' }}</span>
+          </div>
+          <div class="ann-body">{{ a.content }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
       <h3>近 14 天 · 用户注册与活跃</h3>
       <div ref="uaRef" class="chart"></div>
     </div>
@@ -179,7 +203,37 @@ onMounted(async () => {
   await nextTick()
   render()
   loadUsers(1)
+  loadAnnouncements()
 })
+
+/* ===== 公告发布 ===== */
+const aTitle = ref('')
+const aContent = ref('')
+const aPublishing = ref(false)
+const aMsg = ref('')
+const aList = ref([])
+
+const loadAnnouncements = async () => {
+  try {
+    aList.value = await api('/api/announcements') || []
+  } catch (e) { /* 公告历史拉取失败不阻塞看板 */ }
+}
+
+const publish = async () => {
+  aPublishing.value = true
+  aMsg.value = ''
+  try {
+    await api('/api/announcements', { method: 'POST', body: { title: aTitle.value, content: aContent.value } })
+    aMsg.value = '已发布并推送给全部用户'
+    aTitle.value = ''
+    aContent.value = ''
+    await loadAnnouncements()
+  } catch (e) {
+    aMsg.value = e.message
+  } finally {
+    aPublishing.value = false
+  }
+}
 
 /* ===== 用户列表 ===== */
 const uRecords = ref([])
@@ -217,4 +271,11 @@ onBeforeUnmount(() => {
 .u-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; }
 .u-cell { display: flex; align-items: center; gap: 6px; }
 .u-av { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: none; display: inline-flex; align-items: center; justify-content: center; background: var(--accent-subtle); color: var(--primary); font-size: 12px; font-weight: 600; }
+.ann-form { display: flex; flex-direction: column; gap: 8px; }
+.ann-form input, .ann-form textarea { width: 100%; font: inherit; padding: 8px 10px; resize: vertical; }
+.ann-history { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.ann-item { padding: 8px 0; border-bottom: 1px dashed var(--border); }
+.ann-item:last-child { border-bottom: none; }
+.ann-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.ann-body { font-size: 13px; color: var(--muted); margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 </style>

@@ -245,6 +245,18 @@ CREATE TABLE IF NOT EXISTS t_favorite (
     UNIQUE KEY uk_favorite (user_id, question_id)
 );
 
+-- ========== 新增：系统公告（admin 发布，站内通知触达全员） ==========
+
+CREATE TABLE IF NOT EXISTS t_announcement (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   BIGINT DEFAULT 1,
+    admin_id    BIGINT NOT NULL,
+    admin_name  VARCHAR(50),
+    title       VARCHAR(100) NOT NULL,
+    content     TEXT NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ========== 新增：学习笔记 ==========
 
 CREATE TABLE IF NOT EXISTS t_note (

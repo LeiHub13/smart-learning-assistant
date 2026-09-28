@@ -285,7 +285,7 @@ const readOne = async (n) => {
 
 const detail = ref(null)
 
-const TYPE_LABELS = { review: '复习提醒', plan: '学习计划', system: '系统通知', exam: '考试', practice: '练习', dm: '私信', friend: '好友' }
+const TYPE_LABELS = { review: '复习提醒', plan: '学习计划', system: '系统通知', exam: '考试', practice: '练习', dm: '私信', friend: '好友', announcement: '公告' }
 const typeLabel = (t) => t === 'mail'
   ? (detail.value?.mailStatus === 'SENT' ? '发送成功' : '发送失败')
   : (TYPE_LABELS[t] || '通知')
