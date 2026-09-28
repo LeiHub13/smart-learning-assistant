@@ -42,6 +42,7 @@ public class KbService {
     private final com.example.learningassistant.ai.ChatModelFactory modelFactory;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final com.example.learningassistant.course.mapper.CourseMapper courseMapper;
+    private final com.example.learningassistant.course.mapper.CourseUserMapper courseUserMapper;
 
     public static final String TOPIC_DOC_INDEX = "kb.document.index";
 
@@ -306,21 +307,30 @@ public class KbService {
     }
 
     /**
-     * 文档管理：跨课程/知识库汇总全部文档，带课程与知识库名（登录即可访问，与预览同口径）。
+     * 文档管理：跨我创建/已加入的课程汇总文档，带课程与知识库名（口径同「我的课程」）。
      */
-    public List<Map<String, Object>> docsAll() {
-        List<Document> docs = documentMapper.selectList(new LambdaQueryWrapper<Document>()
-                .orderByDesc(Document::getCreatedAt));
-        Map<Long, KnowledgeBase> kbById = kbMapper.selectList(null).stream()
+    public List<Map<String, Object>> docsAll(Long userId) {
+        java.util.Set<Long> courseIds = new java.util.HashSet<>();
+        courseMapper.selectList(new LambdaQueryWrapper<com.example.learningassistant.course.entity.Course>()
+                        .eq(com.example.learningassistant.course.entity.Course::getOwnerId, userId))
+                .forEach(c -> courseIds.add(c.getId()));
+        courseUserMapper.selectList(new LambdaQueryWrapper<com.example.learningassistant.course.entity.CourseUser>()
+                        .eq(com.example.learningassistant.course.entity.CourseUser::getUserId, userId))
+                .forEach(cu -> courseIds.add(cu.getCourseId()));
+
+        Map<Long, KnowledgeBase> kbById = courseIds.isEmpty() ? Map.of()
+                : kbMapper.selectList(new LambdaQueryWrapper<KnowledgeBase>()
+                        .in(KnowledgeBase::getCourseId, courseIds)).stream()
                 .collect(java.util.stream.Collectors.toMap(KnowledgeBase::getId, k -> k, (a, b) -> a));
-        java.util.Set<Long> courseIds = kbById.values().stream()
-                .map(KnowledgeBase::getCourseId).filter(java.util.Objects::nonNull)
-                .collect(java.util.stream.Collectors.toSet());
         Map<Long, String> courseNames = courseIds.isEmpty() ? Map.of()
                 : courseMapper.selectBatchIds(courseIds).stream()
                         .collect(java.util.stream.Collectors.toMap(
                                 com.example.learningassistant.course.entity.Course::getId,
                                 com.example.learningassistant.course.entity.Course::getName, (a, b) -> a));
+        List<Document> docs = kbById.isEmpty() ? List.of()
+                : documentMapper.selectList(new LambdaQueryWrapper<Document>()
+                        .in(Document::getKbId, kbById.keySet())
+                        .orderByDesc(Document::getCreatedAt));
         List<Map<String, Object>> result = new java.util.ArrayList<>();
         for (Document d : docs) {
             KnowledgeBase kb = kbById.get(d.getKbId());
@@ -328,10 +338,9 @@ public class KbService {
             m.put("docId", d.getId());
             m.put("fileName", d.getFileName());
             m.put("kbId", d.getKbId());
-            m.put("kbName", kb == null ? "（已删知识库）" : kb.getName());
-            m.put("courseId", kb == null ? null : kb.getCourseId());
-            m.put("courseName", kb == null || kb.getCourseId() == null ? "—"
-                    : courseNames.getOrDefault(kb.getCourseId(), "—"));
+            m.put("kbName", kb.getName());
+            m.put("courseId", kb.getCourseId());
+            m.put("courseName", courseNames.getOrDefault(kb.getCourseId(), "—"));
             m.put("fileType", d.getFileType());
             m.put("chunkCount", d.getChunkCount());
             m.put("hasOverview", d.getOverview() != null);

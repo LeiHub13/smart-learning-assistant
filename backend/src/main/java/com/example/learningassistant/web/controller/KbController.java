@@ -5,6 +5,8 @@ import com.example.learningassistant.common.ApiResponse;
 import com.example.learningassistant.kb.entity.Document;
 import com.example.learningassistant.kb.entity.KnowledgeBase;
 import com.example.learningassistant.kb.service.KbService;
+import com.example.learningassistant.security.CurrentUser;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -81,10 +83,10 @@ public class KbController {
         return ApiResponse.ok(kbService.renameDocument(kbId, docId, body.get("fileName")));
     }
 
-    /** 文档管理：跨课程/知识库汇总全部文档（含原件跳转地址与速览状态）。 */
+    /** 文档管理：汇总我创建/已加入课程的全部文档（含原件跳转地址与速览状态）。 */
     @GetMapping("/api/kb/docs")
-    public ApiResponse<List<Map<String, Object>>> docsAll() {
-        return ApiResponse.ok(kbService.docsAll());
+    public ApiResponse<List<Map<String, Object>>> docsAll(HttpServletRequest request) {
+        return ApiResponse.ok(kbService.docsAll(CurrentUser.get(request).id()));
     }
 
     @PostMapping("/api/kb/{kbId}/documents")
