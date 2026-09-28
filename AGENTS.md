@@ -20,10 +20,14 @@
 - LLM provider 仅支持 `python` / `openai-compatible`，无 mock 降级；`openai-compatible`/`spring-ai` 不经过 ai-service，因此没有知识库检索能力
 - 系统无用户角色概念：所有用户权限一致，资源按 userId 隔离；演示账号 pg13/xiaozhang/xiaodi（密码 123456）
 - 一键部署：根目录 `docker-compose.yml` + `deploy.sh`（三镜像编排，详见 `docs/05-Docker部署.md`）
-- push到远程仓库的时候要询问我！！！！
+- 一个任务完成后,你觉着可以commit了,你就commit,要push的时候询问我!!
 
 ## 验证
 
 - 后端编译：`cd backend && mvn -q compile -DskipTests`
 - 前端构建：`cd frontend && npx vite build`
 - AI 服务单测：`cd ai-service && python -m pytest tests -q`（`tests/test_mcp.py` 需 `langchain_mcp_adapters`，缺失时的失败与本仓库无关）
+
+## 服务器地址
+
+- 在C:\Users\Lenovo\.ssh\config   地址: 115.29.230.205
