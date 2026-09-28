@@ -137,4 +137,16 @@ public class NotifyService {
             notificationMapper.updateById(n);
         }
     }
+
+    /** 打开通知指向的入口（如某私聊会话）时，把该入口的未读铃铛一并清掉。 */
+    public void markLinkRead(Long userId, String link) {
+        List<Notification> unread = notificationMapper.selectList(new LambdaQueryWrapper<Notification>()
+                .eq(Notification::getUserId, userId)
+                .eq(Notification::getLink, link)
+                .eq(Notification::getReadFlag, false));
+        for (Notification n : unread) {
+            n.setReadFlag(true);
+            notificationMapper.updateById(n);
+        }
+    }
 }

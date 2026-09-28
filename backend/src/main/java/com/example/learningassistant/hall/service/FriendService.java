@@ -102,11 +102,11 @@ public class FriendService {
         if (target.getId().equals(me)) {
             throw new BizException("不能添加自己为好友");
         }
+        // 双向各一条独立查询：组合 OR 的嵌套 wrapper 在该表上匹配不到行，弃用
         boolean exists = friendshipMapper.selectCount(new LambdaQueryWrapper<Friendship>()
-                .and(w -> w
-                        .and(w2 -> w2.eq(Friendship::getUserId, me).eq(Friendship::getFriendId, target.getId()))
-                        .or()
-                        .and(w2 -> w2.eq(Friendship::getUserId, target.getId()).eq(Friendship::getFriendId, me)))) > 0;
+                .eq(Friendship::getUserId, me).eq(Friendship::getFriendId, target.getId())) > 0
+                || friendshipMapper.selectCount(new LambdaQueryWrapper<Friendship>()
+                .eq(Friendship::getUserId, target.getId()).eq(Friendship::getFriendId, me)) > 0;
         if (exists) {
             throw new BizException("已存在好友关系或待处理的请求");
         }

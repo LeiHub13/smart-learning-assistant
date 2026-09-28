@@ -51,7 +51,7 @@
         <div>
           <h3>{{ active.kind === 'dm' ? active.name : '# ' + active.name }}</h3>
           <div class="hall-status" :class="{ off: !connected }">
-            <template v-if="active.kind === 'dm'">{{ peerOnline ? '对方在线' : '对方不在线（留言会走通知）' }}</template>
+            <template v-if="active.kind === 'dm'">{{ peerOnline ? '对方在线' : '对方不在线（消息会通知对方）' }}</template>
             <template v-else-if="connected">在线 {{ onlineCount }} 人{{ onlineNames ? '：' + onlineNames : '' }}</template>
             <template v-else-if="reconnecting">连接断开，正在重连…</template>
             <template v-else>连接中…</template>
@@ -148,6 +148,7 @@ const askRemove = ref(false)
 let ws = null
 let hbTimer = null
 let retryTimer = null
+let friendsTimer = null
 let manualClose = false
 let retries = 0
 let seq = 0
@@ -231,6 +232,7 @@ const connect = () => {
     connected.value = true
     reconnecting.value = false
     retries = 0
+    sendView()
     // 心跳保活：服务端 90s 无消息会清死连接
     hbTimer = setInterval(() => {
       if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }))
@@ -244,6 +246,16 @@ const connect = () => {
     clearInterval(hbTimer)
     hbTimer = null
     if (!manualClose) scheduleReconnect()
+  }
+}
+
+/* 上报当前正在看的会话：服务端据此对 DM 决定「已读不打铃 / 落通知」 */
+const sendView = () => {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return
+  if (active.value.kind === 'dm') {
+    ws.send(JSON.stringify({ type: 'view', kind: 'dm', peerUserId: active.value.peerId }))
+  } else {
+    ws.send(JSON.stringify({ type: 'view', kind: 'channel' }))
   }
 }
 
@@ -284,6 +296,13 @@ const loadFriends = async () => {
     friends.value = d.friends || []
     incoming.value = d.incoming || []
     outgoing.value = d.outgoing || []
+    // 未读徽标以服务端计数为准；正开着的会话视为已读
+    const map = {}
+    for (const f of friends.value) {
+      map[f.userId] = active.value.kind === 'dm' && active.value.peerId === f.userId
+        ? 0 : (f.unread || 0)
+    }
+    unread.value = map
   } catch (e) {
     error.value = e.message
   }
@@ -294,6 +313,7 @@ const openChannel = async (c) => {
   active.value = { kind: 'channel', courseId: c.courseId ?? null, name: c.name }
   messages.value = []
   error.value = ''
+  sendView()
   try {
     const q = c.courseId == null ? '' : '&courseId=' + c.courseId
     const list = await api('/api/hall/messages?limit=50' + q)
@@ -310,6 +330,7 @@ const openDm = async (f) => {
   unread.value[f.userId] = 0
   messages.value = []
   error.value = ''
+  sendView()
   try {
     const list = await api('/api/dm/messages?peerUserId=' + f.userId)
     messages.value = (list || []).map((m) => ({
@@ -413,6 +434,8 @@ onMounted(async () => {
   await openChannel(channelList.value[0] || { courseId: null, name: '公共大厅' })
   await openPeerFromQuery()
   connect()
+  // 好友在线状态与未读徽标定时校准（徽标的实时增量走 WS dm 帧）
+  friendsTimer = setInterval(loadFriends, 30000)
 })
 
 onActivated(() => { loadFriends() })
@@ -420,6 +443,7 @@ onActivated(() => { loadFriends() })
 onUnmounted(() => {
   manualClose = true
   clearInterval(hbTimer)
+  clearInterval(friendsTimer)
   clearTimeout(retryTimer)
   if (ws) {
     ws.onclose = null

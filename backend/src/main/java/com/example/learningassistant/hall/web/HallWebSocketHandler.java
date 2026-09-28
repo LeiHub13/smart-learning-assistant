@@ -1,6 +1,7 @@
 package com.example.learningassistant.hall.web;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.example.learningassistant.course.entity.Course;
 import com.example.learningassistant.course.entity.CourseUser;
 import com.example.learningassistant.course.mapper.CourseMapper;
@@ -38,13 +39,14 @@ import java.util.function.Predicate;
  * 协议（JSON 文本帧）：
  *   客户端 -> {type:"chat", courseId?, content:"..."}  courseId 缺省=公共大厅，否则须为我的课程
  *            {type:"dm", toUserId, content:"..."}      仅限已同意的好友
+ *            {type:"view", kind:"dm"|"channel", peerUserId?}  上报当前正在看的会话（DM 免打扰判定）
  *            {type:"ping"}
  *   服务端 -> {type:"chat", id, userId, nickname, courseId, content, sentAt}
  *            {type:"dm", id, fromUserId, fromNickname, content, sentAt}   收发双方都收（多端一致）
  *            {type:"system", event:"join"|"leave", nickname, online:[{userId,nickname}], onlineCount}
  *            {type:"pong"} / {type:"error", message}
  * 课程成员集合在连接建立时缓存（选课变化重连后生效）；课程频道消息只广播给同课程在线者，
- * 公共大厅消息全员广播。DM 收件人不在线时由 NotifyService 落一条铃铛通知。
+ * 公共大厅消息全员广播。DM 一律落铃铛通知，收件人正在查看该会话时视为已读不打铃。
  */
 @Slf4j
 @Component
@@ -69,6 +71,9 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
 
     /** 在线用户的课程集合缓存（userId -> 我创建/已加入的课程 id），连接建立时加载。 */
     private final Map<Long, Set<Long>> userCourses = new ConcurrentHashMap<>();
+
+    /** 正在查看的会话（userId -> 对端 userId）；查看频道或断开时移除。用于 DM 免打扰判定。 */
+    private final Map<Long, Long> viewingPeer = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -97,6 +102,15 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
         }
         AuthUser user = user(session);
         if (user == null) {
+            return;
+        }
+        if ("view".equals(type)) {
+            Long peer = toLong(payload.get("peerUserId"));
+            if ("dm".equals(String.valueOf(payload.get("kind"))) && peer != null) {
+                viewingPeer.put(user.id(), peer);
+            } else {
+                viewingPeer.remove(user.id());
+            }
             return;
         }
         Object raw = payload.get("content");
@@ -146,7 +160,7 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
         broadcast(frame, audience);
     }
 
-    /** 私聊：仅限已同意的好友；对方全部在线连接实时推送，离线则落铃铛通知。 */
+    /** 私聊：仅限已同意的好友；实时推送双方。收件人未在看的会话一律落铃铛通知（在线与否不影响）。 */
     private void handleDm(WebSocketSession session, AuthUser user, Object rawTo, String content) {
         Long toUserId = toLong(rawTo);
         if (toUserId == null || toUserId.equals(user.id())) {
@@ -175,9 +189,16 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
         frame.put("content", content);
         frame.put("sentAt", m.getCreatedAt());
 
-        boolean receiverOnline = sendToUser(toUserId, frame);
+        sendToUser(toUserId, frame);
         sendToUser(user.id(), frame);
-        if (!receiverOnline) {
+
+        // 收件人正开着这个会话 = 消息已实时看见，直接置已读且不打铃；否则一律通知
+        boolean viewed = user.id().equals(viewingPeer.get(toUserId));
+        if (viewed) {
+            dmMessageMapper.update(null, new UpdateWrapper<DmMessage>()
+                    .set("read_flag", 1)
+                    .eq("id", m.getId()));
+        } else {
             notifyService.send(toUserId, "dm", "来自 " + nickname(user) + " 的私信",
                     content, "/hall?peer=" + user.id());
         }
@@ -192,6 +213,7 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
         boolean stillOnline = sessions.values().stream().anyMatch(u -> u.id().equals(user.id()));
         if (!stillOnline) {
             userCourses.remove(user.id());
+            viewingPeer.remove(user.id());
         }
         broadcastSystem("leave", nickname(user));
     }
@@ -228,9 +250,12 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
     }
 
     private boolean areFriends(Long a, Long b) {
+        // 双向各一条独立查询：组合 OR 的嵌套 wrapper 在该表上匹配不到行，弃用
         return friendshipMapper.selectCount(new LambdaQueryWrapper<Friendship>()
-                .and(w -> w.eq(Friendship::getUserId, a).eq(Friendship::getFriendId, b))
-                .or(w -> w.eq(Friendship::getUserId, b).eq(Friendship::getFriendId, a))
+                .eq(Friendship::getUserId, a).eq(Friendship::getFriendId, b)
+                .eq(Friendship::getStatus, Friendship.STATUS_ACCEPTED)) > 0
+                || friendshipMapper.selectCount(new LambdaQueryWrapper<Friendship>()
+                .eq(Friendship::getUserId, b).eq(Friendship::getFriendId, a)
                 .eq(Friendship::getStatus, Friendship.STATUS_ACCEPTED)) > 0;
     }
 
