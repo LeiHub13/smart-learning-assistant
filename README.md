@@ -49,6 +49,4 @@ java -jar target/learning-assistant-1.0.0.jar
 
 `pg13` · `xiaozhang` · `xiaodi`（无角色概念，资源按 userId 隔离；接口文档 `/swagger-ui.html`）
 
-## 文档
 
-`docs/02-系统架构设计.md`（架构）· `docs/05-Docker部署.md`（部署）· `docs/07-交接文档.md`（交接）
