@@ -47,15 +47,18 @@ import java.util.function.Predicate;
  *            {type:"ai", courseId, content:"..."}      课程频道问 AI 助教（RAG 流式，全员可见）
  *            {type:"dm", toUserId, content:"..."}      仅限已同意的好友
  *            {type:"view", kind:"dm"|"channel", peerUserId?}  上报当前正在看的会话（DM 免打扰判定）
+ *            {type:"online", courseId?}                拉取当前频道在线名单（点对点回帧；课程频道仅含该课程在线成员）
  *            {type:"ping"}
  *   服务端 -> {type:"chat", id, userId, nickname, avatar, courseId, content, sentAt}
  *             AI 消息额外带 role:"ai" 与 sources（引用编号），userId=0、nickname=「AI 助教」
  *            {type:"ai_start", courseId}                        助教开始生成（客户端占位「思考中」气泡）
  *            {type:"ai_delta", courseId, delta}                 助教回答增量
  *            {type:"ai_error", courseId, message}               助教生成失败
+ *            {type:"online", courseId, online:[...], onlineCount}  在线名单回帧（公共大厅=全员，课程频道=该课程成员）
  *            {type:"dm", id, fromUserId, fromNickname, fromAvatar, content, sentAt}  收发双方都收（多端一致）
- *            {type:"system", event:"join"|"leave", nickname, online:[{userId,nickname}], onlineCount}
+ *            {type:"system", event:"join"|"leave", nickname, online:[...], onlineCount}
  *            {type:"pong"} / {type:"error", message}
+ * system 帧的 online 仍为全厅名单（移动端单房间版消费）；Web 端课程频道的成员名单走 online 请求帧。
  * 课程成员集合在连接建立时缓存（选课变化重连后生效）；课程频道消息只广播给同课程在线者，
  * 公共大厅消息全员广播。DM 一律落铃铛通知，收件人正在查看该会话时视为已读不打铃。
  * AI 助教每课程单飞（同时只允许一个请求在生成），SESSION_ID=hall-course-{id} 使课程内共享助教记忆。
@@ -132,6 +135,19 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
             } else {
                 viewingPeer.remove(user.id());
             }
+            return;
+        }
+        if ("online".equals(type)) {
+            // 点对点在线名单：课程频道只含该课程在线成员，且请求者本人须为成员（防非成员探成员名单）
+            Long courseId = toLong(payload.get("courseId"));
+            boolean member = courseId == null || myCourses(user.id()).contains(courseId);
+            List<Map<String, Object>> list = member ? onlineUsersFor(courseId) : List.of();
+            Map<String, Object> reply = new LinkedHashMap<>();
+            reply.put("type", "online");
+            reply.put("courseId", courseId);
+            reply.put("online", list);
+            reply.put("onlineCount", list.size());
+            sendTo(session, reply);
             return;
         }
         Object raw = payload.get("content");
@@ -419,8 +435,17 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
 
     /** 在线名单：按 userId 去重，同一用户多端连接只显示一次。 */
     private List<Map<String, Object>> onlineUsers() {
+        return onlineUsersFor(null);
+    }
+
+    /** 在线名单（可按课程过滤）：courseId 为空=全厅；非空=仅该课程（创建者/已加入）的在线成员。 */
+    private List<Map<String, Object>> onlineUsersFor(Long courseId) {
         Map<Long, String> byUser = new LinkedHashMap<>();
-        for (AuthUser u : sessions.values()) {
+        for (Map.Entry<WebSocketSession, AuthUser> e : sessions.entrySet()) {
+            AuthUser u = e.getValue();
+            if (courseId != null && !myCourses(u.id()).contains(courseId)) {
+                continue;
+            }
             byUser.putIfAbsent(u.id(), nickname(u));
         }
         List<Map<String, Object>> list = new ArrayList<>();

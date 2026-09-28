@@ -317,11 +317,19 @@ const onServerEvent = (data) => {
     } else if (!mine) {
       unread.value[peerId] = (unread.value[peerId] || 0) + 1
     }
+  } else if (data.type === 'online') {
+    // 点对点在线名单回帧：课程频道=该课程在线成员，公共大厅=全员
+    if (active.value.kind === 'channel' && (data.courseId ?? null) === (active.value.courseId ?? null)) {
+      applyOnline(data.online)
+    }
   } else if (data.type === 'system') {
-    // join/leave 事件都携带全量在线名单，客户端直接整体替换
-    applyOnline(data.online)
+    // join/leave 事件只带全厅名单（移动端消费）；Web 端按当前频道重新拉取成员过滤名单
     if (active.value.kind === 'channel') {
-      pushSys(data.event === 'join' ? `${data.nickname} 进入对话厅` : `${data.nickname} 离开了对话厅`)
+      // 进出提示行只放公共大厅；课程频道展示的名单本就只含本课程成员，人数变化走重新拉取
+      if (active.value.courseId == null) {
+        pushSys(data.event === 'join' ? `${data.nickname} 进入对话厅` : `${data.nickname} 离开了对话厅`)
+      }
+      sendOnlineReq()
     }
   } else if (data.type === 'error') {
     pushSys(data.message || '发送失败')
@@ -342,6 +350,7 @@ const connect = () => {
     reconnecting.value = false
     retries = 0
     sendView()
+    sendOnlineReq()
     // 心跳保活：服务端 90s 无消息会清死连接
     hbTimer = setInterval(() => {
       if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }))
@@ -366,6 +375,13 @@ const sendView = () => {
   } else {
     ws.send(JSON.stringify({ type: 'view', kind: 'channel' }))
   }
+}
+
+/* 拉取当前频道的在线名单（服务端按课程成员过滤后点对点回帧） */
+const sendOnlineReq = () => {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return
+  if (active.value.kind !== 'channel') return
+  ws.send(JSON.stringify({ type: 'online', courseId: active.value.courseId }))
 }
 
 const scheduleReconnect = () => {
@@ -461,8 +477,11 @@ const openChannel = async (c) => {
   active.value = { kind: 'channel', courseId: c.courseId ?? null, name: c.name }
   chatTab.value = 'chat'
   messages.value = []
+  // 旧频道的名单不再适用，清空待新回帧
+  onlineUsers.value = []
   error.value = ''
   sendView()
+  sendOnlineReq()
   try {
     const q = c.courseId == null ? '' : '&courseId=' + c.courseId
     const list = await api('/api/hall/messages?limit=50' + q)
