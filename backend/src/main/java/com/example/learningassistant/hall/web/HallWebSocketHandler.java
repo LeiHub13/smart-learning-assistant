@@ -1,7 +1,17 @@
 package com.example.learningassistant.hall.web;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.learningassistant.course.entity.Course;
+import com.example.learningassistant.course.entity.CourseUser;
+import com.example.learningassistant.course.mapper.CourseMapper;
+import com.example.learningassistant.course.mapper.CourseUserMapper;
+import com.example.learningassistant.hall.entity.DmMessage;
+import com.example.learningassistant.hall.entity.Friendship;
 import com.example.learningassistant.hall.entity.HallMessage;
+import com.example.learningassistant.hall.mapper.DmMessageMapper;
+import com.example.learningassistant.hall.mapper.FriendshipMapper;
 import com.example.learningassistant.hall.mapper.HallMessageMapper;
+import com.example.learningassistant.notify.service.NotifyService;
 import com.example.learningassistant.security.AuthUser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -14,20 +24,27 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 
 /**
- * 对话厅 WebSocket 处理器：全局单间，进厅广播在线名单，发言全员广播并落库。
+ * 对话厅 WebSocket 处理器：频道聊天（公共大厅 + 课程频道）与好友私信复用一条连接。
  *
  * 协议（JSON 文本帧）：
- *   客户端 -> {type:"chat", content:"..."} / {type:"ping"}
- *   服务端 -> {type:"chat", id, userId, nickname, content, sentAt}   聊天消息（含发送者自己的回显）
+ *   客户端 -> {type:"chat", courseId?, content:"..."}  courseId 缺省=公共大厅，否则须为我的课程
+ *            {type:"dm", toUserId, content:"..."}      仅限已同意的好友
+ *            {type:"ping"}
+ *   服务端 -> {type:"chat", id, userId, nickname, courseId, content, sentAt}
+ *            {type:"dm", id, fromUserId, fromNickname, content, sentAt}   收发双方都收（多端一致）
  *            {type:"system", event:"join"|"leave", nickname, online:[{userId,nickname}], onlineCount}
  *            {type:"pong"} / {type:"error", message}
- * 在线名单按 userId 去重（同一用户开多个标签页只算一人）。
+ * 课程成员集合在连接建立时缓存（选课变化重连后生效）；课程频道消息只广播给同课程在线者，
+ * 公共大厅消息全员广播。DM 收件人不在线时由 NotifyService 落一条铃铛通知。
  */
 @Slf4j
 @Component
@@ -41,9 +58,17 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
     private final HallMessageMapper hallMessageMapper;
+    private final DmMessageMapper dmMessageMapper;
+    private final FriendshipMapper friendshipMapper;
+    private final CourseMapper courseMapper;
+    private final CourseUserMapper courseUserMapper;
+    private final NotifyService notifyService;
 
     /** 在线连接 -> 用户。ConcurrentHashMap keySet 天然去重并发。 */
     private final Map<WebSocketSession, AuthUser> sessions = new ConcurrentHashMap<>();
+
+    /** 在线用户的课程集合缓存（userId -> 我创建/已加入的课程 id），连接建立时加载。 */
+    private final Map<Long, Set<Long>> userCourses = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -53,6 +78,7 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         sessions.put(session, user);
+        userCourses.put(user.id(), loadMyCourseIds(user.id()));
         broadcastSystem("join", nickname(user));
     }
 
@@ -69,9 +95,6 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
             sendTo(session, Map.of("type", "pong"));
             return;
         }
-        if (!"chat".equals(type)) {
-            return;
-        }
         AuthUser user = user(session);
         if (user == null) {
             return;
@@ -86,28 +109,129 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
             sendTo(session, Map.of("type", "error", "message", "消息不能超过 " + MAX_CONTENT_LEN + " 字"));
             return;
         }
+        if ("dm".equals(type)) {
+            handleDm(session, user, payload.get("toUserId"), content);
+        } else if ("chat".equals(type)) {
+            handleChat(session, user, payload.get("courseId"), content);
+        }
+    }
+
+    /** 频道消息：courseId 缺省=公共大厅；课程频道须为成员，且只广播给同课程在线者。 */
+    private void handleChat(WebSocketSession session, AuthUser user, Object rawCourseId, String content) {
+        Long courseId = toLong(rawCourseId);
+        if (courseId != null && !myCourses(user.id()).contains(courseId)) {
+            sendTo(session, Map.of("type", "error", "message", "只能在自己创建或已加入的课程频道发言"));
+            return;
+        }
         HallMessage m = new HallMessage();
         m.setTenantId(user.tenantId());
         m.setUserId(user.id());
+        m.setCourseId(courseId);
         m.setContent(content);
         m.setCreatedAt(LocalDateTime.now());
         hallMessageMapper.insert(m);
-        broadcast(Map.of("type", "chat", "id", m.getId(), "userId", user.id(),
-                "nickname", nickname(user), "content", content, "sentAt", m.getCreatedAt()));
+
+        Map<String, Object> frame = new LinkedHashMap<>();
+        frame.put("type", "chat");
+        frame.put("id", m.getId());
+        frame.put("userId", user.id());
+        frame.put("nickname", nickname(user));
+        frame.put("courseId", courseId);
+        frame.put("content", content);
+        frame.put("sentAt", m.getCreatedAt());
+        // 公共大厅全员可见；课程频道只发给该课程成员（用 Predicate 复用同一条广播路径）
+        Predicate<AuthUser> audience = courseId == null
+                ? u -> true
+                : u -> myCourses(u.id()).contains(courseId);
+        broadcast(frame, audience);
+    }
+
+    /** 私聊：仅限已同意的好友；对方全部在线连接实时推送，离线则落铃铛通知。 */
+    private void handleDm(WebSocketSession session, AuthUser user, Object rawTo, String content) {
+        Long toUserId = toLong(rawTo);
+        if (toUserId == null || toUserId.equals(user.id())) {
+            sendTo(session, Map.of("type", "error", "message", "无效的私聊对象"));
+            return;
+        }
+        if (!areFriends(user.id(), toUserId)) {
+            sendTo(session, Map.of("type", "error", "message", "只能给好友发私信"));
+            return;
+        }
+        DmMessage m = new DmMessage();
+        m.setTenantId(user.tenantId());
+        m.setSenderId(user.id());
+        m.setReceiverId(toUserId);
+        m.setContent(content);
+        m.setReadFlag(0);
+        m.setCreatedAt(LocalDateTime.now());
+        dmMessageMapper.insert(m);
+
+        Map<String, Object> frame = new LinkedHashMap<>();
+        frame.put("type", "dm");
+        frame.put("id", m.getId());
+        frame.put("fromUserId", user.id());
+        frame.put("fromNickname", nickname(user));
+        frame.put("toUserId", toUserId);
+        frame.put("content", content);
+        frame.put("sentAt", m.getCreatedAt());
+
+        boolean receiverOnline = sendToUser(toUserId, frame);
+        sendToUser(user.id(), frame);
+        if (!receiverOnline) {
+            notifyService.send(toUserId, "dm", "来自 " + nickname(user) + " 的私信",
+                    content, "/hall?peer=" + user.id());
+        }
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         AuthUser user = sessions.remove(session);
-        if (user != null) {
-            broadcastSystem("leave", nickname(user));
+        if (user == null) {
+            return;
         }
+        boolean stillOnline = sessions.values().stream().anyMatch(u -> u.id().equals(user.id()));
+        if (!stillOnline) {
+            userCourses.remove(user.id());
+        }
+        broadcastSystem("leave", nickname(user));
     }
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) {
         // 异常连接交给容器按 idle 超时或客户端 onClose 清理，这里不重复 close 以免噪音
         log.debug("对话厅连接异常: {}", exception.getMessage());
+    }
+
+    /** 当前在线用户 id（好友列表的在线标记用）。 */
+    public Set<Long> onlineUserIds() {
+        Set<Long> ids = new HashSet<>();
+        for (AuthUser u : sessions.values()) {
+            ids.add(u.id());
+        }
+        return ids;
+    }
+
+    private Set<Long> myCourses(Long userId) {
+        return userCourses.computeIfAbsent(userId, this::loadMyCourseIds);
+    }
+
+    /** 我创建的 + 已加入的课程（口径同「我的课程」）。 */
+    private Set<Long> loadMyCourseIds(Long userId) {
+        Set<Long> ids = new HashSet<>();
+        courseMapper.selectList(new LambdaQueryWrapper<Course>()
+                        .eq(Course::getOwnerId, userId).select(Course::getId))
+                .forEach(c -> ids.add(c.getId()));
+        courseUserMapper.selectList(new LambdaQueryWrapper<CourseUser>()
+                        .eq(CourseUser::getUserId, userId).select(CourseUser::getCourseId))
+                .forEach(cu -> ids.add(cu.getCourseId()));
+        return ids;
+    }
+
+    private boolean areFriends(Long a, Long b) {
+        return friendshipMapper.selectCount(new LambdaQueryWrapper<Friendship>()
+                .and(w -> w.eq(Friendship::getUserId, a).eq(Friendship::getFriendId, b))
+                .or(w -> w.eq(Friendship::getUserId, b).eq(Friendship::getFriendId, a))
+                .eq(Friendship::getStatus, Friendship.STATUS_ACCEPTED)) > 0;
     }
 
     private AuthUser user(WebSocketSession session) {
@@ -118,6 +242,14 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
     private static String nickname(AuthUser user) {
         String n = user.nickname();
         return n == null || n.isBlank() ? user.username() : n;
+    }
+
+    private static Long toLong(Object raw) {
+        try {
+            return raw == null ? null : Long.valueOf(String.valueOf(raw));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /** 在线名单：按 userId 去重，同一用户多端连接只显示一次。 */
@@ -134,14 +266,29 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
     private void broadcastSystem(String event, String nickname) {
         List<Map<String, Object>> online = onlineUsers();
         broadcast(Map.of("type", "system", "event", event, "nickname", nickname,
-                "online", online, "onlineCount", online.size()));
+                "online", online, "onlineCount", online.size()), u -> true);
     }
 
-    private void broadcast(Map<String, Object> payload) {
+    private void broadcast(Map<String, Object> payload, Predicate<AuthUser> audience) {
         String json = toJson(payload);
-        for (WebSocketSession s : sessions.keySet()) {
-            sendRaw(s, json);
+        for (Map.Entry<WebSocketSession, AuthUser> e : sessions.entrySet()) {
+            if (audience.test(e.getValue())) {
+                sendRaw(e.getKey(), json);
+            }
         }
+    }
+
+    /** 发给某用户的全部在线连接；返回其是否至少有一条在线。 */
+    private boolean sendToUser(Long userId, Map<String, Object> payload) {
+        String json = toJson(payload);
+        boolean any = false;
+        for (Map.Entry<WebSocketSession, AuthUser> e : sessions.entrySet()) {
+            if (e.getValue().id().equals(userId)) {
+                any = true;
+                sendRaw(e.getKey(), json);
+            }
+        }
+        return any;
     }
 
     private void sendTo(WebSocketSession session, Map<String, Object> payload) {

@@ -21,6 +21,10 @@ public class Notification {
     private String type;
     private String title;
     private String content;
+
+    /** 可选跳转路径（如 /hall?peer=3）：前端点击通知时直接路由过去。 */
+    private String link;
+
     private Boolean readFlag;
 
     /** 定时投递时间：非空表示尚未到点，列表里不可见；投递器置空后才放行。 */

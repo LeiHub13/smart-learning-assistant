@@ -8,19 +8,19 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 对话厅消息：实时聊天记录（WebSocket 广播 + 落库供历史回看）。
- * courseId 为空表示公共大厅，非空表示课程频道（仅课程成员可见）。
+ * 一对一私信：sender_id -> receiver_id；read_flag 表示收件人是否已读。
  */
 @Data
-@TableName("t_hall_message")
-public class HallMessage {
+@TableName("t_dm_message")
+public class DmMessage {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
     private Long tenantId;
-    private Long userId;
-    private Long courseId;
+    private Long senderId;
+    private Long receiverId;
     private String content;
+    private Integer readFlag;
     private LocalDateTime createdAt;
 }

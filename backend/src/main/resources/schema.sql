@@ -146,12 +146,37 @@ CREATE TABLE IF NOT EXISTS t_chat_message (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- course_id 为 NULL 表示公共大厅消息；非空表示该课程频道消息（仅课程成员可见）
 CREATE TABLE IF NOT EXISTS t_hall_message (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     tenant_id  BIGINT DEFAULT 1,
     user_id    BIGINT NOT NULL,
+    course_id  BIGINT,
     content    VARCHAR(1000) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 好友关系：一行代表一次好友请求/关系；status 0=待同意 1=已同意
+CREATE TABLE IF NOT EXISTS t_friendship (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id  BIGINT DEFAULT 1,
+    user_id    BIGINT NOT NULL COMMENT '请求方',
+    friend_id  BIGINT NOT NULL COMMENT '接收方',
+    status     TINYINT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_friend_pair (user_id, friend_id)
+);
+
+-- 一对一私信
+CREATE TABLE IF NOT EXISTS t_dm_message (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   BIGINT DEFAULT 1,
+    sender_id   BIGINT NOT NULL,
+    receiver_id BIGINT NOT NULL,
+    content     VARCHAR(1000) NOT NULL,
+    read_flag   TINYINT DEFAULT 0,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_dm_pair (sender_id, receiver_id, id)
 );
 
 CREATE TABLE IF NOT EXISTS t_flashcard (
@@ -308,6 +333,7 @@ CREATE TABLE IF NOT EXISTS t_notification (
     type        VARCHAR(20) DEFAULT 'review',
     title       VARCHAR(200),
     content     TEXT,
+    link        VARCHAR(200),
     read_flag   BOOLEAN DEFAULT FALSE,
     scheduled_at TIMESTAMP NULL,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP

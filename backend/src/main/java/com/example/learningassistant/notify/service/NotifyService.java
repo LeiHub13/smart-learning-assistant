@@ -32,7 +32,12 @@ public class NotifyService {
      * 发送站内通知；已启用邮件渠道且用户绑定了邮箱时同步外发邮件。
      */
     public void send(Long userId, String type, String title, String content) {
-        send(userId, type, title, content, null);
+        send(userId, type, title, content, null, null);
+    }
+
+    /** 带跳转路径的通知：link 存前端路由（如 /hall?peer=3），点击通知时直接跳转。 */
+    public void send(Long userId, String type, String title, String content, String link) {
+        send(userId, type, title, content, null, link);
     }
 
     /**
@@ -40,12 +45,18 @@ public class NotifyService {
      * 到点由 {@link #deliverDue()} 置空并投递（此刻才出现在列表里）。
      */
     public void send(Long userId, String type, String title, String content, LocalDateTime scheduledAt) {
+        send(userId, type, title, content, scheduledAt, null);
+    }
+
+    private void send(Long userId, String type, String title, String content,
+                      LocalDateTime scheduledAt, String link) {
         boolean pending = scheduledAt != null && scheduledAt.isAfter(LocalDateTime.now());
         Notification n = new Notification();
         n.setUserId(userId);
         n.setType(type);
         n.setTitle(title);
         n.setContent(content);
+        n.setLink(link);
         n.setReadFlag(false);
         n.setScheduledAt(pending ? scheduledAt : null);
         n.setCreatedAt(LocalDateTime.now());

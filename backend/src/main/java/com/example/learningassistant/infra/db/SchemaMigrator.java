@@ -39,7 +39,9 @@ public class SchemaMigrator implements CommandLineRunner {
             new ColumnSpec("t_chat_session", "socratic", "TINYINT DEFAULT 0 AFTER kb_scope"),
             new ColumnSpec("t_chat_message", "source_chunks", "VARCHAR(300) NULL AFTER sources"),
             new ColumnSpec("t_chat_message", "followups", "VARCHAR(600) NULL AFTER source_chunks"),
-            new ColumnSpec("t_document", "overview", "TEXT NULL AFTER parse_status"));
+            new ColumnSpec("t_document", "overview", "TEXT NULL AFTER parse_status"),
+            new ColumnSpec("t_hall_message", "course_id", "BIGINT NULL AFTER user_id"),
+            new ColumnSpec("t_notification", "link", "VARCHAR(200) NULL AFTER content"));
 
     @Override
     public void run(String... args) {
