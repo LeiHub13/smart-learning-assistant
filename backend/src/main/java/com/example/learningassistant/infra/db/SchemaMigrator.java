@@ -41,7 +41,10 @@ public class SchemaMigrator implements CommandLineRunner {
             new ColumnSpec("t_chat_message", "followups", "VARCHAR(600) NULL AFTER source_chunks"),
             new ColumnSpec("t_document", "overview", "TEXT NULL AFTER parse_status"),
             new ColumnSpec("t_hall_message", "course_id", "BIGINT NULL AFTER user_id"),
-            new ColumnSpec("t_notification", "link", "VARCHAR(200) NULL AFTER content"));
+            new ColumnSpec("t_hall_message", "role", "TINYINT NOT NULL DEFAULT 0 AFTER course_id"),
+            new ColumnSpec("t_hall_message", "sources", "VARCHAR(500) NULL AFTER role"),
+            new ColumnSpec("t_notification", "link", "VARCHAR(200) NULL AFTER content"),
+            new ColumnSpec("t_note", "shared", "TINYINT NOT NULL DEFAULT 0 AFTER content"));
 
     @Override
     public void run(String... args) {
@@ -60,8 +63,31 @@ public class SchemaMigrator implements CommandLineRunner {
             }
         }
         relaxLegacyColumns();
+        widenHallContent();
         if (added > 0) {
             log.info("增量迁移完成，共补齐 {} 列", added);
+        }
+    }
+
+    /**
+     * t_hall_message.content 原为 VARCHAR(1000)，容纳 AI 助教的 Markdown 长回答不够；
+     * 老库放宽为 TEXT（幂等：已是 TEXT 类型则跳过）。
+     */
+    private void widenHallContent() {
+        if (!tableExists("t_hall_message") || !columnExists("t_hall_message", "content")) {
+            return;
+        }
+        String type = jdbcTemplate.queryForObject(
+                "SELECT DATA_TYPE FROM information_schema.COLUMNS "
+                        + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_hall_message' AND COLUMN_NAME = 'content'",
+                String.class);
+        if ("varchar".equalsIgnoreCase(type)) {
+            try {
+                jdbcTemplate.execute("ALTER TABLE t_hall_message MODIFY COLUMN content TEXT NOT NULL");
+                log.info("增量迁移：t_hall_message.content 已放宽为 TEXT（容纳 AI 助教长回答）");
+            } catch (Exception e) {
+                log.error("增量迁移失败 t_hall_message.content：{}", e.getMessage());
+            }
         }
     }
 

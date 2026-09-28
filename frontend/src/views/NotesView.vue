@@ -33,8 +33,12 @@
           <AppIcon name="chev" :size="14" class="chev" />
           {{ n.title }}
           <span v-if="n.kpName" class="tag">{{ n.kpName }}</span>
+          <span v-if="n.shared" class="tag ok">已共享到课程</span>
         </h3>
         <div class="btns" @click.stop>
+          <button v-if="n.courseId" class="btn ghost small" @click="toggleShare(n)">
+            {{ n.shared ? '取消共享' : '共享到课程' }}
+          </button>
           <button class="btn ghost small" @click="toggleEditor(n)">编辑</button>
           <button class="btn ghost small" @click="del(n)">删除</button>
         </div>
@@ -48,7 +52,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { api, getCourses } from '../api'
+import { api, getCourses, setNoteShared } from '../api'
 import { fmtTime, mdToHtml } from '../utils'
 import AppIcon from '../components/AppIcon.vue'
 
@@ -112,6 +116,16 @@ const del = async (n) => {
   if (!confirm('删除笔记「' + n.title + '」？')) return
   try {
     await api('/api/notes/' + n.id, { method: 'DELETE' })
+    await load()
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+/** 共享开关：共享后笔记出现在课程频道的学习空间（成员只读） */
+const toggleShare = async (n) => {
+  try {
+    await setNoteShared(n.id, !n.shared)
     await load()
   } catch (e) {
     error.value = e.message

@@ -2,6 +2,8 @@ package com.example.learningassistant.hall.web;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.example.learningassistant.ai.AIChatMessage;
+import com.example.learningassistant.ai.ChatModelFactory;
 import com.example.learningassistant.course.entity.Course;
 import com.example.learningassistant.course.entity.CourseUser;
 import com.example.learningassistant.course.mapper.CourseMapper;
@@ -12,6 +14,8 @@ import com.example.learningassistant.hall.entity.HallMessage;
 import com.example.learningassistant.hall.mapper.DmMessageMapper;
 import com.example.learningassistant.hall.mapper.FriendshipMapper;
 import com.example.learningassistant.hall.mapper.HallMessageMapper;
+import com.example.learningassistant.kb.entity.KnowledgeBase;
+import com.example.learningassistant.kb.service.KbService;
 import com.example.learningassistant.notify.service.NotifyService;
 import com.example.learningassistant.security.AuthUser;
 import com.example.learningassistant.user.entity.User;
@@ -36,19 +40,25 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
- * 对话厅 WebSocket 处理器：频道聊天（公共大厅 + 课程频道）与好友私信复用一条连接。
+ * 对话厅 WebSocket 处理器：频道聊天（公共大厅 + 课程频道）、AI 助教与好友私信复用一条连接。
  *
  * 协议（JSON 文本帧）：
  *   客户端 -> {type:"chat", courseId?, content:"..."}  courseId 缺省=公共大厅，否则须为我的课程
+ *            {type:"ai", courseId, content:"..."}      课程频道问 AI 助教（RAG 流式，全员可见）
  *            {type:"dm", toUserId, content:"..."}      仅限已同意的好友
  *            {type:"view", kind:"dm"|"channel", peerUserId?}  上报当前正在看的会话（DM 免打扰判定）
  *            {type:"ping"}
  *   服务端 -> {type:"chat", id, userId, nickname, avatar, courseId, content, sentAt}
+ *             AI 消息额外带 role:"ai" 与 sources（引用编号），userId=0、nickname=「AI 助教」
+ *            {type:"ai_start", courseId}                        助教开始生成（客户端占位「思考中」气泡）
+ *            {type:"ai_delta", courseId, delta}                 助教回答增量
+ *            {type:"ai_error", courseId, message}               助教生成失败
  *            {type:"dm", id, fromUserId, fromNickname, fromAvatar, content, sentAt}  收发双方都收（多端一致）
  *            {type:"system", event:"join"|"leave", nickname, online:[{userId,nickname}], onlineCount}
  *            {type:"pong"} / {type:"error", message}
  * 课程成员集合在连接建立时缓存（选课变化重连后生效）；课程频道消息只广播给同课程在线者，
  * 公共大厅消息全员广播。DM 一律落铃铛通知，收件人正在查看该会话时视为已读不打铃。
+ * AI 助教每课程单飞（同时只允许一个请求在生成），SESSION_ID=hall-course-{id} 使课程内共享助教记忆。
  */
 @Slf4j
 @Component
@@ -60,6 +70,9 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
 
     static final int MAX_CONTENT_LEN = 500;
 
+    /** AI 助教消息展示昵称（userId 固定为 HallMessage.AI_USER_ID） */
+    private static final String AI_NICKNAME = "AI 助教";
+
     private final ObjectMapper objectMapper;
     private final HallMessageMapper hallMessageMapper;
     private final DmMessageMapper dmMessageMapper;
@@ -68,6 +81,8 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
     private final CourseUserMapper courseUserMapper;
     private final UserMapper userMapper;
     private final NotifyService notifyService;
+    private final ChatModelFactory modelFactory;
+    private final KbService kbService;
 
     /** 在线连接 -> 用户。ConcurrentHashMap keySet 天然去重并发。 */
     private final Map<WebSocketSession, AuthUser> sessions = new ConcurrentHashMap<>();
@@ -77,6 +92,9 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
 
     /** 正在查看的会话（userId -> 对端 userId）；查看频道或断开时移除。用于 DM 免打扰判定。 */
     private final Map<Long, Long> viewingPeer = new ConcurrentHashMap<>();
+
+    /** AI 助教每课程单飞：正在生成的课程 id 集合（add 的原子性即「占坑」判定）。 */
+    private final Set<Long> aiBusyCourses = ConcurrentHashMap.newKeySet();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -130,6 +148,8 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
             handleDm(session, user, payload.get("toUserId"), content);
         } else if ("chat".equals(type)) {
             handleChat(session, user, payload.get("courseId"), content);
+        } else if ("ai".equals(type)) {
+            handleAi(session, user, payload.get("courseId"), content);
         }
     }
 
@@ -140,28 +160,137 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
             sendTo(session, Map.of("type", "error", "message", "只能在自己创建或已加入的课程频道发言"));
             return;
         }
+        HallMessage m = persistMessage(user.tenantId(), user.id(), courseId, HallMessage.ROLE_USER, null, content);
+        broadcast(chatFrame(m, nickname(user), null), audience(courseId));
+    }
+
+    /**
+     * AI 助教：仅课程频道。提问先按普通用户消息落库广播（刷新后问答上下文完整），
+     * 随后按课程知识库 RAG 流式回答——delta 增量广播，完成后落库并广播 role=ai 的最终消息。
+     * 每课程单飞；无知识库的课程直接提示。
+     */
+    private void handleAi(WebSocketSession session, AuthUser user, Object rawCourseId, String content) {
+        Long courseId = toLong(rawCourseId);
+        if (courseId == null) {
+            sendTo(session, Map.of("type", "error", "message", "公共大厅没有 AI 助教，请在课程频道提问"));
+            return;
+        }
+        if (!myCourses(user.id()).contains(courseId)) {
+            sendTo(session, Map.of("type", "error", "message", "只能在自己创建或已加入的课程频道问助教"));
+            return;
+        }
+        if (!aiBusyCourses.add(courseId)) {
+            sendTo(session, Map.of("type", "error", "message", "助教正在回答中，请稍候再提问"));
+            return;
+        }
+        try {
+            List<KnowledgeBase> kbs = kbService.kbList(courseId);
+            if (kbs.isEmpty()) {
+                sendTo(session, Map.of("type", "error", "message", "本课程还没有知识库资料，请先在「文档管理」上传"));
+                aiBusyCourses.remove(courseId);
+                return;
+            }
+            HallMessage q = persistMessage(user.tenantId(), user.id(), courseId, HallMessage.ROLE_USER, null, content);
+            broadcast(chatFrame(q, nickname(user), null), audience(courseId));
+            broadcast(Map.of("type", "ai_start", "courseId", courseId), audience(courseId));
+            streamAssistantAnswer(courseId, user, content, kbs);
+        } catch (Exception e) {
+            aiBusyCourses.remove(courseId);
+            log.error("频道助教请求失败 courseId={}: {}", courseId, e.getMessage(), e);
+            sendTo(session, Map.of("type", "error", "message", "助教暂时不可用，请稍后再试"));
+        }
+    }
+
+    /**
+     * 助教 RAG 流式回答（回调运行在 ai-stream 守护线程）。
+     * 检索锚点 KB_ID 取课程最新知识库（Python 侧 rag_qa 必须有 kbId 才触发检索），KB_IDS 展开全部知识库；
+     * SESSION_ID=hall-course-{id} 使同一课程共享一份助教会话记忆。
+     */
+    private void streamAssistantAnswer(Long courseId, AuthUser asker, String question, List<KnowledgeBase> kbs) {
+        String kbIds = kbs.stream().map(kb -> String.valueOf(kb.getId()))
+                .collect(java.util.stream.Collectors.joining(","));
+        KnowledgeBase anchor = kbs.get(0);
+        String system = new StringBuilder()
+                .append("HALL_QA\n你是课程频道里的 AI 助教，结合课程知识库资料回答同学们的提问，")
+                .append("标注引用编号[1][2]等，用中文友好、简洁、准确地回答。")
+                .append("\nKB_ID:").append(anchor.getId())
+                .append("\nKB_NAME:").append(anchor.getName() == null ? ""
+                        : anchor.getName().replaceAll("[\\r\\n]+", " ").trim())
+                .append("\nKB_SCOPE:course")
+                .append("\nKB_IDS:").append(kbIds)
+                .append("\nCOURSE_ID:").append(courseId)
+                .append("\nUSER_ID:").append(asker.id())
+                .append("\nSESSION_ID:hall-course-").append(courseId)
+                .toString();
+        List<AIChatMessage> messages = List.of(
+                new AIChatMessage("system", system),
+                new AIChatMessage("user", question));
+
+        StringBuilder acc = new StringBuilder();
+        modelFactory.get().stream(messages,
+                delta -> {
+                    acc.append(delta);
+                    broadcast(Map.of("type", "ai_delta", "courseId", courseId, "delta", delta),
+                            audience(courseId));
+                },
+                refs -> {
+                    try {
+                        String sources = refs == null || refs.refs() == null ? "" : refs.refs().trim();
+                        if (acc.isEmpty()) {
+                            broadcast(Map.of("type", "ai_error", "courseId", courseId,
+                                    "message", "助教这次没能给出回答，请换个问法试试"), audience(courseId));
+                            return;
+                        }
+                        HallMessage m = persistMessage(asker.tenantId(), HallMessage.AI_USER_ID, courseId,
+                                HallMessage.ROLE_AI, sources.isEmpty() ? null : sources, acc.toString());
+                        broadcast(chatFrame(m, AI_NICKNAME, "ai"), audience(courseId));
+                    } finally {
+                        aiBusyCourses.remove(courseId);
+                    }
+                },
+                e -> {
+                    aiBusyCourses.remove(courseId);
+                    log.error("频道助教生成失败 courseId={}: {}", courseId, e.getMessage());
+                    broadcast(Map.of("type", "ai_error", "courseId", courseId,
+                            "message", "助教这次没能给出回答，请稍后再试"), audience(courseId));
+                });
+    }
+
+    private HallMessage persistMessage(Long tenantId, Long userId, Long courseId, int role, String sources, String content) {
         HallMessage m = new HallMessage();
-        m.setTenantId(user.tenantId());
-        m.setUserId(user.id());
+        m.setTenantId(tenantId);
+        m.setUserId(userId);
         m.setCourseId(courseId);
+        m.setRole(role);
+        m.setSources(sources);
         m.setContent(content);
         m.setCreatedAt(LocalDateTime.now());
         hallMessageMapper.insert(m);
+        return m;
+    }
 
+    /** 广播受众：公共大厅全员；课程频道仅同课程在线者（成员集合为连接建立时的缓存）。 */
+    private Predicate<AuthUser> audience(Long courseId) {
+        return courseId == null ? u -> true : u -> myCourses(u.id()).contains(courseId);
+    }
+
+    /** 频道消息帧：role 非空表示 AI 助教消息（额外带 sources；userId=0、无头像）。 */
+    private Map<String, Object> chatFrame(HallMessage m, String nickname, String role) {
+        boolean ai = role != null;
         Map<String, Object> frame = new LinkedHashMap<>();
         frame.put("type", "chat");
         frame.put("id", m.getId());
-        frame.put("userId", user.id());
-        frame.put("nickname", nickname(user));
-        frame.put("avatar", avatar(user.id()));
-        frame.put("courseId", courseId);
-        frame.put("content", content);
+        frame.put("userId", m.getUserId());
+        frame.put("nickname", nickname);
+        frame.put("avatar", ai ? "" : avatar(m.getUserId()));
+        frame.put("courseId", m.getCourseId());
+        if (ai) {
+            frame.put("role", role);
+            frame.put("sources", m.getSources() == null ? "" : m.getSources());
+        }
+        frame.put("content", m.getContent());
         frame.put("sentAt", m.getCreatedAt());
-        // 公共大厅全员可见；课程频道只发给该课程成员（用 Predicate 复用同一条广播路径）
-        Predicate<AuthUser> audience = courseId == null
-                ? u -> true
-                : u -> myCourses(u.id()).contains(courseId);
-        broadcast(frame, audience);
+        return frame;
     }
 
     /** 私聊：仅限已同意的好友；实时推送双方。收件人未在看的会话一律落铃铛通知（在线与否不影响）。 */

@@ -63,6 +63,12 @@
         </span>
       </div>
 
+      <!-- 频道学习空间切换：仅课程频道（公共大厅无知识库，私聊不适用） -->
+      <div v-if="isCourseChannel" class="chat-tabs">
+        <button :class="{ on: chatTab === 'chat' }" @click="chatTab = 'chat'">聊天</button>
+        <button :class="{ on: chatTab === 'space' }" @click="openSpace">学习空间</button>
+      </div>
+
       <div v-if="error" class="err" style="margin:0 16px">{{ error }}</div>
 
       <div v-if="askRemove" class="row" style="margin:8px 16px 0;background:var(--bad-soft,#fdebec);border-radius:8px;padding:8px 12px">
@@ -73,44 +79,101 @@
         </span>
       </div>
 
-      <div class="msgs" ref="bodyRef">
-        <div v-if="!messages.length" class="empty">
-          <div style="font-size:16px;font-weight:600;margin-bottom:8px">{{ emptyTitle }}</div>
-          <div style="margin:10px 0 16px">{{ emptyHint }}</div>
-        </div>
-        <div v-for="m in messages" :key="m.key">
-          <div v-if="m.kind === 'system'" class="sys-line">{{ m.text }}</div>
-          <div v-else-if="m.kind === 'dm'" class="m" :class="{ me: m.mine }">
-            <img v-if="dmAvatar(m)" class="av av-img" :src="dmAvatar(m)" alt="" />
-            <div v-else class="av" :style="m.mine ? {} : { background: avatarColor(m.fromUserId) }">{{ avatarChar(m) }}</div>
-            <div class="bub-wrap">
-              <div class="meta">
-                <span class="nick">{{ m.mine ? '我' : m.nickname }}</span>
-                <span class="time">{{ fmtTime(m.sentAt) }}</span>
+      <template v-if="showChat">
+        <div class="msgs" ref="bodyRef">
+          <div v-if="!messages.length" class="empty">
+            <div style="font-size:16px;font-weight:600;margin-bottom:8px">{{ emptyTitle }}</div>
+            <div style="margin:10px 0 16px">{{ emptyHint }}</div>
+          </div>
+          <div v-for="m in messages" :key="m.key">
+            <div v-if="m.kind === 'system'" class="sys-line">{{ m.text }}</div>
+            <div v-else-if="m.kind === 'dm'" class="m" :class="{ me: m.mine }">
+              <img v-if="dmAvatar(m)" class="av av-img" :src="dmAvatar(m)" alt="" />
+              <div v-else class="av" :style="m.mine ? {} : { background: avatarColor(m.fromUserId) }">{{ avatarChar(m) }}</div>
+              <div class="bub-wrap">
+                <div class="meta">
+                  <span class="nick">{{ m.mine ? '我' : m.nickname }}</span>
+                  <span class="time">{{ fmtTime(m.sentAt) }}</span>
+                </div>
+                <div class="bub hall-bub">{{ m.content }}</div>
               </div>
-              <div class="bub hall-bub">{{ m.content }}</div>
+            </div>
+            <div v-else class="m" :class="{ me: !m.ai && Number(m.userId) === meId }">
+              <!-- AI 助教消息：Markdown 渲染 + 引用来源（复用全局 .bub 排版与 .sources 配色） -->
+              <template v-if="m.ai">
+                <div class="av ai-av">AI</div>
+                <div class="bub-wrap wide">
+                  <div class="meta">
+                    <span class="nick">AI 助教</span>
+                    <span class="time">{{ fmtTime(m.sentAt) }}</span>
+                  </div>
+                  <div class="bub hall-bub hall-md"><div v-html="mdToHtml(m.content)"></div></div>
+                  <div v-if="m.sources" class="sources">
+                    <span>引用来源：</span>
+                    <a v-for="(s, si) in String(m.sources).split(',')" :key="si" class="src-chip" @click="goDocs">[{{ s.trim() }}]</a>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <img v-if="m.avatar" class="av av-img" :src="m.avatar" alt="" />
+                <div v-else class="av" :style="Number(m.userId) === meId ? {} : { background: avatarColor(m.userId) }">{{ avatarChar(m) }}</div>
+                <div class="bub-wrap">
+                  <div class="meta">
+                    <span class="nick">{{ Number(m.userId) === meId ? '我' : m.nickname }}</span>
+                    <span class="time">{{ fmtTime(m.sentAt) }}</span>
+                  </div>
+                  <div class="bub hall-bub">{{ m.content }}</div>
+                </div>
+              </template>
             </div>
           </div>
-          <div v-else class="m" :class="{ me: Number(m.userId) === meId }">
-            <img v-if="m.avatar" class="av av-img" :src="m.avatar" alt="" />
-            <div v-else class="av" :style="Number(m.userId) === meId ? {} : { background: avatarColor(m.userId) }">{{ avatarChar(m) }}</div>
-            <div class="bub-wrap">
+          <!-- 助教生成中占位气泡：delta 实时累积，最终帧到达后由正式消息取代 -->
+          <div v-if="aiThinking" class="m">
+            <div class="av ai-av">AI</div>
+            <div class="bub-wrap wide">
               <div class="meta">
-                <span class="nick">{{ Number(m.userId) === meId ? '我' : m.nickname }}</span>
-                <span class="time">{{ fmtTime(m.sentAt) }}</span>
+                <span class="nick">AI 助教</span>
+                <span class="time">正在回答…</span>
               </div>
-              <div class="bub hall-bub">{{ m.content }}</div>
+              <div class="bub hall-bub"><span v-if="!aiStreamText" class="muted">思考中…</span><template v-else>{{ aiStreamText }}</template></div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div class="input-bar">
-        <textarea v-model="input" :placeholder="connected ? inputHint : '未连接'" :disabled="!connected"
-                  @keydown.enter.exact.prevent="send"></textarea>
-        <button class="btn" :disabled="!connected || !input.trim()" @click="send">
-          {{ connected ? '发送' : '未连接' }}
-        </button>
+        <div class="input-bar">
+          <textarea ref="inputRef" v-model="input" :placeholder="connected ? inputHint : '未连接'" :disabled="!connected"
+                    @keydown.enter.exact.prevent="send"></textarea>
+          <button v-if="isCourseChannel" class="btn ghost" :disabled="!connected || !input.trim()" @click="askAi">问助教</button>
+          <button class="btn" :disabled="!connected || !input.trim()" @click="send">
+            {{ connected ? '发送' : '未连接' }}
+          </button>
+        </div>
+      </template>
+
+      <!-- 学习空间面板：助教入口 + 共享笔记（切换到课程频道时懒加载） -->
+      <div v-else class="space-panel">
+        <div class="space-card">
+          <div class="sp-title">AI 课程助教</div>
+          <div class="sp-desc">基于本课程知识库回答问题；回复会出现在频道聊天里，全部成员可见、可回看。</div>
+          <button class="btn small" @click="goAsk">去问助教</button>
+        </div>
+        <div class="space-card">
+          <div class="sp-row">
+            <div class="sp-title">共享笔记</div>
+            <button class="btn ghost small" @click="loadSpace">刷新</button>
+          </div>
+          <div class="sp-desc">同学在「学习笔记」页勾选「共享到课程」的笔记会出现在这里（只读）。</div>
+          <div v-if="spaceLoading" class="muted small" style="margin-top:8px">加载中…</div>
+          <div v-else-if="!spaceNotes.length" class="muted small" style="margin-top:8px">还没有共享笔记</div>
+          <div v-for="n in spaceNotes" :key="'sn' + n.id" class="share-note">
+            <div class="sn-head">
+              <span class="sn-title">{{ n.title }}</span>
+              <span v-if="n.kpName" class="tag">{{ n.kpName }}</span>
+            </div>
+            <div class="sn-content" v-html="mdToHtml(n.content)"></div>
+            <div class="muted small">{{ n.author }} · 更新于 {{ fmtTime(n.updatedAt) }}</div>
+          </div>
+        </div>
       </div>
     </section>
   </div>
@@ -118,12 +181,14 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, onActivated, nextTick, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { api, getToken } from '../api'
+import { useRoute, useRouter } from 'vue-router'
+import { api, getToken, spaceNotes as fetchSpaceNotes } from '../api'
+import { mdToHtml } from '../utils'
 
 defineOptions({ name: 'HallView' })
 
 const route = useRoute()
+const router = useRouter()
 
 const channelList = ref([])
 const friends = ref([])
@@ -140,7 +205,16 @@ const connected = ref(false)
 const reconnecting = ref(false)
 const onlineUsers = ref([])
 const bodyRef = ref(null)
+const inputRef = ref(null)
 const error = ref('')
+
+/* 频道学习空间：chatTab 仅在课程频道生效（DM 恒为聊天），space 面板切入时懒加载 */
+const chatTab = ref('chat')
+const spaceNotes = ref([])
+const spaceLoading = ref(false)
+/* 助教生成中：挂到发起的频道（channelId），最终帧/错误帧统一收口清空 */
+const pendingAiCourse = ref(null)
+const aiStreamText = ref('')
 
 const addOpen = ref(false)
 const addName = ref('')
@@ -162,12 +236,19 @@ const peerOnline = computed(() => {
   const f = friends.value.find((x) => x.userId === active.value.peerId)
   return !!f && !!f.online
 })
+const isCourseChannel = computed(() => active.value.kind === 'channel' && active.value.courseId != null)
+const showChat = computed(() => !isCourseChannel.value || chatTab.value === 'chat')
+const aiThinking = computed(() =>
+  pendingAiCourse.value != null && active.value.kind === 'channel'
+  && pendingAiCourse.value === active.value.courseId)
 const emptyTitle = computed(() =>
   active.value.kind === 'dm' ? `与 ${active.value.name} 的私聊` : `欢迎来到 ${active.value.name}`)
 const emptyHint = computed(() =>
   active.value.kind === 'dm' ? '聊点什么吧，只有你们两个人能看到' : '打个招呼吧')
-const inputHint = computed(() =>
-  active.value.kind === 'dm' ? '悄悄话，Enter 发送' : '和大家聊聊学习心得，Enter 发送')
+const inputHint = computed(() => {
+  if (active.value.kind === 'dm') return '悄悄话，Enter 发送'
+  return isCourseChannel.value ? '和大家聊聊，或点「问助教」让 AI 基于课程资料回答' : '和大家聊聊学习心得，Enter 发送'
+})
 
 const wsUrl = () => {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -191,13 +272,38 @@ const applyOnline = (list) => {
 const onServerEvent = (data) => {
   if (data.type === 'chat') {
     // 只渲染当前频道的消息（服务端本就只发给同课程成员/全员）
-    if (active.value.kind !== 'channel') return
-    if ((data.courseId ?? null) !== (active.value.courseId ?? null)) return
+    const isAi = data.role === 'ai'
+    if (active.value.kind !== 'channel'
+        || (data.courseId ?? null) !== (active.value.courseId ?? null)) {
+      // AI 最终帧落在别处：消息下次进频道从历史加载，这里只负责收口占位气泡
+      if (isAi) { pendingAiCourse.value = null; aiStreamText.value = '' }
+      return
+    }
     messages.value.push({
       kind: 'chat', key: 'c' + data.id, id: data.id, userId: data.userId,
-      nickname: data.nickname, avatar: data.avatar, content: data.content, sentAt: data.sentAt
+      nickname: data.nickname, avatar: data.avatar, content: data.content, sentAt: data.sentAt,
+      ai: isAi, sources: data.sources || ''
     })
+    if (isAi) { pendingAiCourse.value = null; aiStreamText.value = '' }
     scrollDown()
+  } else if (data.type === 'ai_start') {
+    // 占位气泡挂到发起提问的频道；当前正好在看该频道则顺手滚到底
+    pendingAiCourse.value = data.courseId
+    aiStreamText.value = ''
+    if (aiThinking.value) scrollDown()
+  } else if (data.type === 'ai_delta') {
+    if (pendingAiCourse.value === data.courseId) {
+      aiStreamText.value += data.delta || ''
+      if (aiThinking.value) scrollDown()
+    }
+  } else if (data.type === 'ai_error') {
+    if (pendingAiCourse.value === data.courseId) {
+      pendingAiCourse.value = null
+      aiStreamText.value = ''
+      if (active.value.kind === 'channel' && data.courseId === active.value.courseId) {
+        pushSys(data.message || '助教回答失败')
+      }
+    }
   } else if (data.type === 'dm') {
     const mine = Number(data.fromUserId) === meId.value
     const peerId = mine ? Number(data.toUserId) : Number(data.fromUserId)
@@ -283,6 +389,45 @@ const send = () => {
   input.value = ''
 }
 
+/** 问 AI 助教（仅课程频道）：问题按普通消息落库广播，回答以 ai_delta 增量推送 */
+const askAi = () => {
+  const text = input.value.trim()
+  if (!text || !ws || ws.readyState !== WebSocket.OPEN) return
+  if (!isCourseChannel.value) return
+  ws.send(JSON.stringify({ type: 'ai', courseId: active.value.courseId, content: text.slice(0, 500) }))
+  input.value = ''
+}
+
+/* ---------- 学习空间 ---------- */
+
+const loadSpace = async () => {
+  if (active.value.courseId == null) return
+  spaceLoading.value = true
+  try {
+    spaceNotes.value = (await fetchSpaceNotes(active.value.courseId)) || []
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    spaceLoading.value = false
+  }
+}
+
+const openSpace = () => {
+  chatTab.value = 'space'
+  loadSpace()
+}
+
+/** 从学习空间切回聊天并聚焦输入框 */
+const goAsk = () => {
+  chatTab.value = 'chat'
+  nextTick(() => { if (inputRef.value) inputRef.value.focus() })
+}
+
+/** AI 回答的引用来源 → 课程文档页（对齐引用编号与文档片段） */
+const goDocs = () => {
+  if (active.value.courseId != null) router.push({ path: '/docs', query: { courseId: active.value.courseId } })
+}
+
 /* ---------- 左栏数据 ---------- */
 
 const loadChannels = async () => {
@@ -314,13 +459,15 @@ const loadFriends = async () => {
 const openChannel = async (c) => {
   askRemove.value = false
   active.value = { kind: 'channel', courseId: c.courseId ?? null, name: c.name }
+  chatTab.value = 'chat'
   messages.value = []
   error.value = ''
   sendView()
   try {
     const q = c.courseId == null ? '' : '&courseId=' + c.courseId
     const list = await api('/api/hall/messages?limit=50' + q)
-    messages.value = (list || []).map((m) => ({ kind: 'chat', key: 'c' + m.id, ...m }))
+    // ai=true 的历史消息走 Markdown 渲染并带引用来源（spread 在前，字段规范化在后）
+    messages.value = (list || []).map((m) => ({ kind: 'chat', key: 'c' + m.id, ...m, ai: m.role === 1, sources: m.sources || '' }))
   } catch (e) {
     error.value = e.message
   }
@@ -527,7 +674,36 @@ onUnmounted(() => {
 .hall-status { font-size: 12.5px; color: var(--muted); }
 .hall-status.off { color: var(--warn); }
 
+/* 聊天 / 学习空间 切换（仅课程频道渲染） */
+.chat-tabs { display: flex; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
+.chat-tabs button {
+  border: 1px solid var(--border); background: transparent; border-radius: 999px;
+  padding: 4px 14px; font-size: 13px; color: var(--muted); cursor: pointer;
+}
+.chat-tabs button.on { background: var(--accent-subtle); border-color: var(--accent-deep); color: var(--accent-deep); font-weight: 600; }
+
+/* 学习空间面板：与 .msgs 同级，内部滚动不撑破 .chat */
+.space-panel { flex: 1; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+.space-card { border: 1px solid var(--border); background: var(--card); border-radius: 12px; padding: 14px 16px; }
+.sp-row { display: flex; align-items: center; justify-content: space-between; }
+.sp-title { font-weight: 700; margin-bottom: 4px; }
+.sp-desc { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.share-note { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-top: 10px; }
+.sn-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.sn-title { font-weight: 600; }
+.sn-content { font-size: 13.5px; line-height: 1.8; max-height: 320px; overflow-y: auto; margin: 4px 0 8px; }
+.sn-content p { margin: 4px 0; }
+
 .msgs { flex: 1; overflow-y: auto; padding: 16px 18px; }
+
+/* AI 助教气泡：灰底方块头像 + Markdown 正文（禁用 pre-wrap，排版交给 .bub 全局规则） */
+.ai-av { background: #59636e; font-size: 11px; font-weight: 600; }
+.bub-wrap.wide { max-width: 88%; }
+.hall-md { white-space: normal; }
+.src-chip {
+  margin: 0 3px; padding: 0 6px; border: 1px solid currentColor;
+  border-radius: 6px; cursor: pointer; font-weight: 600;
+}
 
 .input-bar {
   display: flex; gap: 10px; align-items: flex-end;

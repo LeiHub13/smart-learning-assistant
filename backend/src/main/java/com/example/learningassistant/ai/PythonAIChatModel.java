@@ -23,6 +23,7 @@ import java.util.function.Consumer;
  *
  * 场景映射（从 system 消息中的标记解析）：
  *   RAG_QA / FREE -> /ai/stream（SSE 流式，带会话记忆）
+ *   HALL_QA -> /ai/stream（课程频道 AI 助教，走 rag_qa 链路但恒不升级 agent）
  *   GEN_LECTURE / GEN_QUESTIONS / REVIEW_SUBJECTIVE / ADVICE / PLAN / REPORT / RECOMMEND -> /ai/complete
  * 知识库答疑：system 中的 KB_ID 随请求传给 Python，检索链路（查询改写 -> 向量召回 -> 重排）
  * 全在 ai-service 内完成，引用编号 sources 由流式 done 事件回传（Java 落库）。
@@ -156,8 +157,11 @@ public class PythonAIChatModel implements ChatModel {
             }
         }
 
+        // HALL_QA：课程频道 AI 助教（对话厅），与 rag_qa 同一检索/提示链路，
+        // 但不升级 agent——频道回答全员可见，Agent 的写动作确认流程不适用于频道场景
+        boolean hallQa = system.contains("HALL_QA");
         String scene;
-        if (system.contains("RAG_QA")) {
+        if (hallQa || system.contains("RAG_QA")) {
             scene = "rag_qa";
         } else if (system.contains("FREE")) {
             scene = "free";
@@ -182,8 +186,8 @@ public class PythonAIChatModel implements ChatModel {
         } else {
             scene = "free";
         }
-        // Agent 模式：答疑类场景升级为 ReAct Agent（Python 侧自主调工具），其余场景不变
-        if (agentEnabled && ("rag_qa".equals(scene) || "free".equals(scene))) {
+        // Agent 模式：答疑类场景升级为 ReAct Agent（Python 侧自主调工具），频道助教与其余场景不变
+        if (agentEnabled && !hallQa && ("rag_qa".equals(scene) || "free".equals(scene))) {
             scene = "agent";
         }
         return new RequestPayload(scene, lastUser, extractMarker(system, "SESSION_ID"),

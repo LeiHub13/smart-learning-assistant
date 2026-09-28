@@ -111,6 +111,10 @@ export async function unreadCount() { return api('/api/notifications/unread-coun
 export async function markRead(id) { return api(`/api/notifications/${id}/read`, { method: 'POST' }) }
 export async function markAllRead() { return api('/api/notifications/read-all', { method: 'POST' }) }
 
+/** 频道学习空间：课程频道内的共享笔记（作者勾选 shared 后成员只读可见） */
+export async function spaceNotes(courseId) { return api(`/api/hall/space/notes?courseId=${courseId}`) }
+export async function setNoteShared(id, shared) { return api(`/api/notes/${id}/shared`, { method: 'PUT', body: { shared } }) }
+
 /** 流式讲义：onDone 仍收 savedId（从最终事件对象中取） */
 export async function streamLecture(body, onDelta, onDone) {
   return sseStream('/api/generate/lecture/stream', body, onDelta, (d) => onDone(d && d.saved))

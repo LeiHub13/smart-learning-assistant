@@ -147,12 +147,15 @@ CREATE TABLE IF NOT EXISTS t_chat_message (
 );
 
 -- course_id 为 NULL 表示公共大厅消息；非空表示该课程频道消息（仅课程成员可见）
+-- role 0=用户消息 1=AI 助教回复（user_id=0）；sources 为 AI 回答的引用来源编号
 CREATE TABLE IF NOT EXISTS t_hall_message (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     tenant_id  BIGINT DEFAULT 1,
     user_id    BIGINT NOT NULL,
     course_id  BIGINT,
-    content    VARCHAR(1000) NOT NULL,
+    role       TINYINT NOT NULL DEFAULT 0,
+    sources    VARCHAR(500),
+    content    TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -252,6 +255,7 @@ CREATE TABLE IF NOT EXISTS t_note (
     kp_name     VARCHAR(100),
     title       VARCHAR(100) NOT NULL,
     content     TEXT NOT NULL,
+    shared      TINYINT NOT NULL DEFAULT 0,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

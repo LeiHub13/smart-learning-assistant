@@ -38,6 +38,7 @@ public class NoteService {
         n.setKpName(kpName == null || kpName.isBlank() ? null : kpName.trim());
         n.setTitle(title.trim());
         n.setContent(content.trim());
+        n.setShared(0);
         n.setCreatedAt(LocalDateTime.now());
         n.setUpdatedAt(LocalDateTime.now());
         noteMapper.insert(n);
@@ -58,6 +59,18 @@ public class NoteService {
     public void delete(Long userId, Long id) {
         requireOwned(id, userId);
         noteMapper.deleteById(id);
+    }
+
+    /** 共享开关：作者把笔记共享到课程频道学习空间（须已绑定课程），off 恢复私有。 */
+    public Note setShared(Long userId, Long id, boolean shared) {
+        Note n = requireOwned(id, userId);
+        if (shared && n.getCourseId() == null) {
+            throw new BizException("未绑定课程的笔记不能共享");
+        }
+        n.setShared(shared ? 1 : 0);
+        n.setUpdatedAt(LocalDateTime.now());
+        noteMapper.updateById(n);
+        return n;
     }
 
     private Note requireOwned(Long id, Long userId) {

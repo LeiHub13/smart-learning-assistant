@@ -52,6 +52,16 @@ public class NoteController {
                 body.get("kpName"), body.get("title"), body.get("content")));
     }
 
+    /** 共享开关：仅作者本人可操作；shared=true 须已绑定课程。 */
+    @PutMapping("/{id}/shared")
+    public ApiResponse<Note> setShared(HttpServletRequest request, @PathVariable Long id,
+                                       @RequestBody Map<String, Object> body) {
+        AuthUser u = CurrentUser.get(request);
+        boolean shared = Boolean.TRUE.equals(body.get("shared"))
+                || "true".equalsIgnoreCase(String.valueOf(body.get("shared")));
+        return ApiResponse.ok(noteService.setShared(u.id(), id, shared));
+    }
+
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(HttpServletRequest request, @PathVariable Long id) {
         AuthUser u = CurrentUser.get(request);
