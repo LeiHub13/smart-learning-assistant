@@ -85,6 +85,13 @@ public class AuthController {
         return ApiResponse.ok(null);
     }
 
+    @PutMapping("/me/username")
+    public ApiResponse<Void> updateUsername(HttpServletRequest request, @RequestBody Map<String, String> body) {
+        AuthUser u = CurrentUser.get(request);
+        authService.updateUsername(u.id(), body.get("username"));
+        return ApiResponse.ok(null);
+    }
+
     @PutMapping("/me/password")
     public ApiResponse<Void> changePassword(HttpServletRequest request, @RequestBody Map<String, String> body) {
         AuthUser u = CurrentUser.get(request);

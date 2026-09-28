@@ -32,6 +32,7 @@ public class AuthService {
     private final JwtTokenService jwtTokenService;
     private final EmailCodeService emailCodeService;
     private final CourseMapper courseMapper;
+    private final com.example.learningassistant.admin.service.AdminService adminService;
 
     public Map<String, String> login(String username, String password) {
         User user = userMapper.findByUsername(username)
@@ -123,6 +124,35 @@ public class AuthService {
         courseMapper.update(null, new LambdaUpdateWrapper<Course>()
                 .eq(Course::getOwnerId, userId)
                 .set(Course::getOwnerName, name));
+    }
+
+    /**
+     * 修改用户名：全局唯一（应用层查重 + t_user.uk_username 唯一索引兜底并发）。
+     * 管理员账号禁止改名：管理员身份按用户名白名单判定（AdminService.isAdmin），
+     * 改名后旧用户名空出会被他人注册从而顶替管理员身份。
+     */
+    public void updateUsername(Long userId, String newUsername) {
+        if (newUsername == null || newUsername.isBlank()) {
+            throw new BizException("用户名不能为空");
+        }
+        String name = newUsername.trim();
+        if (name.length() > 32) {
+            throw new BizException("用户名不能超过 32 个字符");
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException("用户不存在");
+        }
+        if (adminService.isAdmin(user.getUsername())) {
+            throw new BizException("管理员账号不允许修改用户名");
+        }
+        if (name.equals(user.getUsername())) {
+            return;
+        }
+        userMapper.findByUsername(name)
+                .ifPresent(u -> { throw new BizException("用户名已存在"); });
+        user.setUsername(name);
+        userMapper.updateById(user);
     }
 
     /** 修改密码：校验原密码，新密码至少 6 位。 */

@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-title">个人中心</div>
-    <div class="page-sub">头像、昵称、通知邮箱与密码管理</div>
+    <div class="page-sub">用户名、头像、昵称、通知邮箱与密码管理</div>
 
     <div v-if="msg" class="card" style="border-color:var(--primary)"><b>{{ msg }}</b></div>
     <div v-if="err" class="err">{{ err }}</div>
@@ -25,6 +25,14 @@
       <h3>基本资料</h3>
       <div class="field-row">
         <div class="field">
+          <span class="label">用户名</span>
+          <input v-model="username" type="text" maxlength="32" :disabled="isAdminAccount" placeholder="登录账号，全局唯一" />
+        </div>
+        <button class="btn small" :disabled="savingUsername || isAdminAccount" @click="saveUsername">保存用户名</button>
+      </div>
+      <div class="hint" v-if="isAdminAccount">管理员账号不允许修改用户名</div>
+      <div class="field-row">
+        <div class="field">
           <span class="label">昵称</span>
           <input v-model="nickname" type="text" maxlength="20" placeholder="展示在页面上的名字" />
         </div>
@@ -37,7 +45,6 @@
         </div>
         <button class="btn small" :disabled="savingEmail" @click="saveEmail">保存邮箱</button>
       </div>
-      <div class="hint" style="margin-top:10px">用户名：{{ me?.username }}（不可修改）</div>
     </div>
 
     <div class="card">
@@ -81,12 +88,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { api, getToken, downloadFile } from '../api'
 
 defineOptions({ name: 'ProfileView' })
 
 const me = ref(null)
+const username = ref('')
 const nickname = ref('')
 const email = ref('')
 const oldPwd = ref('')
@@ -97,6 +105,7 @@ const msg = ref('')
 const err = ref('')
 const uploading = ref(false)
 const savingNick = ref(false)
+const savingUsername = ref(false)
 const savingEmail = ref(false)
 const savingPwd = ref(false)
 const exporting = ref('')
@@ -120,8 +129,35 @@ const exportData = async (path, filename) => {
 
 const loadMe = async () => {
   me.value = await api('/api/auth/me')
+  username.value = me.value.username || ''
   nickname.value = me.value.nickname || ''
   email.value = me.value.email || ''
+}
+
+const isAdminAccount = computed(() => me.value?.username === 'admin')
+
+const saveUsername = async () => {
+  const v = username.value.trim()
+  if (!v) {
+    err.value = '用户名不能为空'
+    return
+  }
+  if (v === me.value?.username) {
+    err.value = '新用户名与当前用户名相同'
+    return
+  }
+  username.value = v
+  savingUsername.value = true
+  err.value = ''
+  try {
+    await api('/api/auth/me/username', { method: 'PUT', body: { username: v } })
+    await loadMe()
+    flash('用户名已保存，下次登录请使用新用户名')
+  } catch (e) {
+    err.value = e.message
+  } finally {
+    savingUsername.value = false
+  }
 }
 
 const flash = (t) => {
