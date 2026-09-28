@@ -1,6 +1,9 @@
 package com.example.learningassistant.user.service;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.learningassistant.common.BizException;
+import com.example.learningassistant.course.entity.Course;
+import com.example.learningassistant.course.mapper.CourseMapper;
 import com.example.learningassistant.security.AuthUser;
 import com.example.learningassistant.security.JwtTokenService;
 import com.example.learningassistant.user.entity.User;
@@ -28,6 +31,7 @@ public class AuthService {
     private final UserMapper userMapper;
     private final JwtTokenService jwtTokenService;
     private final EmailCodeService emailCodeService;
+    private final CourseMapper courseMapper;
 
     public Map<String, String> login(String username, String password) {
         User user = userMapper.findByUsername(username)
@@ -101,7 +105,10 @@ public class AuthService {
         userMapper.updateById(user);
     }
 
-    /** 更新昵称。 */
+    /**
+     * 更新昵称。课程表冗余了创建者名快照（t_course.owner_name，课程 Hub 展示用），
+     * 这里同步回填，否则改名后历史课程仍显示旧昵称。
+     */
     public void updateNickname(Long userId, String nickname) {
         if (nickname == null || nickname.isBlank()) {
             throw new BizException("昵称不能为空");
@@ -110,8 +117,12 @@ public class AuthService {
         if (user == null) {
             throw new BizException("用户不存在");
         }
-        user.setNickname(nickname.trim());
+        String name = nickname.trim();
+        user.setNickname(name);
         userMapper.updateById(user);
+        courseMapper.update(null, new LambdaUpdateWrapper<Course>()
+                .eq(Course::getOwnerId, userId)
+                .set(Course::getOwnerName, name));
     }
 
     /** 修改密码：校验原密码，新密码至少 6 位。 */
