@@ -405,7 +405,7 @@ img.avatar { object-fit: cover; padding: 0; }
 .notify-modal-card {
   width: min(460px, calc(100vw - 48px));
   max-height: 76vh; overflow: auto;
-  background: #fff; border-radius: 16px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
   box-shadow: 0 24px 64px rgba(0, 0, 0, .22);
   padding: 16px 20px 14px;
   animation: nm-pop .18s ease;
@@ -448,6 +448,7 @@ img.avatar { object-fit: cover; padding: 0; }
 .grp.active { background: var(--soft); }
 .grp.active .m-txt { color: var(--text); }
 .grp.active .m-ico { background: rgba(9,105,218,.1); opacity: 1; }
+html.dark .grp.active .m-ico { background: rgba(56,139,253,.2); }
 .sub { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .22s ease; }
 .sub.open { grid-template-rows: 1fr; }
 .sub-in { overflow: hidden; display: flex; flex-direction: column; gap: 2px; padding: 2px 6px 4px; }

@@ -289,7 +289,7 @@ onMounted(async () => {
 
 <style scoped>
 .timer { font-size: 20px; font-weight: 800; letter-spacing: .04em; }
-.timer.danger { color: #ff4d4f; }
+.timer.danger { color: var(--danger); }
 .create-box { margin-top: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
 .bank { max-height: 240px; overflow: auto; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
 .bank > div { padding: 8px 6px; border-bottom: 1px solid var(--border); cursor: pointer; }

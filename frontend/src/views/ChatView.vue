@@ -530,6 +530,7 @@ const cancelAction = async (m, a) => {
   transition: border-color .3s ease, box-shadow .3s ease;
 }
 .src-item.flash { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(9,105,218,.18); }
+html.dark .src-item.flash { box-shadow: 0 0 0 3px rgba(56,139,253,.35); }
 .src-doc { font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 3px; }
 .src-txt { font-size: 12.5px; color: var(--muted); line-height: 1.7; }
 
@@ -539,7 +540,7 @@ const cancelAction = async (m, a) => {
 }
 .fu-label { font-size: 12px; color: var(--muted); }
 .fu-chip {
-  font-size: 12.5px; color: var(--primary); background: #ddf4ff;
+  font-size: 12.5px; color: var(--primary); background: var(--accent-subtle);
   border: none; border-radius: 999px; padding: 4px 12px; cursor: pointer;
   text-align: left; line-height: 1.5; transition: background .15s ease;
 }

@@ -674,9 +674,9 @@ onUnmounted(() => {
   width: 8px; height: 8px; border-radius: 50%; flex: none;
   background: var(--border); opacity: .8;
 }
-.dot.on { background: #1a7f37; opacity: 1; }
+.dot.on { background: var(--ok-strong); opacity: 1; }
 .badge-n {
-  margin-left: auto; background: #d1242f; color: #fff;
+  margin-left: auto; background: var(--bad-strong); color: #fff;
   font-size: 10px; border-radius: 8px; padding: 0 5px; line-height: 14px;
 }
 .req-item {
