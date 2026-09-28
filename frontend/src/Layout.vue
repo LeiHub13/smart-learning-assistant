@@ -268,17 +268,23 @@ const fmtShort = (t) => {
 }
 
 const readOne = async (n) => {
-  detail.value = n
   if (!n.readFlag) {
     await markRead(n.id)
     n.readFlag = true
     unread.value = Math.max(0, unread.value - 1)
   }
+  // 带跳转路径的通知（私信/好友请求）：已读后直接路由到对话厅
+  if (n.link) {
+    bellOpen.value = false
+    await router.push(n.link)
+    return
+  }
+  detail.value = n
 }
 
 const detail = ref(null)
 
-const TYPE_LABELS = { review: '复习提醒', plan: '学习计划', system: '系统通知', exam: '考试', practice: '练习' }
+const TYPE_LABELS = { review: '复习提醒', plan: '学习计划', system: '系统通知', exam: '考试', practice: '练习', dm: '私信', friend: '好友' }
 const typeLabel = (t) => t === 'mail'
   ? (detail.value?.mailStatus === 'SENT' ? '发送成功' : '发送失败')
   : (TYPE_LABELS[t] || '通知')
