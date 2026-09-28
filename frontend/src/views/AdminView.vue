@@ -44,7 +44,7 @@
             <td>{{ u.email || '—' }}</td>
             <td>{{ u.practiceCount }}</td>
             <td>{{ u.lastStudy || '—' }}</td>
-            <td>{{ (u.createdAt || '').slice(0, 10) }}</td>
+            <td>{{ (u.createdAt || '').replace('T', ' ').slice(0, 16) }}</td>
             <td>{{ u.admin ? '管理员' : '普通用户' }}</td>
           </tr>
         </tbody>
