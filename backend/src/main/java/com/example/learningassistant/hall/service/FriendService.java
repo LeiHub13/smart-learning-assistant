@@ -58,6 +58,7 @@ public class FriendService {
             m.put("userId", fid);
             m.put("username", u.getUsername());
             m.put("nickname", display(u));
+            m.put("avatar", u.getAvatar() == null ? "" : u.getAvatar());
             m.put("online", online.contains(fid));
             m.put("unread", dmMessageMapper.selectCount(new LambdaQueryWrapper<DmMessage>()
                     .eq(DmMessage::getSenderId, fid)

@@ -101,11 +101,15 @@ public class HallController {
         ordered.sort((a, b) -> Long.compare(a.getId(), b.getId()));
 
         List<Long> userIds = ordered.stream().map(HallMessage::getUserId).distinct().toList();
-        Map<Long, String> nicknames = nicknames(userIds);
+        Map<Long, User> users = usersById(userIds);
         return ApiResponse.ok(ordered.stream()
-                .map(m -> new HallMessageView(m.getId(), m.getUserId(),
-                        nicknames.getOrDefault(m.getUserId(), "用户" + m.getUserId()),
-                        m.getCourseId(), m.getContent(), m.getCreatedAt()))
+                .map(m -> {
+                    User u = users.get(m.getUserId());
+                    return new HallMessageView(m.getId(), m.getUserId(),
+                            u == null ? "用户" + m.getUserId() : display(u),
+                            u == null ? "" : u.getAvatar() == null ? "" : u.getAvatar(),
+                            m.getCourseId(), m.getContent(), m.getCreatedAt());
+                })
                 .toList());
     }
 
@@ -120,17 +124,18 @@ public class HallController {
         return ids;
     }
 
-    private Map<Long, String> nicknames(List<Long> userIds) {
+    private Map<Long, User> usersById(List<Long> userIds) {
         return userIds.isEmpty() ? Map.of()
                 : userMapper.selectBatchIds(userIds).stream()
-                        .collect(Collectors.toMap(User::getId,
-                                u -> u.getNickname() == null || u.getNickname().isBlank()
-                                        ? u.getUsername() : u.getNickname(),
-                                (a, b) -> a));
+                        .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
     }
 
-    /** 历史消息视图：昵称在读取时补齐，落库只存 userId；courseId 为空表示公共大厅。 */
-    public record HallMessageView(Long id, Long userId, String nickname, Long courseId,
-                                  String content, LocalDateTime createdAt) {
+    private static String display(User u) {
+        return u.getNickname() == null || u.getNickname().isBlank() ? u.getUsername() : u.getNickname();
+    }
+
+    /** 历史消息视图：昵称/头像在读取时补齐，落库只存 userId；courseId 为空表示公共大厅。 */
+    public record HallMessageView(Long id, Long userId, String nickname, String avatar,
+                                  Long courseId, String content, LocalDateTime createdAt) {
     }
 }

@@ -14,6 +14,8 @@ import com.example.learningassistant.hall.mapper.FriendshipMapper;
 import com.example.learningassistant.hall.mapper.HallMessageMapper;
 import com.example.learningassistant.notify.service.NotifyService;
 import com.example.learningassistant.security.AuthUser;
+import com.example.learningassistant.user.entity.User;
+import com.example.learningassistant.user.mapper.UserMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,8 +43,8 @@ import java.util.function.Predicate;
  *            {type:"dm", toUserId, content:"..."}      仅限已同意的好友
  *            {type:"view", kind:"dm"|"channel", peerUserId?}  上报当前正在看的会话（DM 免打扰判定）
  *            {type:"ping"}
- *   服务端 -> {type:"chat", id, userId, nickname, courseId, content, sentAt}
- *            {type:"dm", id, fromUserId, fromNickname, content, sentAt}   收发双方都收（多端一致）
+ *   服务端 -> {type:"chat", id, userId, nickname, avatar, courseId, content, sentAt}
+ *            {type:"dm", id, fromUserId, fromNickname, fromAvatar, content, sentAt}  收发双方都收（多端一致）
  *            {type:"system", event:"join"|"leave", nickname, online:[{userId,nickname}], onlineCount}
  *            {type:"pong"} / {type:"error", message}
  * 课程成员集合在连接建立时缓存（选课变化重连后生效）；课程频道消息只广播给同课程在线者，
@@ -64,6 +66,7 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
     private final FriendshipMapper friendshipMapper;
     private final CourseMapper courseMapper;
     private final CourseUserMapper courseUserMapper;
+    private final UserMapper userMapper;
     private final NotifyService notifyService;
 
     /** 在线连接 -> 用户。ConcurrentHashMap keySet 天然去重并发。 */
@@ -150,6 +153,7 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
         frame.put("id", m.getId());
         frame.put("userId", user.id());
         frame.put("nickname", nickname(user));
+        frame.put("avatar", avatar(user.id()));
         frame.put("courseId", courseId);
         frame.put("content", content);
         frame.put("sentAt", m.getCreatedAt());
@@ -185,6 +189,7 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
         frame.put("id", m.getId());
         frame.put("fromUserId", user.id());
         frame.put("fromNickname", nickname(user));
+        frame.put("fromAvatar", avatar(user.id()));
         frame.put("toUserId", toUserId);
         frame.put("content", content);
         frame.put("sentAt", m.getCreatedAt());
@@ -267,6 +272,12 @@ public class HallWebSocketHandler extends TextWebSocketHandler {
     private static String nickname(AuthUser user) {
         String n = user.nickname();
         return n == null || n.isBlank() ? user.username() : n;
+    }
+
+    /** 头像 URL（/files/avatars/...），未设置时返回空串，前端回退昵称首字。 */
+    private String avatar(Long userId) {
+        User u = userMapper.selectById(userId);
+        return u == null || u.getAvatar() == null ? "" : u.getAvatar();
     }
 
     private static Long toLong(Object raw) {

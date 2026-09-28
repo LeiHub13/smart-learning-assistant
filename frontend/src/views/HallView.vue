@@ -81,7 +81,8 @@
         <div v-for="m in messages" :key="m.key">
           <div v-if="m.kind === 'system'" class="sys-line">{{ m.text }}</div>
           <div v-else-if="m.kind === 'dm'" class="m" :class="{ me: m.mine }">
-            <div class="av" :style="m.mine ? {} : { background: avatarColor(m.fromUserId) }">{{ avatarChar(m) }}</div>
+            <img v-if="dmAvatar(m)" class="av av-img" :src="dmAvatar(m)" alt="" />
+            <div v-else class="av" :style="m.mine ? {} : { background: avatarColor(m.fromUserId) }">{{ avatarChar(m) }}</div>
             <div class="bub-wrap">
               <div class="meta">
                 <span class="nick">{{ m.mine ? '我' : m.nickname }}</span>
@@ -91,7 +92,8 @@
             </div>
           </div>
           <div v-else class="m" :class="{ me: Number(m.userId) === meId }">
-            <div class="av" :style="Number(m.userId) === meId ? {} : { background: avatarColor(m.userId) }">{{ avatarChar(m) }}</div>
+            <img v-if="m.avatar" class="av av-img" :src="m.avatar" alt="" />
+            <div v-else class="av" :style="Number(m.userId) === meId ? {} : { background: avatarColor(m.userId) }">{{ avatarChar(m) }}</div>
             <div class="bub-wrap">
               <div class="meta">
                 <span class="nick">{{ Number(m.userId) === meId ? '我' : m.nickname }}</span>
@@ -133,6 +135,7 @@ const active = ref({ kind: 'channel', courseId: null, name: '公共大厅' })
 const messages = ref([])
 const input = ref('')
 const meId = ref(null)
+const myAvatar = ref('')
 const connected = ref(false)
 const reconnecting = ref(false)
 const onlineUsers = ref([])
@@ -192,7 +195,7 @@ const onServerEvent = (data) => {
     if ((data.courseId ?? null) !== (active.value.courseId ?? null)) return
     messages.value.push({
       kind: 'chat', key: 'c' + data.id, id: data.id, userId: data.userId,
-      nickname: data.nickname, content: data.content, sentAt: data.sentAt
+      nickname: data.nickname, avatar: data.avatar, content: data.content, sentAt: data.sentAt
     })
     scrollDown()
   } else if (data.type === 'dm') {
@@ -405,6 +408,13 @@ const avatarChar = (m) => {
   return Number(m.userId) === meId.value ? '我' : String(m.nickname || '?').charAt(0).toUpperCase()
 }
 
+/* 私聊气泡头像：自己取登录头像，对方取好友列表里的头像（都没有则回退首字） */
+const dmAvatar = (m) => {
+  if (m.mine) return myAvatar.value
+  const f = friends.value.find((x) => x.userId === m.fromUserId)
+  return (f && f.avatar) || ''
+}
+
 /* 其他人头像底色：按 userId 从固定色板取色，同一人颜色稳定 */
 const AVATAR_COLORS = ['#4f6ef7', '#0ea5e9', '#10b981', '#f59e0b', '#e11d48', '#8b5cf6', '#0d9488', '#d97706']
 const avatarColor = (userId) => AVATAR_COLORS[Math.abs(Number(userId) || 0) % AVATAR_COLORS.length]
@@ -428,6 +438,7 @@ onMounted(async () => {
     const me = await api('/api/auth/me')
     // /api/auth/me 的 id 是字符串、WS 广播的 userId 是数字：统一转数值再比较
     meId.value = Number(me.id)
+    myAvatar.value = me.avatar || ''
   } catch { /* 拿不到当前用户只影响「我」的气泡方向 */ }
   await loadChannels()
   await loadFriends()
@@ -438,7 +449,14 @@ onMounted(async () => {
   friendsTimer = setInterval(loadFriends, 30000)
 })
 
-onActivated(() => { loadFriends() })
+onActivated(async () => {
+  loadFriends()
+  // 可能在「我的」页换过头像
+  try {
+    const me = await api('/api/auth/me')
+    myAvatar.value = me.avatar || ''
+  } catch { /* 忽略 */ }
+})
 
 onUnmounted(() => {
   manualClose = true
@@ -533,6 +551,9 @@ onUnmounted(() => {
   text-align: center; font-size: 12px; color: var(--muted);
   margin: 6px 0 14px;
 }
+
+/* 真实头像：img 直接套用全局 .av 的尺寸圆角，只补裁剪 */
+.av-img { object-fit: cover; }
 
 @media (max-width: 1024px) {
   .hall-page { margin: -18px -16px; height: calc(100vh - 60px); }
