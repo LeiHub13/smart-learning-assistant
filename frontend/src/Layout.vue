@@ -55,6 +55,7 @@
               <div v-for="n in notifies" :key="n.id" :class="['notify-item', { unread: !n.readFlag }]" @click="readOne(n)">
                 <div class="notify-title">{{ n.title }}</div>
                 <div class="notify-content">{{ n.content }}</div>
+                <div class="notify-content muted">{{ fmtShort(n.createdAt) }}</div>
               </div>
             </template>
             <template v-else>

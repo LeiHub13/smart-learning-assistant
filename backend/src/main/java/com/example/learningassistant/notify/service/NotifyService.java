@@ -110,8 +110,10 @@ public class NotifyService {
     }
 
     public List<Notification> list(Long userId) {
+        // createdAt 精确到秒，同一秒内的通知用 id 兜底，保证稳定的新在前
         return notificationMapper.selectList(visibleWrapper(userId)
                 .orderByDesc(Notification::getCreatedAt)
+                .orderByDesc(Notification::getId)
                 .last("LIMIT 50"));
     }
 
