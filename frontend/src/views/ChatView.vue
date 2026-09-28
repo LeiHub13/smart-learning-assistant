@@ -71,11 +71,15 @@
               <template v-if="m.sourceChunks">
                 <span>引用来源：</span>
                 <a v-for="(cid, si) in m.sourceChunks.split(',')" :key="si"
-                   class="src-chip" @click="jumpSource(m, si + 1)">[{{ si + 1 }}]</a>
+                   class="src-chip" @click="jumpSource(m, si + 1, $event)">[{{ si + 1 }}]</a>
               </template>
               <template v-else>引用来源：知识库片段 {{ m.sources.split(',').join('、') }}</template>
             </div>
             <div v-if="m.showSources && m.sourceChunks" class="src-panel">
+              <div class="src-panel-head">
+                <span>引用原文</span>
+                <button class="src-close" @click="closeSources(m)">收起</button>
+              </div>
               <div v-for="(d, di) in m.sourceDetails || []" :key="di" class="src-item"
                    :class="{ flash: m.flashSrc === di + 1 }">
                 <div class="src-doc">[{{ di + 1 }}] 《{{ d.docName }}》</div>
@@ -428,8 +432,15 @@ const genFlashcards = async () => {
   }
 }
 
-/* ===== 引用跳转：点 [n] 展开来源原文面板并高亮定位（chunk 原文懒加载，按消息缓存） ===== */
-const jumpSource = async (m, n) => {
+/* ===== 引用跳转：点 [n] 展开来源原文面板并高亮定位（chunk 原文懒加载，按消息缓存）；
+   面板可经「收起」按钮或再次点击当前编号关闭 ===== */
+const jumpSource = async (m, n, ev) => {
+  // 当前正开着的同一编号再点一次 = 收起
+  if (m.showSources && m.openSrc === n) {
+    closeSources(m)
+    return
+  }
+  m.openSrc = n
   m.showSources = true
   m.flashSrc = n
   if (!m.sourceDetails) {
@@ -437,16 +448,23 @@ const jumpSource = async (m, n) => {
       m.sourceDetails = await api('/api/kb/chunks?ids=' + m.sourceChunks)
     } catch (e) {
       showHint('引用原文加载失败：' + e.message)
-      m.showSources = false
+      closeSources(m)
       return
     }
   }
   nextTick(() => {
-    const panel = document.querySelector('.src-panel')
-    const item = panel && panel.children[n - 1]
+    // 从点击处向上找所在气泡，避免多条消息同时展开面板时定位到别家
+    const bub = ev && ev.target ? ev.target.closest('.bub') : null
+    const item = bub && bub.querySelectorAll('.src-item')[n - 1]
     if (item) item.scrollIntoView({ behavior: 'smooth', block: 'center' })
   })
   setTimeout(() => { if (m.flashSrc === n) m.flashSrc = 0 }, 1800)
+}
+
+const closeSources = (m) => {
+  m.showSources = false
+  m.openSrc = 0
+  m.flashSrc = 0
 }
 
 const confirmAction = async (m, a) => {
@@ -497,6 +515,16 @@ const cancelAction = async (m, a) => {
 }
 .src-chip:hover { background: var(--bg); }
 .src-panel { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.src-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12px; color: var(--muted); padding: 0 2px;
+}
+.src-close {
+  border: 1px solid var(--border); background: var(--bg); color: var(--muted);
+  font-size: 12px; border-radius: 999px; padding: 2px 10px; cursor: pointer;
+  transition: color .15s ease, border-color .15s ease;
+}
+.src-close:hover { color: var(--primary); border-color: var(--primary); }
 .src-item {
   background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
   transition: border-color .3s ease, box-shadow .3s ease;
