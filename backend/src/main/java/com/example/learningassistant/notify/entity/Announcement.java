@@ -23,5 +23,7 @@ public class Announcement {
     private String adminName;
     private String title;
     private String content;
+    /** 发布时是否同步外发邮件：1=已发邮件（撤回收不回）0=仅站内（撤回零残留） */
+    private Integer emailSent;
     private LocalDateTime createdAt;
 }

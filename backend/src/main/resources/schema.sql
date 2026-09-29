@@ -254,6 +254,7 @@ CREATE TABLE IF NOT EXISTS t_announcement (
     admin_name  VARCHAR(50),
     title       VARCHAR(100) NOT NULL,
     content     TEXT NOT NULL,
+    email_sent  TINYINT NOT NULL DEFAULT 0,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

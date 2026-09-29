@@ -30,10 +30,13 @@ public class AnnouncementController {
     private final AdminService adminService;
 
     @PostMapping
-    public ApiResponse<Announcement> publish(HttpServletRequest request, @RequestBody Map<String, String> body) {
+    public ApiResponse<Announcement> publish(HttpServletRequest request, @RequestBody Map<String, Object> body) {
         AuthUser me = requireAdmin(request);
+        // 邮件开关缺省 true 保持既有行为；不发邮件的公告撤回零残留
+        boolean email = !Boolean.FALSE.equals(body.get("notifyEmail"))
+                && !"false".equalsIgnoreCase(String.valueOf(body.get("notifyEmail")));
         return ApiResponse.ok(announcementService.publish(me.id(), display(me),
-                body.get("title"), body.get("content")));
+                (String) body.get("title"), (String) body.get("content"), email));
     }
 
     @GetMapping

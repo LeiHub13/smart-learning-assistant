@@ -32,17 +32,17 @@ public class NotifyService {
      * 发送站内通知；已启用邮件渠道且用户绑定了邮箱时同步外发邮件。
      */
     public void send(Long userId, String type, String title, String content) {
-        send(userId, type, title, content, null, null, null);
+        send(userId, type, title, content, null, null, null, true);
     }
 
     /** 带跳转路径的通知：link 存前端路由（如 /hall?peer=3），点击通知时直接跳转。 */
     public void send(Long userId, String type, String title, String content, String link) {
-        send(userId, type, title, content, null, link, null);
+        send(userId, type, title, content, null, link, null, true);
     }
 
-    /** 公告通知：记录来源公告 id，供撤回时按它清理已扇出的通知。 */
-    public void send(Long userId, String type, String title, String content, Long announcementId) {
-        send(userId, type, title, content, null, null, announcementId);
+    /** 公告通知：记录来源公告 id，供撤回时按它清理已扇出的通知。email=false 时不外发邮件（公告可选邮件开关）。 */
+    public void send(Long userId, String type, String title, String content, Long announcementId, boolean email) {
+        send(userId, type, title, content, null, null, announcementId, email);
     }
 
     /**
@@ -50,11 +50,11 @@ public class NotifyService {
      * 到点由 {@link #deliverDue()} 置空并投递（此刻才出现在列表里）。
      */
     public void send(Long userId, String type, String title, String content, LocalDateTime scheduledAt) {
-        send(userId, type, title, content, scheduledAt, null, null);
+        send(userId, type, title, content, scheduledAt, null, null, true);
     }
 
     private void send(Long userId, String type, String title, String content,
-                      LocalDateTime scheduledAt, String link, Long announcementId) {
+                      LocalDateTime scheduledAt, String link, Long announcementId, boolean email) {
         boolean pending = scheduledAt != null && scheduledAt.isAfter(LocalDateTime.now());
         Notification n = new Notification();
         n.setUserId(userId);
@@ -69,6 +69,9 @@ public class NotifyService {
         notificationMapper.insert(n);
 
         if (pending) {
+            return;
+        }
+        if (!email) {
             return;
         }
         mailIfAvailable(userId, title, content);

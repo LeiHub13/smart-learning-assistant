@@ -21,6 +21,11 @@
       <div class="ann-form">
         <input v-model="aTitle" type="text" maxlength="100" placeholder="公告标题（≤100 字）" @keyup.enter="publish" />
         <textarea v-model="aContent" rows="4" maxlength="5000" placeholder="公告内容，发布后将推送到全部用户的铃铛通知…"></textarea>
+        <label class="ann-email">
+          <input v-model="aEmail" type="checkbox" />
+          <span>同时发送邮件通知</span>
+          <span class="muted small">勾选后公告会同步发邮件给绑定邮箱的用户；邮件无法随撤回收回，不勾则仅进铃铛、撤回零残留</span>
+        </label>
         <div class="row" style="justify-content:flex-end;gap:8px">
           <span v-if="aMsg" class="muted small">{{ aMsg }}</span>
           <button class="btn" :disabled="aPublishing || !aTitle.trim() || !aContent.trim()" @click="publish">
@@ -34,6 +39,7 @@
           <div class="ann-head">
             <b>{{ a.title }}</b>
             <span class="row" style="gap:8px">
+              <span v-if="a.emailSent" class="tag">已发邮件</span>
               <span class="muted small">{{ (a.createdAt || '').replace('T', ' ').slice(0, 16) }} · {{ a.adminName || '管理员' }}</span>
               <button class="btn danger small" :disabled="aRecalling === a.id" @click="recall(a)">撤回</button>
             </span>
@@ -212,6 +218,7 @@ onMounted(async () => {
 /* ===== 公告发布 ===== */
 const aTitle = ref('')
 const aContent = ref('')
+const aEmail = ref(true)
 const aPublishing = ref(false)
 const aMsg = ref('')
 const aList = ref([])
@@ -226,8 +233,11 @@ const publish = async () => {
   aPublishing.value = true
   aMsg.value = ''
   try {
-    await api('/api/announcements', { method: 'POST', body: { title: aTitle.value, content: aContent.value } })
-    aMsg.value = '已发布并推送给全部用户'
+    await api('/api/announcements', {
+      method: 'POST',
+      body: { title: aTitle.value, content: aContent.value, notifyEmail: aEmail.value }
+    })
+    aMsg.value = aEmail.value ? '已发布并推送给全部用户（含邮件）' : '已发布，仅站内通知（撤回零残留）'
     aTitle.value = ''
     aContent.value = ''
     await loadAnnouncements()
@@ -293,6 +303,8 @@ onBeforeUnmount(() => {
 .u-av { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: none; display: inline-flex; align-items: center; justify-content: center; background: var(--accent-subtle); color: var(--primary); font-size: 12px; font-weight: 600; }
 .ann-form { display: flex; flex-direction: column; gap: 8px; }
 .ann-form input, .ann-form textarea { width: 100%; font: inherit; padding: 8px 10px; resize: vertical; }
+.ann-email { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+.ann-email input { width: auto; }
 .ann-history { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
 .ann-item { padding: 8px 0; border-bottom: 1px dashed var(--border); }
 .ann-item:last-child { border-bottom: none; }

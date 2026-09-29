@@ -31,8 +31,8 @@ public class AnnouncementService {
     private final UserMapper userMapper;
     private final NotifyService notifyService;
 
-    /** 发布公告：落存档 + 全员扇出站内通知（跳过发布者本人）。 */
-    public Announcement publish(Long adminId, String adminName, String title, String content) {
+    /** 发布公告：落存档 + 向除发布者外的全部用户扇出站内通知；email=true 时同步外发邮件。 */
+    public Announcement publish(Long adminId, String adminName, String title, String content, boolean email) {
         if (title == null || title.isBlank()) {
             throw new BizException("公告标题不能为空");
         }
@@ -52,6 +52,7 @@ public class AnnouncementService {
         a.setAdminName(adminName);
         a.setTitle(title.trim());
         a.setContent(content.trim());
+        a.setEmailSent(email ? 1 : 0);
         a.setCreatedAt(LocalDateTime.now());
         announcementMapper.insert(a);
 
@@ -61,10 +62,10 @@ public class AnnouncementService {
             if (u.getId().equals(adminId)) {
                 continue;
             }
-            notifyService.send(u.getId(), NOTIFY_TYPE, "公告：" + title.trim(), content.trim(), a.getId());
+            notifyService.send(u.getId(), NOTIFY_TYPE, "公告：" + title.trim(), content.trim(), a.getId(), email);
             sent++;
         }
-        log.info("公告已发布 adminId={} 触达 {} 位用户: {}", adminId, sent, a.getTitle());
+        log.info("公告已发布 adminId={} email={} 触达 {} 位用户: {}", adminId, email, sent, a.getTitle());
         return a;
     }
 
