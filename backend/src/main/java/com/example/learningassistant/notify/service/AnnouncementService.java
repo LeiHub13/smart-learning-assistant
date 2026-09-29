@@ -3,7 +3,9 @@ package com.example.learningassistant.notify.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.learningassistant.common.BizException;
 import com.example.learningassistant.notify.entity.Announcement;
+import com.example.learningassistant.notify.entity.Notification;
 import com.example.learningassistant.notify.mapper.AnnouncementMapper;
+import com.example.learningassistant.notify.mapper.NotificationMapper;
 import com.example.learningassistant.user.entity.User;
 import com.example.learningassistant.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ public class AnnouncementService {
     public static final String NOTIFY_TYPE = "announcement";
 
     private final AnnouncementMapper announcementMapper;
+    private final NotificationMapper notificationMapper;
     private final UserMapper userMapper;
     private final NotifyService notifyService;
 
@@ -58,11 +61,37 @@ public class AnnouncementService {
             if (u.getId().equals(adminId)) {
                 continue;
             }
-            notifyService.send(u.getId(), NOTIFY_TYPE, "公告：" + title.trim(), content.trim());
+            notifyService.send(u.getId(), NOTIFY_TYPE, "公告：" + title.trim(), content.trim(), a.getId());
             sent++;
         }
         log.info("公告已发布 adminId={} 触达 {} 位用户: {}", adminId, sent, a.getTitle());
         return a;
+    }
+
+    /**
+     * 撤回公告：删除发布存档，并按 announcement_id 清理已扇出到各用户铃铛的通知。
+     *
+     * @return 清理掉的通知条数（前端提示用）
+     */
+    public int recall(Long id) {
+        Announcement a = announcementMapper.selectById(id);
+        if (a == null) {
+            throw new BizException("公告不存在或已撤回");
+        }
+        int cleaned = notificationCleanup(id);
+        announcementMapper.deleteById(id);
+        log.info("公告已撤回 id={} 清理 {} 条通知: {}", id, cleaned, a.getTitle());
+        return cleaned;
+    }
+
+    private int notificationCleanup(Long announcementId) {
+        List<Notification> stale = notificationMapper.selectList(new LambdaQueryWrapper<Notification>()
+                .eq(Notification::getType, NOTIFY_TYPE)
+                .eq(Notification::getAnnouncementId, announcementId));
+        for (Notification n : stale) {
+            notificationMapper.deleteById(n.getId());
+        }
+        return stale.size();
     }
 
     /** 发布历史（管理页展示），最新在前。 */

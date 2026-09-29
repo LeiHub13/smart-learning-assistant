@@ -44,6 +44,7 @@ public class SchemaMigrator implements CommandLineRunner {
             new ColumnSpec("t_hall_message", "role", "TINYINT NOT NULL DEFAULT 0 AFTER course_id"),
             new ColumnSpec("t_hall_message", "sources", "VARCHAR(500) NULL AFTER role"),
             new ColumnSpec("t_notification", "link", "VARCHAR(200) NULL AFTER content"),
+            new ColumnSpec("t_notification", "announcement_id", "BIGINT NULL AFTER link"),
             new ColumnSpec("t_note", "shared", "TINYINT NOT NULL DEFAULT 0 AFTER content"));
 
     @Override

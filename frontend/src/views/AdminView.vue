@@ -33,7 +33,10 @@
         <div v-for="a in aList" :key="a.id" class="ann-item">
           <div class="ann-head">
             <b>{{ a.title }}</b>
-            <span class="muted small">{{ (a.createdAt || '').replace('T', ' ').slice(0, 16) }} · {{ a.adminName || '管理员' }}</span>
+            <span class="row" style="gap:8px">
+              <span class="muted small">{{ (a.createdAt || '').replace('T', ' ').slice(0, 16) }} · {{ a.adminName || '管理员' }}</span>
+              <button class="btn danger small" :disabled="aRecalling === a.id" @click="recall(a)">撤回</button>
+            </span>
           </div>
           <div class="ann-body">{{ a.content }}</div>
         </div>
@@ -232,6 +235,23 @@ const publish = async () => {
     aMsg.value = e.message
   } finally {
     aPublishing.value = false
+  }
+}
+
+/* 撤回：删除公告存档，同时清理已扇出到各用户铃铛的通知 */
+const aRecalling = ref(null)
+const recall = async (a) => {
+  if (!confirm('撤回公告「' + a.title + '」？所有用户铃铛里的这条公告也会一并消失。')) return
+  aRecalling.value = a.id
+  aMsg.value = ''
+  try {
+    const r = await api('/api/announcements/' + a.id, { method: 'DELETE' })
+    aMsg.value = '已撤回，清理了 ' + (r.recalled || 0) + ' 条用户通知'
+    await loadAnnouncements()
+  } catch (e) {
+    aMsg.value = e.message
+  } finally {
+    aRecalling.value = null
   }
 }
 

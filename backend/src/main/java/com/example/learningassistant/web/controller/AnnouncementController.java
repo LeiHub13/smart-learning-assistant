@@ -42,6 +42,13 @@ public class AnnouncementController {
         return ApiResponse.ok(announcementService.history());
     }
 
+    /** 撤回：删除存档并清理已扇出到各用户铃铛的通知，返回清理条数。 */
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
+    public ApiResponse<Map<String, Integer>> recall(HttpServletRequest request, @org.springframework.web.bind.annotation.PathVariable Long id) {
+        requireAdmin(request);
+        return ApiResponse.ok(Map.of("recalled", announcementService.recall(id)));
+    }
+
     private AuthUser requireAdmin(HttpServletRequest request) {
         AuthUser me = CurrentUser.get(request);
         if (!adminService.isAdmin(me.username())) {
