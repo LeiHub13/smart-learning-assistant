@@ -36,14 +36,15 @@ public class GenerateController {
     private final GeneratorService generatorService;
 
     @PostMapping("/lecture/stream")
-    public SseEmitter lectureStream(HttpServletRequest request, @RequestBody Map<String, String> body) {
+    public SseEmitter lectureStream(HttpServletRequest request, @RequestBody Map<String, Object> body) {
         AuthUser u = CurrentUser.get(request);
-        Long courseId = body.get("courseId") == null ? null : Long.valueOf(body.get("courseId"));
-        String topic = body.get("topic");
-        String kp = body.get("kp");
+        Long courseId = parseLong(body.get("courseId"));
+        String topic = (String) body.get("topic");
+        String kp = (String) body.get("kp");
+        List<Long> kbIds = parseKbIds(body.get("kbIds"));
         SseEmitter emitter = new SseEmitter(300_000L);
         AtomicBoolean clientGone = new AtomicBoolean(false);
-        generatorService.streamLecture(u.id(), courseId, topic, kp,
+        generatorService.streamLecture(u.id(), courseId, topic, kp, kbIds,
                 delta -> safeSend(emitter, clientGone, Map.of("delta", delta)),
                 g -> {
                     safeSend(emitter, clientGone, Map.of("saved", g.getId()));
@@ -58,6 +59,23 @@ public class GenerateController {
                     }
                 });
         return emitter;
+    }
+
+    private Long parseLong(Object raw) {
+        try {
+            return raw == null ? null : Long.valueOf(String.valueOf(raw));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** kbIds 可缺省：null/空 = 不使用知识库（生成退回纯模型知识）。 */
+    @SuppressWarnings("unchecked")
+    private List<Long> parseKbIds(Object raw) {
+        if (!(raw instanceof List<?> list) || list.isEmpty()) {
+            return List.of();
+        }
+        return list.stream().map(x -> Long.valueOf(String.valueOf(x))).toList();
     }
 
     /**
@@ -88,18 +106,20 @@ public class GenerateController {
     }
 
     @PostMapping("/lecture")
-    public ApiResponse<GeneratedContent> lecture(HttpServletRequest request, @RequestBody Map<String, String> body) {
+    public ApiResponse<GeneratedContent> lecture(HttpServletRequest request, @RequestBody Map<String, Object> body) {
         AuthUser u = CurrentUser.get(request);
-        Long courseId = body.get("courseId") == null ? null : Long.valueOf(body.get("courseId"));
-        return ApiResponse.ok(generatorService.generateLecture(u.id(), courseId, body.get("topic"), body.get("kp")));
+        Long courseId = parseLong(body.get("courseId"));
+        return ApiResponse.ok(generatorService.generateLecture(u.id(), courseId,
+                (String) body.get("topic"), (String) body.get("kp"), parseKbIds(body.get("kbIds"))));
     }
 
     @PostMapping("/questions")
-    public ApiResponse<List<Question>> questions(HttpServletRequest request, @RequestBody Map<String, String> body) {
+    public ApiResponse<List<Question>> questions(HttpServletRequest request, @RequestBody Map<String, Object> body) {
         AuthUser u = CurrentUser.get(request);
-        Long courseId = body.get("courseId") == null ? null : Long.valueOf(body.get("courseId"));
-        int count = body.get("count") == null ? 5 : Integer.parseInt(body.get("count"));
-        return ApiResponse.ok(generatorService.generateQuestions(u.id(), courseId, body.get("kp"), count));
+        Long courseId = parseLong(body.get("courseId"));
+        int count = body.get("count") == null ? 5 : Integer.parseInt(String.valueOf(body.get("count")));
+        return ApiResponse.ok(generatorService.generateQuestions(u.id(), courseId,
+                (String) body.get("kp"), count, parseKbIds(body.get("kbIds"))));
     }
 
     @GetMapping("/history")

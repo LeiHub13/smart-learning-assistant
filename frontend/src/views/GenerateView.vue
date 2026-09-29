@@ -10,8 +10,16 @@
       <div class="row" style="margin-bottom:12px">
         <div>
           <span class="label">课程</span>
-          <select v-model="courseId">
+          <select v-model="courseId" @change="loadKbs">
             <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+        </div>
+        <div>
+          <span class="label">知识库（可选）</span>
+          <select v-model="kbChoice">
+            <option value="">不使用知识库</option>
+            <option v-if="kbs.length > 1" value="all">全部知识库（{{ kbs.length }} 个）</option>
+            <option v-for="k in kbs" :key="k.id" :value="String(k.id)">{{ k.name }}</option>
           </select>
         </div>
         <div>
@@ -24,10 +32,19 @@
           <span class="label">讲义主题</span>
           <input v-model="topic" type="text" placeholder="如：Java 集合框架" />
         </div>
+        <div>
+          <span class="label">生成题目数</span>
+          <select v-model.number="qCount">
+            <option v-for="n in 10" :key="n" :value="n">{{ n }} 道</option>
+          </select>
+        </div>
         <div class="btns">
           <button class="btn" :disabled="busy" @click="genLecture">生成讲义</button>
           <button class="btn ghost" :disabled="busy" @click="genQuestions">生成练习题</button>
         </div>
+      </div>
+      <div v-if="kbChoice" class="muted small" style="margin-top:10px">
+        将参考「{{ kbLabel }}」内与{{ activeKbHint }}相关的课程资料生成；不填{{ kbChoice && !topic ? '主题' : '知识点' }}时资料参考有限
       </div>
     </div>
 
@@ -63,7 +80,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { api, getCourses, streamLecture, downloadFile } from '../api'
 import { parseOptions, mdToHtml } from '../utils'
 
@@ -71,8 +88,11 @@ defineOptions({ name: 'GenerateView' })
 
 const courses = ref([])
 const courseId = ref(null)
+const kbs = ref([])
+const kbChoice = ref('')
 const kp = ref('')
 const topic = ref('')
+const qCount = ref(5)
 const busy = ref(false)
 const lecture = ref('')
 const lectureId = ref(null)
@@ -82,9 +102,33 @@ const kbSaving = ref(false)
 const questions = ref([])
 const error = ref('')
 
+/* 课程 -> 知识库列表联动；换课程重置选择 */
+const loadKbs = async () => {
+  kbChoice.value = ''
+  kbs.value = []
+  if (!courseId.value) return
+  try {
+    kbs.value = await api(`/api/courses/${courseId.value}/kb`) || []
+  } catch { /* 知识库列表拉取失败不阻塞生成 */ }
+}
+watch(courseId, loadKbs)
+
+/* kbChoice -> 提交用的 kbIds：''=不使用，'all'=全部，否则单库 */
+const kbIds = computed(() => {
+  if (!kbChoice.value || !kbs.value.length) return []
+  if (kbChoice.value === 'all') return kbs.value.map((k) => k.id)
+  const id = Number(kbChoice.value)
+  return kbs.value.some((k) => k.id === id) ? [id] : []
+})
+const kbLabel = computed(() => (kbChoice.value === 'all' ? '全部知识库' : (kbs.value.find((k) => String(k.id) === kbChoice.value)?.name || '')))
+const activeKbHint = computed(() => (kp.value.trim() ? `「${kp.value.trim()}」` : '关键词'))
+
 onMounted(async () => {
   courses.value = await getCourses()
-  if (courses.value.length) courseId.value = courses.value[0].id
+  if (courses.value.length) {
+    courseId.value = courses.value[0].id
+    await loadKbs()
+  }
 })
 
 const genLecture = async () => {
@@ -101,7 +145,7 @@ const genLecture = async () => {
   kbName.value = ''
   try {
     await streamLecture(
-      { courseId: courseId.value, topic: topic.value.trim(), kp: kp.value.trim() },
+      { courseId: courseId.value, topic: topic.value.trim(), kp: kp.value.trim(), kbIds: kbIds.value },
       (delta) => { lecture.value += delta },
       (savedId) => { lectureId.value = savedId || null }
     )
@@ -149,7 +193,7 @@ const genQuestions = async () => {
   try {
     questions.value = await api('/api/generate/questions', {
       method: 'POST',
-      body: { courseId: courseId.value, kp: kp.value.trim(), count: 5 }
+      body: { courseId: courseId.value, kp: kp.value.trim(), count: qCount.value, kbIds: kbIds.value }
     })
   } catch (e) {
     error.value = e.message

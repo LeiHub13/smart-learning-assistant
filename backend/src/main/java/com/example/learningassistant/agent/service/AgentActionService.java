@@ -681,8 +681,9 @@ public class AgentActionService {
     private void executeGenerateQuestions(AgentAction a, Map<String, Object> payload) {
         int count = payload.get("count") instanceof Number n ? n.intValue() : 5;
         // LLM 出题耗时较长（确认后前端会转圈等待）；事务边界由 GeneratorService 自己保证
+        // Agent 出题不接知识库选择（kbIds 空 = 纯模型知识 + 掌握度自适应难度）
         List<Question> questions = generatorService.generateQuestions(a.getUserId(), a.getCourseId(),
-                payload.get("kp") == null ? null : String.valueOf(payload.get("kp")), count);
+                payload.get("kp") == null ? null : String.valueOf(payload.get("kp")), count, List.of());
         payload.put("questionIds", questions.stream().map(Question::getId).toList());
         payload.put("generated", questions.size());
         // 出完题直接引导进练习页（auto=1 让练习页自动抽题开练）

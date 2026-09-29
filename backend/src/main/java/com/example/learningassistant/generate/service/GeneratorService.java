@@ -35,7 +35,45 @@ public class GeneratorService {
     private final ObjectMapper objectMapper;
     private final com.example.learningassistant.course.mapper.CourseMapper courseMapper;
     private final com.example.learningassistant.kb.service.KbService kbService;
+    private final com.example.learningassistant.ai.PythonRagClient pythonRagClient;
     private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+
+    /** 生成时从知识库检索的资料条数与单段截断长度（控制提示词体积）。 */
+    private static final int MATERIAL_TOP_K = 6;
+    private static final int MATERIAL_SNIPPET_LEN = 500;
+
+    /**
+     * 按关键词在指定知识库集合内检索资料（供讲义/出题做依据）。
+     * 检索失败自动降级为无资料继续生成，不阻塞主流程。
+     */
+    private List<String> retrieveMaterials(String query, List<Long> kbIds) {
+        if (kbIds == null || kbIds.isEmpty() || query == null || query.isBlank()) {
+            return List.of();
+        }
+        try {
+            return pythonRagClient.retrieveIn(query.trim(), kbIds, MATERIAL_TOP_K).stream()
+                    .map(com.example.learningassistant.ai.PythonRagClient.Hit::content)
+                    .toList();
+        } catch (Exception e) {
+            log.warn("生成前检索知识库失败，降级为无资料生成: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** 把检索到的资料编号拼进 user 提示词，引导模型基于课程资料生成。 */
+    private String materialsBlock(List<String> materials) {
+        if (materials.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("\n\n【课程资料（生成内容必须与资料一致，引用资料时标注编号[n]）】\n");
+        for (int i = 0; i < materials.size(); i++) {
+            String m = materials.get(i);
+            sb.append("[").append(i + 1).append("] ")
+                    .append(m.length() > MATERIAL_SNIPPET_LEN ? m.substring(0, MATERIAL_SNIPPET_LEN) + "…" : m)
+                    .append("\n");
+        }
+        return sb.toString();
+    }
 
     /**
      * 讲义存入课程知识库：无知识库时自动创建，走文本索引链路（分块 + 向量化）。
@@ -70,13 +108,15 @@ public class GeneratorService {
     }
 
     /**
-     * 生成讲义（Markdown）并入库。
+     * 生成讲义（Markdown）并入库。kbIds 非空时先在指定知识库检索资料，讲义基于资料生成。
      */
-    public GeneratedContent generateLecture(Long userId, Long courseId, String topic, String kp) {
+    public GeneratedContent generateLecture(Long userId, Long courseId, String topic, String kp, List<Long> kbIds) {
+        List<String> materials = retrieveMaterials(topic, kbIds);
         ChatModel model = modelFactory.get();
         String md = model.complete(List.of(
                 new AIChatMessage("system", "GEN_LECTURE\n你是课程教师助手，请为课程生成一份结构清晰的 Markdown 讲义。"),
-                new AIChatMessage("user", "主题:" + topic + "\n知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp) + "\n请生成讲义。")));
+                new AIChatMessage("user", "主题:" + topic + "\n知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
+                        + "\n请生成讲义。" + materialsBlock(materials))));
 
         GeneratedContent g = new GeneratedContent();
         g.setUserId(userId);
@@ -95,14 +135,17 @@ public class GeneratorService {
      * LLM 调用在事务外（耗时且不该持有连接），写库部分整体一个事务：
      * 中途失败不能留下半批题目——否则重试会叠加重复题，练习记录也指向不存在的题目。
      */
-    public List<Question> generateQuestions(Long userId, Long courseId, String kp, int count) {
+    public List<Question> generateQuestions(Long userId, Long courseId, String kp, int count, List<Long> kbIds) {
         String difficulty = determineDifficulty(userId, courseId, kp);
+        // 选了知识库且填了知识点时，先检索该知识点的课程资料，题目基于资料出（kp 为空无法定向检索）
+        List<String> materials = retrieveMaterials(kp, kbIds);
         ChatModel model = modelFactory.get();
         String raw = model.complete(List.of(
                 new AIChatMessage("system",
                         "GEN_QUESTIONS\n你是出题老师，只输出 JSON 数组，字段: type(单选/多选/判断/问答), stem, options(数组[{k,v}]), answer, analysis, kpName, difficulty。难度要求：" + difficulty),
                 new AIChatMessage("user", "知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
-                        + "\n数量:" + count + "\n难度:" + difficulty + "\n请生成练习题。")));
+                        + "\n数量:" + count + "\n难度:" + difficulty
+                        + "\n请生成练习题。" + materialsBlock(materials))));
         List<Map<String, Object>> parsed = parseQuestionArray(raw);
         return persistQuestions(userId, courseId, kp, difficulty, raw, parsed, "AI 生成练习（" + parsed.size() + " 题）");
     }
@@ -254,15 +297,17 @@ public class GeneratorService {
     }
 
     /**
-     * 流式生成讲义：逐字返回并保存。
+     * 流式生成讲义：逐字返回并保存。kbIds 非空时先检索知识库资料作为生成依据。
      */
-    public void streamLecture(Long userId, Long courseId, String topic, String kp,
+    public void streamLecture(Long userId, Long courseId, String topic, String kp, List<Long> kbIds,
                               java.util.function.Consumer<String> onDelta, java.util.function.Consumer<GeneratedContent> onDone, java.util.function.Consumer<Throwable> onError) {
+        List<String> materials = retrieveMaterials(topic, kbIds);
         ChatModel model = modelFactory.get();
         StringBuilder acc = new StringBuilder();
         model.stream(List.of(
                         new AIChatMessage("system", "GEN_LECTURE\n你是课程教师助手，请为课程生成一份结构清晰的 Markdown 讲义。"),
-                        new AIChatMessage("user", "主题:" + topic + "\n知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp) + "\n请生成讲义。")),
+                        new AIChatMessage("user", "主题:" + topic + "\n知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
+                                + "\n请生成讲义。" + materialsBlock(materials))),
                 delta -> {
                     acc.append(delta);
                     onDelta.accept(delta);
