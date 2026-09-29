@@ -16,19 +16,50 @@
           </div>
           <div>
             <span class="label">题目数量</span>
-            <input v-model="count" type="number" min="1" max="10" />
+            <select v-model.number="count">
+              <option v-for="n in [5, 10, 15, 20, 30]" :key="n" :value="n">{{ n }} 题</option>
+            </select>
           </div>
           <div class="btns">
             <button class="btn" :disabled="loading" @click="start()">开始练习</button>
           </div>
         </div>
         <div style="margin-top:14px">
+          <div class="row" style="justify-content:space-between">
+            <span class="label">从课程题库选题练习（一次最多 20 题）</span>
+            <button class="btn ghost small" @click="toggleBrowse">{{ browseOpen ? '收起' : '展开选题' }}</button>
+          </div>
+          <template v-if="browseOpen">
+            <div class="row" style="margin:6px 0">
+              <button class="btn ghost small" @click="loadCourseQuestions">加载 / 刷新题目</button>
+              <span class="muted small">已选 {{ selIds.length }} / 20</span>
+              <button class="btn ghost small" :disabled="!bankQuestions.length" @click="selAll">全选</button>
+              <button class="btn small" :disabled="!selIds.length || loading" @click="startByIds">练习选中的 {{ selIds.length }} 题</button>
+            </div>
+            <table v-if="bankQuestions.length">
+              <thead><tr><th style="width:30px"></th><th>题目</th><th>类型</th><th>知识点</th><th>难度</th></tr></thead>
+              <tbody>
+                <tr v-for="q in bankQuestions" :key="q.id">
+                  <td><input type="checkbox" :checked="selIds.includes(q.id)" @change="toggleSel(q.id)" /></td>
+                  <td class="stem">{{ q.stem }}</td>
+                  <td>{{ q.type }}</td>
+                  <td>{{ q.kpName || '—' }}</td>
+                  <td>{{ q.difficulty || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else class="empty">点「加载 / 刷新题目」查看本课程全部题目</div>
+          </template>
+        </div>
+
+        <div style="margin-top:14px">
           <span class="label">最近练习</span>
           <table v-if="history.length">
-            <thead><tr><th>时间</th><th>得分</th><th></th></tr></thead>
+            <thead><tr><th>时间</th><th>课程</th><th>得分</th><th></th></tr></thead>
             <tbody>
               <tr v-for="p in history" :key="p.id">
                 <td>{{ fmtTime(p.createdAt) }}</td>
+                <td>{{ p.courseName || '—' }}</td>
                 <td><b>{{ p.score }}</b> / {{ p.totalScore }}</td>
                 <td><a class="link" @click="viewReport(p.id)">查看报告</a></td>
               </tr>
@@ -350,11 +381,64 @@ const again = () => {
   mistake.value = false
   refreshTrend()
 }
+
+/* ===== 从课程题库选题练习 ===== */
+const browseOpen = ref(false)
+const bankQuestions = ref([])
+const selIds = ref([])
+
+const toggleBrowse = () => {
+  browseOpen.value = !browseOpen.value
+  if (browseOpen.value && !bankQuestions.length) loadCourseQuestions()
+}
+
+const loadCourseQuestions = async () => {
+  error.value = ''
+  try {
+    bankQuestions.value = await api('/api/practice/course-questions?courseId=' + courseId.value) || []
+    selIds.value = []
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+const toggleSel = (id) => {
+  const i = selIds.value.indexOf(id)
+  if (i >= 0) selIds.value.splice(i, 1)
+  else if (selIds.value.length < 20) selIds.value.push(id)
+}
+
+const selAll = () => {
+  selIds.value = bankQuestions.value.slice(0, 20).map((q) => q.id)
+}
+
+/* 按所选题目 id 组卷：保持所选顺序，忽略抽题规则 */
+const startByIds = async () => {
+  loading.value = true
+  error.value = ''
+  answers.value = {}
+  try {
+    paper.value = await api('/api/practice/paper?courseId=' + courseId.value
+      + '&ids=' + encodeURIComponent(selIds.value.join(',')))
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    loading.value = false
+  }
+}
+
+// 换课程时清空已加载的题库列表与选择
+watch(courseId, () => {
+  bankQuestions.value = []
+  selIds.value = []
+})
 </script>
 
 <style scoped>
 .trend-chart { width: 100%; height: 260px; margin-top: 6px; }
 .pager { margin-top: 8px; display: flex; align-items: center; gap: 10px; }
+/* 选题练习：题干列限宽防撑破表格 */
+.stem { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 主观题评分点逐项批改 */
 .rv-line { display: flex; gap: 8px; align-items: baseline; margin-top: 6px; font-size: 13px; line-height: 1.7; }
 .rv-line i { font-style: normal; font-weight: 700; flex-shrink: 0; width: 16px; text-align: center; }

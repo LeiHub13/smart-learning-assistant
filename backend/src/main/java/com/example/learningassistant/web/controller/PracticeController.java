@@ -34,9 +34,25 @@ public class PracticeController {
                                                         @RequestParam(defaultValue = "5") int count,
                                                         @RequestParam(defaultValue = "false") boolean favorite,
                                                         @RequestParam(defaultValue = "false") boolean mistake,
-                                                        @RequestParam(required = false) String kp) {
+                                                        @RequestParam(required = false) String kp,
+                                                        @RequestParam(required = false) String ids) {
         AuthUser u = CurrentUser.get(request);
+        // 选题练习模式：ids 优先，按所选顺序组卷（忽略数量/知识点/错题等抽题规则）
+        if (ids != null && !ids.isBlank()) {
+            List<Long> idList = java.util.Arrays.stream(ids.split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty())
+                    .map(Long::valueOf).toList();
+            return ApiResponse.ok(practiceService.paperByIds(u.id(), courseId, idList));
+        }
         return ApiResponse.ok(practiceService.paper(u.id(), courseId, count, favorite, mistake, kp));
+    }
+
+    /** 选题练习的课程题目清单（不含答案与解析）。 */
+    @GetMapping("/course-questions")
+    public ApiResponse<List<Map<String, Object>>> courseQuestions(HttpServletRequest request,
+                                                                  @RequestParam Long courseId) {
+        AuthUser u = CurrentUser.get(request);
+        return ApiResponse.ok(practiceService.courseQuestions(courseId));
     }
 
     @PostMapping("/submit")

@@ -42,6 +42,7 @@ public class PracticeService {
     private final KnowledgeMasteryMapper masteryMapper;
     private final com.example.learningassistant.favorite.service.FavoriteService favoriteService;
     private final MistakeService mistakeService;
+    private final com.example.learningassistant.course.mapper.CourseMapper courseMapper;
     private final com.example.learningassistant.infra.cache.CacheService cacheService;
     private final com.example.learningassistant.recommend.service.RecommendService recommendService;
 
@@ -190,7 +191,7 @@ public class PracticeService {
         return p;
     }
 
-    /** 最近练习分页（时间倒序）：records + total，page 从 1 起。 */
+    /** 最近练习分页（时间倒序）：records + total，page 从 1 起；每条附课程名。 */
     public Map<String, Object> history(Long userId, int page, int size) {
         int p = Math.max(page, 1);
         int s = Math.min(Math.max(size, 1), 50);
@@ -200,10 +201,70 @@ public class PracticeService {
                 .eq(Practice::getUserId, userId)
                 .orderByDesc(Practice::getCreatedAt)
                 .last("LIMIT " + s + " OFFSET " + (long) (p - 1) * s));
+        // 课程名批量补齐（练习记录展示用，缺失课程显示占位）
+        java.util.Set<Long> courseIds = records.stream().map(Practice::getCourseId)
+                .filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+        Map<Long, String> courseNames = courseIds.isEmpty() ? Map.of()
+                : courseMapper.selectBatchIds(courseIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                com.example.learningassistant.course.entity.Course::getId,
+                                com.example.learningassistant.course.entity.Course::getName, (a, b) -> a));
+        List<Map<String, Object>> views = records.stream().map(rec -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", rec.getId());
+            m.put("title", rec.getTitle());
+            m.put("score", rec.getScore());
+            m.put("totalScore", rec.getTotalScore());
+            m.put("createdAt", rec.getCreatedAt());
+            m.put("courseId", rec.getCourseId());
+            m.put("courseName", rec.getCourseId() == null ? null : courseNames.get(rec.getCourseId()));
+            return m;
+        }).toList();
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("records", records);
+        m.put("records", views);
         m.put("total", total);
         return m;
+    }
+
+    /** 选题练习的课程题目清单：轻量字段（不含答案与解析），最新在前。 */
+    public List<Map<String, Object>> courseQuestions(Long courseId) {
+        return questionMapper.selectList(new LambdaQueryWrapper<Question>()
+                .eq(Question::getCourseId, courseId)
+                .orderByDesc(Question::getId))
+                .stream().map(q -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", q.getId());
+                    m.put("type", q.getType());
+                    m.put("stem", q.getStem());
+                    m.put("kpName", q.getKpName());
+                    m.put("difficulty", q.getDifficulty());
+                    return m;
+                }).toList();
+    }
+
+    /**
+     * 选题练习：按用户挑选的题目 id 组卷，保持所选顺序、不下发答案。
+     * 题目必须属于该课程；个别无效 id 跳过，全部无效才报错；一次最多 20 题（主观题逐题 AI 批改）。
+     */
+    public List<Map<String, Object>> paperByIds(Long userId, Long courseId, List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            throw new BizException("请先选择要练习的题目");
+        }
+        List<Long> distinct = ids.stream().filter(java.util.Objects::nonNull).distinct().limit(20).toList();
+        if (distinct.isEmpty()) {
+            throw new BizException("请先选择要练习的题目");
+        }
+        List<Question> qs = questionMapper.selectList(new LambdaQueryWrapper<Question>()
+                .in(Question::getId, distinct)
+                .eq(Question::getCourseId, courseId));
+        Map<Long, Question> byId = qs.stream()
+                .collect(java.util.stream.Collectors.toMap(Question::getId, q -> q, (a, b) -> a));
+        List<Question> ordered = distinct.stream().map(byId::get)
+                .filter(java.util.Objects::nonNull).toList();
+        if (ordered.isEmpty()) {
+            throw new BizException("所选题目不存在或不属于该课程");
+        }
+        return ordered.stream().map(q -> toPaperItem(q, false)).toList();
     }
 
     /**
