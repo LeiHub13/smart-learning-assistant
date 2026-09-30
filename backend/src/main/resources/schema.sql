@@ -210,6 +210,19 @@ CREATE TABLE IF NOT EXISTS t_mistake_manual (
     KEY idx_mistake_manual_user (user_id, question_id)
 );
 
+-- ========== 新增：知识库知识图谱（LLM 从 KB chunk 抽取实体关系，整图 JSON 存储，按需重建） ==========
+
+CREATE TABLE IF NOT EXISTS t_knowledge_graph (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id  BIGINT DEFAULT 1,
+    kb_id      BIGINT NOT NULL,
+    content    MEDIUMTEXT NOT NULL,
+    node_count INT DEFAULT 0,
+    edge_count INT DEFAULT 0,
+    updated_at TIMESTAMP NULL,
+    UNIQUE KEY uk_kg_kb (kb_id)
+);
+
 CREATE TABLE IF NOT EXISTS t_generated_content (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     tenant_id  BIGINT DEFAULT 1,

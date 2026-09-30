@@ -76,6 +76,18 @@ public class KbController {
         return ApiResponse.ok(kbService.generateOverview(kbId, docId));
     }
 
+    /** 知识库知识图谱：查看已生成的整图（未生成返回 null）。 */
+    @GetMapping("/api/kb/{kbId}/graph")
+    public ApiResponse<Map<String, Object>> graph(@PathVariable Long kbId) {
+        return ApiResponse.ok(kbService.graphOf(kbId));
+    }
+
+    /** 生成/重建知识图谱（LLM 从 KB 全部文档抽取实体关系；同步等待，约十几秒）。 */
+    @PostMapping("/api/kb/{kbId}/graph/rebuild")
+    public ApiResponse<Map<String, Object>> rebuildGraph(@PathVariable Long kbId) {
+        return ApiResponse.ok(kbService.generateGraph(kbId));
+    }
+
     /** 文档重命名：仅改展示名，chunk 与向量索引不受影响。 */
     @PutMapping("/api/kb/{kbId}/documents/{docId}/rename")
     public ApiResponse<Document> rename(@PathVariable Long kbId, @PathVariable Long docId,

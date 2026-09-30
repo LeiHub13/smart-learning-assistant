@@ -115,6 +115,18 @@ def _build_messages(scene: str, question: str, chunks, note: str = None,
             ),
             HumanMessage(question),
         ]
+    if scene == "kg_extract":
+        return [
+            SystemMessage(
+                "你是知识图谱构建师。通读以下课程资料文本，抽取其中的核心概念、术语、方法与原理，"
+                "以及它们之间的关系，构建一张知识图谱。只输出 JSON 对象，不要输出任何其他文字："
+                "{\"nodes\":[{\"name\":\"节点名\",\"type\":\"概念|术语|方法|原理|工具\"}],"
+                "\"edges\":[{\"source\":\"节点名\",\"target\":\"节点名\",\"relation\":\"关系短语(2-8字)\"}]}。"
+                "要求：节点 15-40 个、边 20-60 条；节点名使用资料中出现的原始术语，不要自造新词；"
+                "边必须连接已给出的节点名，同一对节点可以有多条不同的关系；关系要具体（如「包含」「适用于」「对比」「前置知识」）。"
+            ),
+            HumanMessage(question),
+        ]
     if scene == "lecture":
         return [
             SystemMessage(

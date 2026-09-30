@@ -8,18 +8,23 @@ import com.example.learningassistant.infra.storage.FileStorage;
 import com.example.learningassistant.kb.entity.Chunk;
 import com.example.learningassistant.kb.entity.Document;
 import com.example.learningassistant.kb.entity.KnowledgeBase;
+import com.example.learningassistant.kb.entity.KnowledgeGraph;
 import com.example.learningassistant.kb.mapper.ChunkMapper;
 import com.example.learningassistant.kb.mapper.DocumentMapper;
 import com.example.learningassistant.kb.mapper.KnowledgeBaseMapper;
+import com.example.learningassistant.kb.mapper.KnowledgeGraphMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 知识库服务：知识库管理 + 文档登记 + chunk 落库（同步）。
@@ -43,8 +48,16 @@ public class KbService {
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final com.example.learningassistant.course.mapper.CourseMapper courseMapper;
     private final com.example.learningassistant.course.mapper.CourseUserMapper courseUserMapper;
+    private final KnowledgeGraphMapper knowledgeGraphMapper;
 
     public static final String TOPIC_DOC_INDEX = "kb.document.index";
+
+    /** 图谱抽取的材料与产物规模上限：控制 LLM 输入输出体量与前端渲染复杂度。 */
+    private static final int KG_MATERIAL_CHARS = 16000;
+    private static final int KG_MATERIAL_CHUNKS = 48;
+    private static final int KG_NODE_MAX = 60;
+    private static final int KG_EDGE_MAX = 150;
+    private static final Set<String> KG_TYPES = Set.of("概念", "术语", "方法", "原理", "工具");
 
     public KnowledgeBase createKb(Long courseId, String name) {
         KnowledgeBase kb = new KnowledgeBase();
@@ -69,6 +82,8 @@ public class KbService {
             deleteDocument(doc.getId());
         }
         kbMapper.deleteById(kbId);
+        knowledgeGraphMapper.delete(new LambdaQueryWrapper<KnowledgeGraph>()
+                .eq(KnowledgeGraph::getKbId, kbId));
         log.info("知识库 {} 已删除，共清理 {} 个文档", kbId, docs.size());
     }
 
@@ -266,6 +281,178 @@ public class KbService {
             }
         }
         return result;
+    }
+
+    /** 查询知识库已生成的知识图谱（从未生成返回 null）。 */
+    public Map<String, Object> graphOf(Long kbId) {
+        KnowledgeBase kb = requireKb(kbId);
+        KnowledgeGraph row = knowledgeGraphMapper.selectOne(new LambdaQueryWrapper<KnowledgeGraph>()
+                .eq(KnowledgeGraph::getKbId, kbId)
+                .last("LIMIT 1"));
+        return row == null ? null : graphView(kb, row);
+    }
+
+    /**
+     * 生成（或重建）知识库知识图谱：取该 KB 各文档的 chunk 文本（按文档顺序截断）交给 LLM 抽取
+     * 实体关系，归一化（节点去重、剔除断边/自环、限规模）后整图 JSON 存 t_knowledge_graph。
+     * 同步等待，约十几秒（与文档速览同口径）。
+     */
+    public Map<String, Object> generateGraph(Long kbId) {
+        KnowledgeBase kb = requireKb(kbId);
+        List<Document> docs = documents(kbId);
+        if (docs.isEmpty()) {
+            throw new BizException("该知识库还没有资料，先上传文档再生成图谱");
+        }
+        StringBuilder sb = new StringBuilder();
+        int taken = 0;
+        material:
+        for (Document doc : docs) {
+            List<Chunk> chunks = chunkMapper.selectList(new LambdaQueryWrapper<Chunk>()
+                    .eq(Chunk::getDocId, doc.getId())
+                    .orderByAsc(Chunk::getIdx));
+            for (Chunk c : chunks) {
+                String piece = c.getContent();
+                if (piece == null || piece.isBlank()) {
+                    continue;
+                }
+                sb.append(piece.trim()).append('\n');
+                if (++taken >= KG_MATERIAL_CHUNKS || sb.length() >= KG_MATERIAL_CHARS) {
+                    break material;
+                }
+            }
+        }
+        if (sb.length() == 0) {
+            throw new BizException("该知识库没有可分析的内容");
+        }
+        String text = sb.length() > KG_MATERIAL_CHARS
+                ? sb.substring(0, KG_MATERIAL_CHARS) + "…（后文截断）" : sb.toString().trim();
+
+        com.example.learningassistant.ai.ChatModel model = modelFactory.get();
+        String raw = model.complete(List.of(
+                new com.example.learningassistant.ai.AIChatMessage("system",
+                        "KG_EXTRACT\n你是知识图谱构建师。通读以下课程资料文本，抽取其中的核心概念、术语、方法与原理，"
+                                + "以及它们之间的关系，构建一张知识图谱。只输出 JSON 对象，不要输出任何其他文字："
+                                + "{\"nodes\":[{\"name\":\"节点名\",\"type\":\"概念|术语|方法|原理|工具\"}],"
+                                + "\"edges\":[{\"source\":\"节点名\",\"target\":\"节点名\",\"relation\":\"关系短语(2-8字)\"}]}。"
+                                + "要求：节点 15-40 个、边 20-60 条；节点名使用资料中出现的原始术语，不要自造新词；"
+                                + "边必须连接已给出的节点名，同一对节点可以有多条不同的关系；"
+                                + "关系要具体（如「包含」「适用于」「对比」「前置知识」）。"),
+                new com.example.learningassistant.ai.AIChatMessage("user",
+                        "【知识库名称】" + kb.getName() + "\n【资料文本】\n" + text)));
+
+        Map<String, Object> graph = parseGraph(raw);
+        List<Map<String, Object>> nodes = (List<Map<String, Object>>) graph.get("nodes");
+        List<Map<String, Object>> edges = (List<Map<String, Object>>) graph.get("edges");
+
+        String json;
+        try {
+            json = objectMapper.writeValueAsString(graph);
+        } catch (Exception e) {
+            throw new BizException("图谱保存失败，请重试");
+        }
+        KnowledgeGraph row = knowledgeGraphMapper.selectOne(new LambdaQueryWrapper<KnowledgeGraph>()
+                .eq(KnowledgeGraph::getKbId, kbId)
+                .last("LIMIT 1"));
+        if (row == null) {
+            row = new KnowledgeGraph();
+            row.setTenantId(1L);
+            row.setKbId(kbId);
+        }
+        row.setContent(json);
+        row.setNodeCount(nodes.size());
+        row.setEdgeCount(edges.size());
+        row.setUpdatedAt(LocalDateTime.now());
+        if (row.getId() == null) {
+            knowledgeGraphMapper.insert(row);
+        } else {
+            knowledgeGraphMapper.updateById(row);
+        }
+        log.info("知识库 {} 知识图谱已生成：{} 节点 / {} 边", kbId, nodes.size(), edges.size());
+        return graphView(kb, row);
+    }
+
+    /** 模型输出 → 干净的 {nodes, edges}：节点按名去重、类型白名单外归一为「概念」；边剔除断边/自环/重复。 */
+    private Map<String, Object> parseGraph(String raw) {
+        Map<String, Object> parsed;
+        try {
+            parsed = objectMapper.readValue(raw, new com.fasterxml.jackson.core.type.TypeReference<>() {
+            });
+        } catch (Exception e) {
+            log.warn("知识图谱输出解析失败: {}", clip(raw, 200));
+            throw new BizException("图谱生成失败，请重试");
+        }
+        Map<String, Map<String, Object>> nodes = new LinkedHashMap<>();
+        if (parsed.get("nodes") instanceof List<?> list) {
+            for (Object o : list) {
+                if (!(o instanceof Map<?, ?> m) || nodes.size() >= KG_NODE_MAX) {
+                    break;
+                }
+                String name = clip(m.get("name"), 40);
+                if (name == null || name.isBlank() || nodes.containsKey(name)) {
+                    continue;
+                }
+                Map<String, Object> node = new LinkedHashMap<>();
+                node.put("name", name);
+                String type = clip(m.get("type"), 10);
+                // Set.of 白名单不接受 null，先判空再归一
+                node.put("type", type != null && KG_TYPES.contains(type) ? type : "概念");
+                nodes.put(name, node);
+            }
+        }
+        List<Map<String, Object>> edges = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        if (parsed.get("edges") instanceof List<?> list) {
+            for (Object o : list) {
+                if (!(o instanceof Map<?, ?> m) || edges.size() >= KG_EDGE_MAX) {
+                    break;
+                }
+                String source = clip(m.get("source"), 40);
+                String target = clip(m.get("target"), 40);
+                String relation = clip(m.get("relation"), 20);
+                if (source == null || target == null || relation == null
+                        || source.equals(target)
+                        || !nodes.containsKey(source) || !nodes.containsKey(target)) {
+                    continue;
+                }
+                if (!seen.add(source + "|" + target + "|" + relation)) {
+                    continue;
+                }
+                Map<String, Object> edge = new LinkedHashMap<>();
+                edge.put("source", source);
+                edge.put("target", target);
+                edge.put("relation", relation);
+                edges.add(edge);
+            }
+        }
+        if (nodes.isEmpty() || edges.isEmpty()) {
+            throw new BizException("未能从资料中抽取到有效的概念关系，请重试");
+        }
+        Map<String, Object> graph = new LinkedHashMap<>();
+        graph.put("nodes", new ArrayList<>(nodes.values()));
+        graph.put("edges", edges);
+        return graph;
+    }
+
+    /** 图谱对外视图：解析存储 JSON，带知识库名、规模与生成时间。 */
+    private Map<String, Object> graphView(KnowledgeBase kb, KnowledgeGraph row) {
+        Map<String, Object> content;
+        try {
+            content = objectMapper.readValue(row.getContent(),
+                    new com.fasterxml.jackson.core.type.TypeReference<>() {
+                    });
+        } catch (Exception e) {
+            log.warn("知识库 {} 图谱数据损坏: {}", kb.getId(), e.getMessage());
+            throw new BizException("图谱数据损坏，请重新生成");
+        }
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("kbId", kb.getId());
+        view.put("kbName", kb.getName());
+        view.put("nodes", content.getOrDefault("nodes", List.of()));
+        view.put("edges", content.getOrDefault("edges", List.of()));
+        view.put("nodeCount", row.getNodeCount());
+        view.put("edgeCount", row.getEdgeCount());
+        view.put("updatedAt", row.getUpdatedAt() == null ? null : row.getUpdatedAt().toString());
+        return view;
     }
 
     /**

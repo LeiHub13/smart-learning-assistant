@@ -61,6 +61,7 @@
             <b>{{ kb.name }}</b>
             <span class="tag">知识库</span>
             <button class="btn ghost small" style="margin-left:auto" @click="toggleUpload(kb.id)">上传文档</button>
+            <button class="btn ghost small" style="margin-left:8px" @click="openGraph(kb)">图谱</button>
             <button class="btn danger small" style="margin-left:8px" @click="askDeleteKb(sel.id, kb.id, kb.name)">删除知识库</button>
           </div>
           <div v-for="d in kb.docs" :key="d.id" class="ans" style="margin:4px 0">
@@ -104,6 +105,38 @@
       </div>
     </div>
 
+    <!-- 知识图谱：LLM 从该知识库资料抽取概念与关系，ECharts 力导向图展示 -->
+    <div v-if="graphModal" class="modal-mask" @click.self="closeGraph">
+      <div class="modal-box wide kg-box">
+        <div class="detail-hd">
+          <div>
+            <h3 class="detail-title">{{ graphModal.kb.name }} · 知识图谱</h3>
+            <div class="detail-sub" v-if="graphModal.data">
+              {{ graphModal.data.nodeCount }} 个概念 · {{ graphModal.data.edgeCount }} 条关系 ·
+              生成于 {{ fmtKgTime(graphModal.data.updatedAt) }}；拖拽平移、滚轮缩放
+            </div>
+            <div class="detail-sub" v-else>尚未生成图谱，点下方按钮从知识库资料中抽取概念与关系</div>
+          </div>
+          <button class="btn ghost small" @click="closeGraph">关闭</button>
+        </div>
+        <div class="kg-ops">
+          <button class="btn small" :disabled="graphModal.rebuilding" @click="rebuildGraph">
+            {{ graphModal.rebuilding ? '生成中…' : (graphModal.data ? '重新生成' : '生成图谱') }}
+          </button>
+          <span class="kg-legend">
+            <span v-for="(c, t) in KG_TYPE_COLORS" :key="t"><i :style="{ background: c }"></i>{{ t }}</span>
+          </span>
+        </div>
+        <div class="kg-err" v-if="graphModal.err">{{ graphModal.err }}</div>
+        <div class="kg-wrap">
+          <div v-if="!graphModal.data" class="kg-empty">
+            {{ graphModal.rebuilding ? '正在通读资料、抽取概念与关系…（约十几秒）' : '暂无图谱' }}
+          </div>
+          <div ref="kgRef" class="kg-canvas"></div>
+        </div>
+      </div>
+    </div>
+
     <div v-if="confirmKb" class="modal-mask" @click.self="confirmKb = null">
       <div class="modal-box">
         <h3>删除知识库</h3>
@@ -140,11 +173,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import DocViewer from '../components/DocViewer.vue'
 import { useRouter } from 'vue-router'
 import { api, getCourses } from '../api'
 import CourseCard from '../components/CourseCard.vue'
+import * as echarts from 'echarts/core'
+import { GraphChart } from 'echarts/charts'
+import { TooltipComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+
+echarts.use([GraphChart, TooltipComponent, CanvasRenderer])
 
 defineOptions({ name: 'ManageView' })
 
@@ -405,6 +444,96 @@ const doDeleteKb = async () => {
     showHint(e.message)
   }
 }
+
+/* ===== 知识图谱：从知识库资料抽取概念与关系，ECharts 力导向图展示 ===== */
+const KG_TYPE_COLORS = { 概念: '#4e7cf6', 术语: '#9a6bf0', 方法: '#18a058', 原理: '#e08c1a', 工具: '#d9534f' }
+const graphModal = ref(null) // { kb, data, rebuilding, err }
+const kgRef = ref(null)
+let kgChart = null
+
+const fmtKgTime = (s) => (s ? String(s).slice(0, 16).replace('T', ' ') : '')
+
+const openGraph = async (kb) => {
+  graphModal.value = { kb, data: null, rebuilding: false, err: '' }
+  window.addEventListener('resize', kgResize)
+  try {
+    graphModal.value.data = await api('/api/kb/' + kb.id + '/graph')
+  } catch (e) {
+    graphModal.value.err = e.message
+  }
+  nextTick(() => renderGraph())
+}
+
+const renderGraph = () => {
+  const g = graphModal.value && graphModal.value.data
+  if (!kgRef.value || !g || !g.nodes || !g.nodes.length) return
+  if (kgChart) kgChart.dispose()
+  kgChart = echarts.init(kgRef.value)
+  const dark = document.documentElement.classList.contains('dark')
+  // 度数决定节点大小：连接越多（越核心）越大
+  const degree = {}
+  g.edges.forEach((e) => {
+    degree[e.source] = (degree[e.source] || 0) + 1
+    degree[e.target] = (degree[e.target] || 0) + 1
+  })
+  const types = [...new Set(g.nodes.map((n) => n.type || '概念'))]
+  kgChart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      confine: true,
+      formatter: (p) => p.dataType === 'edge'
+        ? p.data.source + ' —' + p.data.value + '→ ' + p.data.target
+        : p.data.name + '（' + (g.nodes.find((n) => n.name === p.data.name) || {}).type + '）'
+    },
+    series: [{
+      type: 'graph',
+      layout: 'force',
+      roam: true,
+      draggable: true,
+      data: g.nodes.map((n) => ({
+        name: n.name,
+        category: Math.max(types.indexOf(n.type || '概念'), 0),
+        symbolSize: Math.min(18 + (degree[n.name] || 0) * 5, 52),
+        itemStyle: { color: KG_TYPE_COLORS[n.type || '概念'] || '#4e7cf6' }
+      })),
+      links: g.edges.map((e) => ({ source: e.source, target: e.target, value: e.relation })),
+      categories: types.map((t) => ({ name: t })),
+      force: { repulsion: 260, edgeLength: [60, 140], gravity: 0.08 },
+      lineStyle: { color: dark ? '#3a4150' : '#d4d9e3', curveness: 0.15 },
+      edgeSymbol: ['none', 'arrow'],
+      edgeSymbolSize: 7,
+      label: { show: true, color: dark ? '#dfe3ea' : '#333', fontSize: 12 },
+      edgeLabel: {
+        show: false, formatter: '{c}', fontSize: 11,
+        color: dark ? '#9aa3b2' : '#666', backgroundColor: dark ? '#1b1f27' : '#fff'
+      },
+      emphasis: { focus: 'adjacency', lineStyle: { width: 3 } }
+    }]
+  })
+}
+
+const rebuildGraph = async () => {
+  const m = graphModal.value
+  if (!m || m.rebuilding) return
+  m.rebuilding = true
+  m.err = ''
+  try {
+    m.data = await api('/api/kb/' + m.kb.id + '/graph/rebuild', { method: 'POST' })
+    nextTick(() => renderGraph())
+  } catch (e) {
+    m.err = e.message
+  } finally {
+    m.rebuilding = false
+  }
+}
+
+const kgResize = () => { if (kgChart) kgChart.resize() }
+
+const closeGraph = () => {
+  graphModal.value = null
+  window.removeEventListener('resize', kgResize)
+  if (kgChart) { kgChart.dispose(); kgChart = null }
+}
 </script>
 
 <style scoped>
@@ -449,4 +578,19 @@ const doDeleteKb = async () => {
 
 html.dark .pv-text { background: var(--soft); }
 html.dark .pv-hit { background: rgba(210,153,34,.4); }
+
+/* 知识图谱弹窗 */
+.kg-box { display: flex; flex-direction: column; }
+.kg-ops { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.kg-legend { margin-left: auto; display: flex; gap: 12px; font-size: 12px; color: var(--muted); }
+.kg-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
+.kg-err { color: #d9534f; font-size: 13px; margin-bottom: 8px; }
+.kg-wrap { position: relative; }
+.kg-canvas { height: 60vh; min-height: 380px; border-radius: 10px; background: var(--soft); }
+.kg-empty {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 14px;
+}
+html.dark .kg-canvas { background: #14161c; }
 </style>

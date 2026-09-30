@@ -104,6 +104,16 @@ def test_doc_overview_prompt_shape():
     assert msgs[-1].content.startswith("【资料标题】")
 
 
+def test_kg_extract_prompt_shape():
+    """知识图谱抽取场景：系统提示约束节点/边结构与「只输出 JSON」，材料走 user 消息。"""
+    text = "【资料标题】x.md" + chr(10) + "【资料文本】正文"
+    msgs = chains._build_messages("kg_extract", text, None)
+    assert "nodes" in msgs[0].content and "edges" in msgs[0].content
+    assert "不要输出任何其他文字" in msgs[0].content
+    assert "原始术语" in msgs[0].content
+    assert msgs[-1].content.startswith("【资料标题】")
+
+
 def test_suggest_followups_parses_and_truncates(monkeypatch):
     """追问推荐：解析 JSON 数组、首尾清理、超长截断、最多 3 条，并以 followup 场景记统计。"""
     seen = {}
