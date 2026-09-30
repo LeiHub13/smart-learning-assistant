@@ -117,8 +117,15 @@ public class FlashcardService {
         return created;
     }
 
-    /** 学习队列：box 小的（薄弱）优先，久未复习的在前。 */
-    public List<Flashcard> study(Long userId, Long courseId, int count) {
+    /**
+     * Agent 确认执行入口：单卡直建（同用户同正面去重），来源记为 chat、sourceId 记答疑会话。
+     * 返回是否真正新建（false = 已存在相同正面的卡片，确认动作按幂等处理不报错）。
+     */
+    public boolean createFromAgent(Long userId, Long courseId, Long sessionId, String front, String back) {
+        return createCard(userId, courseId, "chat", sessionId, front, back);
+    }
+
+    /** 学习队列：box 小的（薄弱）优先，久未复习的在前。 */    public List<Flashcard> study(Long userId, Long courseId, int count) {
         int c = Math.min(Math.max(count, 1), 30);
         LambdaQueryWrapper<Flashcard> w = new LambdaQueryWrapper<Flashcard>()
                 .eq(Flashcard::getUserId, userId)

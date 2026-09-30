@@ -5,6 +5,7 @@ import com.example.learningassistant.agent.entity.AgentAction;
 import com.example.learningassistant.agent.mapper.AgentActionMapper;
 import com.example.learningassistant.common.BizException;
 import com.example.learningassistant.favorite.service.FavoriteService;
+import com.example.learningassistant.flashcard.service.FlashcardService;
 import com.example.learningassistant.generate.service.GeneratorService;
 import com.example.learningassistant.kb.entity.Document;
 import com.example.learningassistant.kb.entity.KnowledgeBase;
@@ -15,6 +16,7 @@ import com.example.learningassistant.notify.service.NotifyService;
 import com.example.learningassistant.plan.service.PlanService;
 import com.example.learningassistant.practice.entity.Question;
 import com.example.learningassistant.practice.mapper.QuestionMapper;
+import com.example.learningassistant.practice.service.MistakeService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -47,7 +49,7 @@ public class AgentActionService {
     private static final Set<String> ALLOWED_KINDS =
             Set.of("add_material", "schedule_review", "finish_plan_task",
                     "add_note", "favorite_question", "generate_questions", "open_page",
-                    "add_plan_task", "add_question");
+                    "add_plan_task", "add_question", "add_flashcard", "add_mistake");
     /** add_question 的题型白名单（与出题链路的题型保持一致）。 */
     private static final Set<String> QUESTION_TYPES = Set.of("单选", "多选", "判断", "问答");
     private static final Set<String> DIFFICULTIES = Set.of("基础", "进阶", "综合");
@@ -67,6 +69,8 @@ public class AgentActionService {
     private static final int OPTION_VALUE_MAX = 200;
     private static final int OPTION_KEY_MAX = 10;
     private static final int OPTIONS_MAX = 8;
+    private static final int FLASH_FRONT_MAX = 500;
+    private static final int FLASH_BACK_MAX = 800;
     private static final long TTL_MINUTES = 30;
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -97,6 +101,8 @@ public class AgentActionService {
     private final GeneratorService generatorService;
     private final QuestionMapper questionMapper;
     private final com.example.learningassistant.practice.service.QuestionService questionService;
+    private final FlashcardService flashcardService;
+    private final MistakeService mistakeService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -122,6 +128,8 @@ public class AgentActionService {
             case "open_page" -> proposeOpenPage(userId, sessionId, src);
             case "add_plan_task" -> proposeAddPlanTask(userId, courseId, sessionId, src);
             case "add_question" -> proposeAddQuestion(userId, courseId, sessionId, src);
+            case "add_flashcard" -> proposeAddFlashcard(userId, courseId, sessionId, src);
+            case "add_mistake" -> proposeAddMistake(userId, courseId, sessionId, src);
             default -> throw new BizException("不支持的动作类型");
         };
     }
@@ -436,6 +444,62 @@ public class AgentActionService {
     }
 
     /**
+     * 记闪卡：自由对话与课程会话都可用（闪卡支持无课程来源）；
+     * 知识点标签与正面在确认执行时才拼装，payload 保持字段干净。
+     */
+    private AgentAction proposeAddFlashcard(Long userId, Long courseId, Long sessionId,
+                                            Map<String, Object> src) {
+        String front = text(src.get("front"));
+        String back = text(src.get("back"));
+        if (front.isEmpty()) {
+            throw new BizException("缺少闪卡正面（问题）");
+        }
+        if (back.isEmpty()) {
+            throw new BizException("缺少闪卡背面（答案）");
+        }
+        String kp = clip(src.get("kpName"), KP_MAX);
+
+        Map<String, Object> stored = new LinkedHashMap<>();
+        stored.put("front", clip(front, FLASH_FRONT_MAX));
+        stored.put("back", clip(back, FLASH_BACK_MAX));
+        stored.put("kpName", kp == null || kp.isBlank() ? null : kp);
+
+        AgentAction a = newAction(userId, courseId, sessionId, "add_flashcard", stored,
+                "记闪卡：「" + clip(front, STEM_MAX) + "」");
+        log.info("用户 {} 登记待确认动作 {}（kind=add_flashcard）", userId, a.getId());
+        return a;
+    }
+
+    /** 收录错题：与收藏同构——questionId 归属在登记阶段就校验，模型给不出跨课程题库的合法 id。 */
+    private AgentAction proposeAddMistake(Long userId, Long courseId, Long sessionId,
+                                          Map<String, Object> src) {
+        if (courseId == null) {
+            throw new BizException("当前会话未绑定课程，无法收录错题");
+        }
+        Long questionId = asLong(src.get("questionId"));
+        if (questionId == null) {
+            throw new BizException("缺少题目 id");
+        }
+        Question q = questionMapper.selectById(questionId);
+        if (q == null) {
+            throw new BizException("题目不存在");
+        }
+        if (!Objects.equals(q.getCourseId(), courseId)) {
+            throw new BizException("题目不属于当前课程");
+        }
+        String stem = clip(q.getStem(), STEM_MAX);
+
+        Map<String, Object> stored = new LinkedHashMap<>();
+        stored.put("questionId", questionId);
+        stored.put("stem", stem);
+
+        AgentAction a = newAction(userId, courseId, sessionId, "add_mistake", stored,
+                "收录错题：「" + (stem == null || stem.isBlank() ? "题 #" + questionId : stem) + "」");
+        log.info("用户 {} 登记待确认动作 {}（kind=add_mistake，question={}）", userId, a.getId(), questionId);
+        return a;
+    }
+
+    /**
      * 选项归一化：接受 [{k,v}] 数组（与出题链路同构），k 缺省按序补 A/B/C…，截断超长项。
      * 格式不合法直接拒绝登记，不让模型侧脏数据走到确认。
      */
@@ -575,6 +639,8 @@ public class AgentActionService {
                 case "open_page" -> executeOpenPage(a, payload);
                 case "add_plan_task" -> executeAddPlanTask(a, payload);
                 case "add_question" -> executeAddQuestion(a, payload);
+                case "add_flashcard" -> executeAddFlashcard(a, payload);
+                case "add_mistake" -> executeAddMistake(a, payload);
                 default -> throw new BizException("不支持的动作类型");
             }
         } catch (Exception e) {
@@ -743,6 +809,34 @@ public class AgentActionService {
                 RESULT_MAX));
         actionMapper.updateById(a);
         log.info("待确认动作 {} 已执行，题目 {} 入库", a.getId(), q.getId());
+    }
+
+    private void executeAddFlashcard(AgentAction a, Map<String, Object> payload) {
+        String front = String.valueOf(payload.getOrDefault("front", ""));
+        String kp = payload.get("kpName") == null ? "" : String.valueOf(payload.get("kpName"));
+        String composed = clip(kp.isBlank() ? front : "【" + kp + "】" + front, FLASH_FRONT_MAX);
+        // 同用户同正面视为重复：不报错，按幂等如实回报（重复确认不产生第二张卡）
+        boolean created = flashcardService.createFromAgent(a.getUserId(), a.getCourseId(),
+                a.getSessionId(), composed, String.valueOf(payload.getOrDefault("back", "")));
+        a.setStatus("executed");
+        a.setResult(clip(created ? "已创建闪卡：「" + clip(front, STEM_MAX) + "」，可在闪卡页面学习"
+                : "已存在相同正面的闪卡，未重复创建", RESULT_MAX));
+        actionMapper.updateById(a);
+        log.info("待确认动作 {} 已执行，闪卡新建={}", a.getId(), created);
+    }
+
+    private void executeAddMistake(AgentAction a, Map<String, Object> payload) {
+        Long questionId = asLong(payload.get("questionId"));
+        if (questionId == null) {
+            throw new BizException("动作数据缺少 questionId");
+        }
+        // 登记到确认之间题目可能已被删除；归属与收录（upsert）由 addManual 再核验
+        mistakeService.addManual(a.getUserId(), a.getCourseId(), questionId);
+        a.setStatus("executed");
+        a.setResult(clip("已收录错题：「" + payload.getOrDefault("stem", "题 #" + questionId)
+                + "」，重练答对后会自动出本", RESULT_MAX));
+        actionMapper.updateById(a);
+        log.info("待确认动作 {} 已执行，错题 {} 收录", a.getId(), questionId);
     }
 
     /** 提醒时间：yyyy-MM-dd 视为当天 09:00，ISO 日期时间原样解析，解析不了视为「立即」。 */

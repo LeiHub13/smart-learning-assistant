@@ -197,6 +197,19 @@ CREATE TABLE IF NOT EXISTS t_flashcard (
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ========== 新增：错题本手动收录（错题本主体仍是查询式推导；本表只存「手动加入」的题，
+-- 重练答对后按收录时间规则自动出本，与答错题目共用同一套在册判定） ==========
+
+CREATE TABLE IF NOT EXISTS t_mistake_manual (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   BIGINT DEFAULT 1,
+    user_id     BIGINT NOT NULL,
+    course_id   BIGINT,
+    question_id BIGINT NOT NULL,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_mistake_manual_user (user_id, question_id)
+);
+
 CREATE TABLE IF NOT EXISTS t_generated_content (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
     tenant_id  BIGINT DEFAULT 1,

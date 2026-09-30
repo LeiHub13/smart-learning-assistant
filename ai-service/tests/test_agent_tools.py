@@ -24,7 +24,7 @@ def test_write_tools_mounted_when_enabled(monkeypatch):
     names = _names(agent._make_tools([], user_id=1, course_id=9))
     assert {"query_plan_tasks", "schedule_review", "finish_plan_task", "save_material_to_kb",
             "add_note", "favorite_question", "generate_questions", "open_page",
-            "add_plan_task", "add_question"} <= names
+            "add_plan_task", "add_question", "add_flashcard", "add_mistake"} <= names
     prompt = agent._system_prompt([])
     assert "schedule_review" in prompt and "open_page" in prompt
     # 写提示词必须讲清「只登记待确认动作」，否则模型会对学生谎称动作已生效
@@ -64,6 +64,8 @@ def test_write_tools_require_user_context(monkeypatch):
     assert "未提供用户信息" in tools["open_page"].invoke({"page": "notes"})
     assert "未提供用户信息" in tools["add_plan_task"].invoke({"title": "T"})
     assert "未提供用户信息" in tools["add_question"].invoke({"q_type": "判断", "stem": "S", "answer": "对"})
+    assert "未提供用户信息" in tools["add_flashcard"].invoke({"front": "F", "back": "B"})
+    assert "未提供用户信息" in tools["add_mistake"].invoke({"question_id": 1})
     # 无用户上下文时只能原地拒绝，不得发起任何 HTTP 回调
     assert calls == []
 
@@ -79,11 +81,13 @@ def test_course_scoped_write_tools_require_course_context(monkeypatch):
     assert "未绑定课程" in tools["favorite_question"].invoke({"question_id": 1})
     assert "未绑定课程" in tools["generate_questions"].invoke({})
     assert "未绑定课程" in tools["add_question"].invoke({"q_type": "判断", "stem": "S", "answer": "对"})
+    assert "未绑定课程" in tools["add_mistake"].invoke({"question_id": 1})
     assert calls == []
-    # open_page / add_plan_task 不依赖课程，允许发起 propose
+    # open_page / add_plan_task / add_flashcard 不依赖课程，允许发起 propose
     assert "未绑定课程" not in tools["open_page"].invoke({"page": "notes"})
     assert "未绑定课程" not in tools["add_plan_task"].invoke({"title": "T"})
-    assert calls == ["/internal/tools/actions/propose"] * 2
+    assert "未绑定课程" not in tools["add_flashcard"].invoke({"front": "F", "back": "B"})
+    assert calls == ["/internal/tools/actions/propose"] * 3
 
 
 def test_save_material_proposes_with_closure_context(monkeypatch):
@@ -235,6 +239,40 @@ def test_add_plan_task_and_add_question_propose_with_request_context(monkeypatch
     for out in (out1, out2, out3, out4):
         assert "待确认动作" in out and "确认执行" in out
     assert "已创建" not in out1 and "已入库" not in out3
+
+
+def test_flashcard_and_mistake_propose_with_request_context(monkeypatch):
+    """记闪卡/收录错题同样只登记待确认动作：闪卡可不绑课程，收录错题必须绑定课程。"""
+    monkeypatch.setattr(config, "AGENT_WRITE_TOOLS", True)
+    calls = []
+
+    def fake_post(path, payload):
+        calls.append((path, payload))
+        return '{"actionId": 11, "summary": "已登记"}'
+
+    monkeypatch.setattr(agent, "_post_java_tool", fake_post)
+    tools = {t.name: t for t in agent._make_tools([], user_id=3, course_id=9, session_id="12")}
+
+    out1 = tools["add_flashcard"].invoke({"front": "什么是 B+ 树？", "back": "一种平衡多路搜索树", "kp_name": "索引"})
+    out2 = tools["add_mistake"].invoke({"question_id": 66})
+
+    assert [p["kind"] for _, p in calls] == ["add_flashcard", "add_mistake"]
+    assert calls[0][1]["payload"] == {"front": "什么是 B+ 树？", "back": "一种平衡多路搜索树", "kpName": "索引"}
+    assert calls[1][1]["payload"] == {"questionId": 66}
+    for path, p in calls:
+        assert path == "/internal/tools/actions/propose"
+        assert p["userId"] == 3 and p["courseId"] == 9 and p["sessionId"] == 12
+    assert "待确认动作" in out1 and "确认执行" in out1
+    # 回执不得声称动作本身已完成
+    assert "已创建" not in out1 and "已收录" not in out2
+
+    # 自由对话（无课程）：闪卡可登记，收录错题原地拒绝
+    calls.clear()
+    free = {t.name: t for t in agent._make_tools([], user_id=3, course_id=None)}
+    ok = free["add_flashcard"].invoke({"front": "F", "back": "B"})
+    assert "未绑定课程" not in ok
+    assert "未绑定课程" in free["add_mistake"].invoke({"question_id": 1})
+    assert [p["kind"] for _, p in calls] == ["add_flashcard"]
 
 
 def test_query_past_questions_scopes_to_user_and_excludes_current_session():

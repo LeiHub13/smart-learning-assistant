@@ -17,6 +17,7 @@
   - save_material_to_kb                                     存资料进知识库
   - add_note / favorite_question / generate_questions       记笔记、收藏题目、AI 出题
   - add_question                                            把一道完整题目加入课程题库
+  - add_flashcard / add_mistake                             记闪卡、把题库题收录进错题本
   - open_page                                               打开系统页面（前端跳转）
   全部只登记「待确认动作」，用户在前端点确认后才生效
 - MCP 外部工具            通过 AI_MCP_CONFIG 接入（如联网搜索 tavily-mcp），
@@ -79,6 +80,9 @@ WRITE_PROMPT_SUFFIX = (
     "- generate_questions AI 出题（默认 5 道、1-10 道，生成需要等待，完成后页面会引导去练习）；\n"
     "- add_question 把一道完整题目加入本课程题库（要求会话已绑定课程；题型 单选/多选/判断/问答，"
     "单选/多选必须给出选项数组 [{k,v}]，判断题答案只写 对/错）；\n"
+    "- add_flashcard 把知识点做成问对式闪卡（front 是具体、可自测的问题，back 是 50 字内的答案，"
+    "学生说想记住某个概念/结论时用，课程内外均可）；add_mistake 把题库中的一道题收录进错题本"
+    "（先用 query_question_bank 拿 questionId，要求会话已绑定课程）；\n"
     "- open_page 打开系统页面，page 从白名单里选（home/chat/generate/practice/mistakes/favorites/"
     "exam/bank/progress/manage/hub/plans/reports/notes/search）；\n"
     "- schedule_review 安排复习提醒、finish_plan_task 学习任务打卡（先用 query_plan_tasks 拿 taskId）、"
@@ -487,6 +491,30 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
         return _propose_action("add_question", inner)
 
     @tool
+    def add_flashcard(front: str, back: str, kp_name: str = "") -> str:
+        """把一个值得记住的知识点做成问对式闪卡（待确认动作，用户确认后才真正创建）。
+        front 是一个具体、可自测的问题（不要是非句），back 是简洁准确的答案（50 字内）；
+        kp_name 是可选的知识点标签，会以【标签】形式缀在卡片正面。课程内外均可使用。"""
+        if not user_id:
+            return "未提供用户信息，无法登记闪卡。"
+        if not (front or "").strip() or not (back or "").strip():
+            return "请提供闪卡正面（问题）与背面（答案）。"
+        return _propose_action("add_flashcard", {
+            "front": front.strip(), "back": back.strip(),
+            "kpName": (kp_name or "").strip()})
+
+    @tool
+    def add_mistake(question_id: int) -> str:
+        """把题库中的一道题收录进错题本（待确认动作，用户确认后才真正收录）。
+        questionId 必须先用 query_question_bank 查到，不能凭空编造；收录后重练答对该题会自动出本；
+        需会话已绑定课程。"""
+        if not user_id:
+            return "未提供用户信息，无法收录错题。"
+        if not course_id:
+            return "当前会话未绑定课程，无法收录错题，请让学生在知识库答疑中提问。"
+        return _propose_action("add_mistake", {"questionId": int(question_id)})
+
+    @tool
     def open_page(page: str) -> str:
         """打开系统中的某个功能页面（待确认动作，用户确认后前端才会跳转）。
         page 取以下白名单之一：home(首页) chat(智能答疑) generate(AI内容生成) practice(题库练习)
@@ -498,7 +526,7 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
 
     return read_tools + ([query_plan_tasks, schedule_review, finish_plan_task, add_plan_task,
                           save_material_to_kb, add_note, favorite_question, generate_questions,
-                          add_question, open_page]
+                          add_question, add_flashcard, add_mistake, open_page]
                          if config.AGENT_WRITE_TOOLS else [])
 
 

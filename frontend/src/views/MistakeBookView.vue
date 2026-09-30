@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-title">错题本</div>
-    <div class="page-sub">自动归集练习与考试中答错的题，重练答对后自动出本</div>
+    <div class="page-sub">练习与考试答错的题自动归集，也可在 AI 答疑中收录；重练答对后自动出本</div>
 
     <div v-if="error" class="err">{{ error }}</div>
 
@@ -31,7 +31,8 @@
         <span v-if="m.question.kpName" class="tag">{{ m.question.kpName }}</span>
         <span v-if="m.question.difficulty" class="tag">{{ m.question.difficulty }}</span>
         <span class="mi-meta">
-          <span class="tag bad">错 {{ m.wrongCount }} 次</span>
+          <span v-if="m.wrongCount > 0" class="tag bad">错 {{ m.wrongCount }} 次</span>
+          <span v-else class="tag">手动收录</span>
           <span class="muted small">{{ fmtTime(m.lastWrongAt) }}</span>
         </span>
       </div>

@@ -1,13 +1,16 @@
 package com.example.learningassistant.practice.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.learningassistant.common.BizException;
 import com.example.learningassistant.exam.entity.ExamAnswer;
 import com.example.learningassistant.exam.entity.ExamRecord;
 import com.example.learningassistant.exam.mapper.ExamAnswerMapper;
 import com.example.learningassistant.exam.mapper.ExamRecordMapper;
+import com.example.learningassistant.practice.entity.ManualMistake;
 import com.example.learningassistant.practice.entity.Practice;
 import com.example.learningassistant.practice.entity.PracticeQuestion;
 import com.example.learningassistant.practice.entity.Question;
+import com.example.learningassistant.practice.mapper.ManualMistakeMapper;
 import com.example.learningassistant.practice.mapper.PracticeMapper;
 import com.example.learningassistant.practice.mapper.PracticeQuestionMapper;
 import com.example.learningassistant.practice.mapper.QuestionMapper;
@@ -21,10 +24,12 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
- * 错题本：归集练习/考试中最近一次作答仍为错误的题目。
- * 查询式实现（无新表）——以"该题最近一次作答是否正确"为准，重练答对后自动出本。
+ * 错题本：归集练习/考试中最近一次作答仍为错误的题目，外加手动收录（t_mistake_manual）。
+ * 查询式实现——以"该题最近一次作答是否正确"为准，重练答对后自动出本；
+ * 手动收录（Agent 确认执行）按收录时间为界参与同一判定：收录之后重练答对才出本。
  */
 @Slf4j
 @Service
@@ -37,6 +42,7 @@ public class MistakeService {
     private final ExamAnswerMapper examAnswerMapper;
     private final QuestionMapper questionMapper;
     private final com.example.learningassistant.exam.mapper.ExamMapper examMapper;
+    private final ManualMistakeMapper manualMistakeMapper;
 
     /**
      * 错题分页：records（question + lastWrongAt + lastWrongAnswer + wrongCount）+ total，按最近答错时间倒序。
@@ -66,7 +72,7 @@ public class MistakeService {
                 m.put("question", q);
                 m.put("lastWrongAt", wrongs.get(qid).at());
                 m.put("lastWrongAnswer", wrongs.get(qid).answer());
-                m.put("wrongCount", counts.getOrDefault(qid, 1));
+                m.put("wrongCount", counts.getOrDefault(qid, 0));
                 records.add(m);
             }
         }
@@ -130,7 +136,77 @@ public class MistakeService {
                 .filter(e -> !Boolean.TRUE.equals(latestCorrect.get(e.getKey())))
                 .sorted(Map.Entry.<Long, LocalDateTime>comparingByValue(Comparator.reverseOrder()))
                 .forEach(e -> wrong.put(e.getKey(), new WrongInfo(e.getValue(), latestAnswer.get(e.getKey()))));
-        return wrong;
+        mergeManual(userId, courseId, latest, latestCorrect, wrong);
+        return sortByTimeDesc(wrong);
+    }
+
+    /**
+     * 手动收录合并：收录时间晚于该题最近一次作答（或该题从无作答）时纳入在册；
+     * 收录之后重练答对则自动出本——「重练答对出本」的语义对收录题同样成立。
+     * 收录前曾答对不阻断收录（收录即表达「这块没掌握」），此时无可展示的错答。
+     */
+    private void mergeManual(Long userId, Long courseId, Map<Long, LocalDateTime> latest,
+                             Map<Long, Boolean> latestCorrect, Map<Long, WrongInfo> wrong) {
+        List<ManualMistake> manuals = manualMistakeMapper.selectList(new LambdaQueryWrapper<ManualMistake>()
+                .eq(ManualMistake::getUserId, userId)
+                .eq(courseId != null, ManualMistake::getCourseId, courseId));
+        for (ManualMistake m : manuals) {
+            Long qid = m.getQuestionId();
+            LocalDateTime addedAt = m.getCreatedAt() == null ? LocalDateTime.now() : m.getCreatedAt();
+            LocalDateTime answeredAt = latest.get(qid);
+            if (answeredAt != null && answeredAt.isAfter(addedAt)) {
+                if (Boolean.TRUE.equals(latestCorrect.get(qid))) {
+                    wrong.remove(qid);
+                }
+                continue;
+            }
+            if (!wrong.containsKey(qid)) {
+                wrong.put(qid, new WrongInfo(addedAt, null));
+            }
+        }
+    }
+
+    /** 按最近在册时间倒序重建（手动收录插入后恢复有序）。 */
+    private Map<Long, WrongInfo> sortByTimeDesc(Map<Long, WrongInfo> wrong) {
+        List<Map.Entry<Long, WrongInfo>> entries = new ArrayList<>(wrong.entrySet());
+        entries.sort(Map.Entry.comparingByValue(Comparator.comparing(WrongInfo::at,
+                Comparator.reverseOrder())));
+        Map<Long, WrongInfo> result = new LinkedHashMap<>();
+        for (Map.Entry<Long, WrongInfo> e : entries) {
+            result.put(e.getKey(), e.getValue());
+        }
+        return result;
+    }
+
+    /**
+     * 手动收录一道题（Agent 动作确认执行调用）：归属校验后 upsert——
+     * 重复收录刷新收录时间，让「收录之后答对才出本」从本次收录重新起算。
+     */
+    public void addManual(Long userId, Long courseId, Long questionId) {
+        Question q = questionMapper.selectById(questionId);
+        if (q == null) {
+            throw new BizException("题目已不存在，可能已被删除");
+        }
+        if (courseId != null && !Objects.equals(q.getCourseId(), courseId)) {
+            throw new BizException("题目不属于当前课程");
+        }
+        ManualMistake row = manualMistakeMapper.selectOne(new LambdaQueryWrapper<ManualMistake>()
+                .eq(ManualMistake::getUserId, userId)
+                .eq(ManualMistake::getQuestionId, questionId)
+                .last("LIMIT 1"));
+        if (row == null) {
+            row = new ManualMistake();
+            row.setTenantId(1L);
+            row.setUserId(userId);
+            row.setCourseId(courseId);
+            row.setQuestionId(questionId);
+            row.setCreatedAt(LocalDateTime.now());
+            manualMistakeMapper.insert(row);
+            return;
+        }
+        row.setCourseId(courseId);
+        row.setCreatedAt(LocalDateTime.now());
+        manualMistakeMapper.updateById(row);
     }
 
     /** 一次错题的聚合信息：最近答错时间 + 当时的作答内容。 */
