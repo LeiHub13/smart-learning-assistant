@@ -130,13 +130,14 @@
 
 <script setup>
 import { ref, onMounted, computed, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { api, sseStream, getCourses } from '../api'
 import { mdToHtml } from '../utils'
 
 defineOptions({ name: 'ChatView' })
 
 const router = useRouter()
+const route = useRoute()
 
 const courses = ref([])
 const kbs = ref([])
@@ -173,8 +174,43 @@ onMounted(async () => {
   courses.value = await getCourses()
   const list = await api('/api/chat/sessions')
   sessions.value = list
+  // 知识图谱节点跳转进来：绑定课程/知识库后围绕该概念自动发起提问，清掉 query 防刷新重复发送
+  const ask = typeof route.query.ask === 'string' ? route.query.ask.trim() : ''
+  if (ask && await askFromGraph(ask)) {
+    router.replace({ path: '/chat' })
+    return
+  }
   if (list.length) await openSession(list[0].id)
 })
+
+/* 图谱跳转提问：校验并绑定 query 里的课程/知识库，复用既有会话或新建后自动发送；返回是否成功受理 */
+const askFromGraph = async (ask) => {
+  const cid = Number(route.query.courseId)
+  const kid = Number(route.query.kbId)
+  if (!courses.value.some((c) => c.id === cid)) {
+    return false
+  }
+  mode.value = 'kb'
+  courseId.value = cid
+  kbScope.value = 'single'
+  kbs.value = await api('/api/courses/' + cid + '/kb').catch(() => [])
+  if (!kbs.value.some((k) => k.id === kid)) {
+    return false
+  }
+  kbId.value = kid
+  const exist = sessions.value.find((s) => s.kbId === kid && s.courseId === cid)
+  if (exist) {
+    await openSession(exist.id)
+  } else {
+    await newSession()
+  }
+  const rel = typeof route.query.rel === 'string'
+    ? route.query.rel.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 4) : []
+  send(rel.length
+    ? `请结合知识库资料讲解「${ask}」这个概念：它的定义与要点，以及它与「${rel.join('」「')}」等概念的关系。`
+    : `请结合知识库资料讲解「${ask}」这个概念的定义与要点。`)
+  return true
+}
 
 const setMode = async (m) => {
   if (mode.value === m) return

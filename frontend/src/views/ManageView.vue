@@ -113,7 +113,7 @@
             <h3 class="detail-title">{{ graphModal.kb.name }} · 知识图谱</h3>
             <div class="detail-sub" v-if="graphModal.data">
               {{ graphModal.data.nodeCount }} 个概念 · {{ graphModal.data.edgeCount }} 条关系 ·
-              生成于 {{ fmtKgTime(graphModal.data.updatedAt) }}；拖拽平移、滚轮缩放
+              生成于 {{ fmtKgTime(graphModal.data.updatedAt) }}；拖拽平移、滚轮缩放，点击节点可发起答疑
             </div>
             <div class="detail-sub" v-else>尚未生成图谱，点下方按钮从知识库资料中抽取概念与关系</div>
           </div>
@@ -509,6 +509,17 @@ const renderGraph = () => {
       },
       emphasis: { focus: 'adjacency', lineStyle: { width: 3 } }
     }]
+  })
+  // 点击节点 → 带上概念名与它在图中的直接邻居跳转答疑，自动绑定该知识库并发起提问
+  kgChart.on('click', (p) => {
+    if (p.dataType !== 'node' || !graphModal.value) return
+    const name = p.data.name
+    const kb = graphModal.value.kb
+    const rel = [...new Set(g.edges
+      .filter((e) => e.source === name || e.target === name)
+      .map((e) => (e.source === name ? e.target : e.source)))].slice(0, 4)
+    closeGraph()
+    router.push({ path: '/chat', query: { courseId: kb.courseId, kbId: kb.id, ask: name, rel: rel.join(',') } })
   })
 }
 

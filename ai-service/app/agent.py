@@ -84,7 +84,7 @@ WRITE_PROMPT_SUFFIX = (
     "学生说想记住某个概念/结论时用，课程内外均可）；add_mistake 把题库中的一道题收录进错题本"
     "（先用 query_question_bank 拿 questionId，要求会话已绑定课程）；\n"
     "- open_page 打开系统页面，page 从白名单里选（home/chat/generate/practice/mistakes/favorites/"
-    "exam/bank/progress/manage/hub/plans/reports/notes/search）；\n"
+    "flashcards/exam/bank/progress/manage/hub/plans/reports/notes/search）；\n"
     "- schedule_review 安排复习提醒、finish_plan_task 学习任务打卡（先用 query_plan_tasks 拿 taskId）、"
     "add_plan_task 新建学习计划任务（task_date 传 yyyy-MM-dd，留空表示今天；"
     "没有计划时系统会自动建一个轻量计划承接）。\n"
@@ -518,8 +518,9 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
     def open_page(page: str) -> str:
         """打开系统中的某个功能页面（待确认动作，用户确认后前端才会跳转）。
         page 取以下白名单之一：home(首页) chat(智能答疑) generate(AI内容生成) practice(题库练习)
-        mistakes(错题本) favorites(收藏夹) exam(在线考试) bank(题库管理) progress(学情分析)
-        manage(我的课程) hub(课程广场) plans(学习计划) reports(学习报告) notes(学习笔记) search(搜索)。"""
+        mistakes(错题本) favorites(收藏夹) flashcards(闪卡) exam(在线考试) bank(题库管理)
+        progress(学情分析) manage(我的课程) hub(课程广场) plans(学习计划) reports(学习报告)
+        notes(学习笔记) search(搜索)。"""
         if not user_id:
             return "未提供用户信息，无法打开页面。"
         return _propose_action("open_page", {"page": (page or "").strip()})

@@ -82,6 +82,7 @@ public class AgentActionService {
             Map.entry("practice", new String[]{"/practice", "题库练习"}),
             Map.entry("mistakes", new String[]{"/mistakes", "错题本"}),
             Map.entry("favorites", new String[]{"/favorites", "收藏夹"}),
+            Map.entry("flashcards", new String[]{"/flashcards", "闪卡"}),
             Map.entry("exam", new String[]{"/exam", "在线考试"}),
             Map.entry("bank", new String[]{"/bank", "题库管理"}),
             Map.entry("progress", new String[]{"/progress", "学情分析"}),
@@ -762,7 +763,11 @@ public class AgentActionService {
     }
 
     private void executeOpenPage(AgentAction a, Map<String, Object> payload) {
-        // 导航动作没有服务端写入：path 在登记时就由白名单生成，确认后由前端跳转
+        // 导航动作没有服务端写入：path 在登记时就由白名单生成；确认响应统一走 resultOf 的
+        // navigate 字段下发给前端，这里必须把 path 映射成 navigate 并回写 payload，
+        // 否则确认后前端拿不到跳转路径（幂等重确认时也要能读到）
+        payload.put("navigate", String.valueOf(payload.getOrDefault("path", "/home")));
+        a.setPayload(writeJson(payload));
         a.setStatus("executed");
         a.setResult(clip("已打开「" + payload.getOrDefault("label", "") + "」页面", RESULT_MAX));
         actionMapper.updateById(a);
