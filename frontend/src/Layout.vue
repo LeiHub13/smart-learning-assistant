@@ -48,26 +48,38 @@
             </div>
             <template v-if="tab === 'system'">
               <div class="notify-head">
-                <b>通知</b>
+                <b>通知 <span v-if="unread" class="n-count">{{ unread > 99 ? '99+' : unread }}</span></b>
                 <a @click="readAll">全部已读</a>
               </div>
-              <div v-if="!notifies.length" class="notify-empty">暂无通知</div>
+              <div v-if="!notifies.length" class="notify-empty">
+                <AppIcon name="bell" :size="26" />
+                <p>暂无通知</p>
+                <span>有新消息会在这里提醒你</span>
+              </div>
               <div v-for="n in notifies" :key="n.id" :class="['notify-item', { unread: !n.readFlag }]" @click="readOne(n)">
-                <div class="notify-title">{{ n.title }}</div>
+                <div class="n-row">
+                  <span class="n-dot" :style="{ background: typeColor(n.type) }" :title="typeLabel(n.type)"></span>
+                  <span class="notify-title">{{ n.title }}</span>
+                  <span class="n-time">{{ fmtListTime(n.createdAt) }}</span>
+                </div>
                 <div class="notify-content">{{ n.content }}</div>
-                <div class="notify-content muted">{{ fmtShort(n.createdAt) }}</div>
               </div>
             </template>
             <template v-else>
               <div class="notify-head"><b>邮件发送记录</b></div>
-              <div v-if="!mailLogs.length" class="notify-empty">暂无邮件发送记录</div>
+              <div v-if="!mailLogs.length" class="notify-empty">
+                <AppIcon name="bell" :size="26" />
+                <p>暂无邮件发送记录</p>
+                <span>公告与提醒的邮件送达情况会显示在这里</span>
+              </div>
               <div v-for="m in mailLogs" :key="m.id" class="notify-item" @click="openMail(m)">
-                <div class="notify-title">
-                  {{ m.subject }}
+                <div class="n-row">
+                  <span class="notify-title">{{ m.subject }}</span>
                   <span class="mail-tag" :class="m.status === 'SENT' ? 'ok' : 'bad'">{{ m.status === 'SENT' ? '成功' : '失败' }}</span>
+                  <span class="n-time">{{ fmtListTime(m.createdAt) }}</span>
                 </div>
                 <div class="notify-content">{{ m.content }}</div>
-                <div class="notify-content muted">{{ m.email }} · {{ fmtShort(m.createdAt) }}</div>
+                <div class="n-mail">{{ m.email }}</div>
               </div>
             </template>
           </div>
@@ -268,6 +280,26 @@ const fmtShort = (t) => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+/* 列表里的紧凑时间：今天的只看时分，更早的看日期（跨年补年份） */
+const fmtListTime = (t) => {
+  if (!t) return ''
+  const d = new Date(t)
+  const now = new Date()
+  const p = (x) => String(x).padStart(2, '0')
+  if (d.toDateString() === now.toDateString()) {
+    return `${p(d.getHours())}:${p(d.getMinutes())}`
+  }
+  const md = `${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  return d.getFullYear() === now.getFullYear() ? md : `${d.getFullYear()}-${md}`
+}
+
+/* 通知类型 → 圆点色：取 GitHub 色板的中间调，浅色/深色主题下都可读 */
+const TYPE_COLORS = {
+  review: '#9a6700', plan: '#1a7f37', system: '#59636e', exam: '#cf222e',
+  practice: '#1b7c83', dm: '#8250df', friend: '#bf3989', announcement: '#0969da',
+}
+const typeColor = (t) => TYPE_COLORS[t] || '#59636e'
+
 const readOne = async (n) => {
   if (!n.readFlag) {
     await markRead(n.id)
@@ -353,9 +385,14 @@ img.avatar { object-fit: cover; padding: 0; }
 .global-search :deep(.el-input__wrapper.is-focus) { background: var(--bg); box-shadow: 0 0 0 1px var(--accent) inset; }
 .global-search :deep(.el-input__inner) { height: 32px; font-size: 13px; }
 .global-search :deep(.el-input__prefix-inner > :first-child) { margin-right: 4px; }
-.tab-bar { display: flex; border-bottom: 1px solid var(--border); }
-.tab-bar span { flex: 1; text-align: center; padding: 10px 0 9px; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; }
-.tab-bar span.on { color: var(--primary); box-shadow: inset 0 -2px 0 var(--primary); }
+/* 分段式选项卡：软底胶囊 + 激活白卡，与全局 tag/按钮语言一致 */
+.tab-bar { display: flex; gap: 4px; margin: 10px 12px 8px; padding: 3px; background: var(--soft); border-radius: 9px; }
+.tab-bar span {
+  flex: 1; text-align: center; padding: 5px 0 6px; font-size: 12.5px; font-weight: 600;
+  color: var(--muted); border-radius: 7px; cursor: pointer;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.tab-bar span.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
 .mail-tag { font-size: 10px; border-radius: 6px; padding: 1px 6px; margin-left: 6px; vertical-align: 1px; }
 .mail-tag.ok { background: var(--ok-soft); color: var(--ok-strong); }
 .mail-tag.bad { background: var(--bad-soft); color: var(--bad-strong); }
@@ -376,23 +413,38 @@ img.avatar { object-fit: cover; padding: 0; }
 .bell:hover { background: var(--hover); }
 .bell .badge { position: absolute; top: 1px; right: 0; background: #d1242f; color: #fff; font-size: 10px; border-radius: 8px; padding: 0 5px; line-height: 14px; box-shadow: 0 0 0 2px var(--bg); }
 .notify-pop {
-  position: absolute; top: 42px; right: -10px; width: 320px; max-height: 400px; overflow: auto;
+  position: absolute; top: 42px; right: -10px; width: 344px; max-height: 440px; overflow-y: auto;
   background: var(--card); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.14);
-  padding: 6px 0; z-index: 100;
+  padding: 0 0 4px; z-index: 100;
   animation: pop-in .16s ease;
 }
+.notify-pop::-webkit-scrollbar { width: 6px; }
+.notify-pop::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.notify-pop::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 @keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
-.notify-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px 9px; border-bottom: 1px solid var(--border); }
-.notify-head b { font-size: 14px; letter-spacing: -.01em; }
+.notify-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+.notify-head b { font-size: 14px; letter-spacing: -.01em; display: flex; align-items: center; gap: 6px; }
+.n-count { padding: 0 7px; line-height: 17px; font-size: 11px; font-weight: 600; border-radius: 999px; background: var(--bad-soft); color: var(--bad-strong); }
 .notify-head a { color: var(--primary); font-size: 12px; cursor: pointer; }
 .notify-head a:hover { text-decoration: underline; }
-.notify-empty { padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
+.notify-empty { padding: 30px 20px; text-align: center; color: var(--muted); }
+.notify-empty .app-icon { opacity: .35; }
+.notify-empty p { margin: 8px 0 2px; font-size: 13px; font-weight: 600; color: var(--text); }
+.notify-empty span { font-size: 12px; }
 .notify-item { padding: 9px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s ease; }
+.notify-item:last-child { border-bottom: none; }
 .notify-item.unread { background: var(--soft); }
-.notify-item.unread .notify-title::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--primary); margin-right: 6px; vertical-align: 1px; }
 .notify-item:hover { background: var(--hover); }
-.notify-title { font-weight: 600; font-size: 13px; }
-.notify-content { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.n-row { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.n-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; }
+.notify-title {
+  flex: 1; min-width: 0; font-weight: 500; font-size: 13px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.notify-item.unread .notify-title { font-weight: 650; }
+.n-time { flex: none; font-size: 11px; color: var(--muted); }
+.notify-content { margin: 3px 0 0 14px; font-size: 12px; line-height: 1.5; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.n-mail { margin: 2px 0 0 14px; font-size: 11px; color: var(--muted); opacity: .85; }
 
 /* ===== 通知详情弹窗 ===== */
 .notify-modal {
@@ -434,12 +486,13 @@ img.avatar { object-fit: cover; padding: 0; }
 }
 .nm-foot { margin-top: 14px; display: flex; justify-content: flex-end; }
 .nm-btn {
-  height: 32px; padding: 0 18px; border: 1px solid rgba(31,35,40,.15); border-radius: 6px;
-  background: var(--success-emph); color: #fff;
+  height: 32px; padding: 0 18px; border: none; border-radius: 8px;
+  background: var(--primary); color: #fff;
   font-size: 13px; font-weight: 500; font-family: inherit; cursor: pointer;
-  transition: background .15s ease;
+  transition: box-shadow .15s ease, filter .15s ease;
 }
-.nm-btn:hover { background: var(--success); }
+.nm-btn:hover { box-shadow: 0 2px 10px rgba(9, 105, 218, .3); filter: brightness(1.06); }
+html.dark .nm-btn:hover { filter: brightness(1.12); }
 
 /* ===== 多级侧边栏 ===== */
 .grp-arrow { margin-left: auto; opacity: .55; transition: transform .2s ease; }
