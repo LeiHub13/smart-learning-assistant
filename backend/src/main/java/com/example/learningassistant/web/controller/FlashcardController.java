@@ -72,6 +72,16 @@ public class FlashcardController {
         return ApiResponse.ok(flashcardService.count(u.id()));
     }
 
+    /** 今日到期卡数（SRS 复习义务），供首页与闪卡页展示。 */
+    @GetMapping("/due")
+    public ApiResponse<Map<String, Object>> due(HttpServletRequest request,
+                                                @RequestParam(required = false) Long courseId) {
+        AuthUser u = CurrentUser.get(request);
+        return ApiResponse.ok(Map.of(
+                "due", flashcardService.dueCount(u.id(), courseId),
+                "total", flashcardService.count(u.id())));
+    }
+
     /** Anki 导出：制表符分隔纯文本，登录用户自己的全部卡片。 */
     @GetMapping("/export")
     public void export(HttpServletRequest request, HttpServletResponse response) throws IOException {

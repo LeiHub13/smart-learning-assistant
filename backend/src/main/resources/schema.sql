@@ -194,6 +194,7 @@ CREATE TABLE IF NOT EXISTS t_flashcard (
     box         INT DEFAULT 1,
     last_result VARCHAR(10),
     last_reviewed_at TIMESTAMP NULL,
+    due_at      TIMESTAMP NULL,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

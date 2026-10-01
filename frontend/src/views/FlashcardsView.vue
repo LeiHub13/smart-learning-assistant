@@ -23,7 +23,10 @@
 
     <div class="card">
       <div class="row" style="justify-content:space-between;margin-bottom:10px">
-        <h3 style="margin:0">学习队列 <span class="tag">{{ queue.length }} 张</span></h3>
+        <h3 style="margin:0">学习队列
+          <span class="tag">{{ queue.length }} 张</span>
+          <span class="tag" :class="due ? 'bad' : 'ok'">今日到期 {{ due }} 张</span>
+        </h3>
         <button class="btn ghost small" :disabled="loading" @click="loadQueue">刷新队列</button>
       </div>
 
@@ -48,7 +51,9 @@
             <button class="btn accent" @click="grade('ok')">✓ 记住了</button>
           </template>
         </div>
-        <div class="muted small" style="text-align:center">第 {{ Math.min(idx + 1, queue.length) }} / {{ queue.length }} 张 · 记住升盒、没记住回盒 1</div>
+        <div class="muted small" style="text-align:center">
+          第 {{ Math.min(idx + 1, queue.length) }} / {{ queue.length }} 张 · 记住升盒、没记住回盒 1{{ lastHint ? ' · ' + lastHint : '' }}
+        </div>
       </template>
       <div v-else class="empty">
         {{ loading ? '加载中…' : (idx >= queue.length && queue.length === 0 && finished ? '本轮完成！刷新队列继续，或再生成一批' : '队列为空——先从上面生成一些闪卡吧') }}
@@ -67,6 +72,8 @@ const queue = ref([])
 const idx = ref(0)
 const revealed = ref(false)
 const total = ref(0)
+const due = ref(0)
+const lastHint = ref('')
 const docList = ref([])
 const docId = ref(null)
 const genLoading = ref(false)
@@ -76,6 +83,8 @@ const error = ref('')
 
 const current = computed(() => queue.value[idx.value] || null)
 const sourceLabel = (s) => ({ mistake: '错题', doc: '文档', chat: '答疑' }[s] || s)
+// 与后端 BOX_INTERVAL_DAYS 对齐：盒 1-5 答对后的下次间隔（天）
+const BOX_DAYS = [1, 2, 4, 7, 15]
 
 const loadQueue = async () => {
   loading.value = true
@@ -84,11 +93,19 @@ const loadQueue = async () => {
     idx.value = 0
     revealed.value = false
     finished.value = false
+    lastHint.value = ''
   } catch (e) {
     error.value = e.message
   } finally {
     loading.value = false
   }
+}
+
+const loadDue = async () => {
+  try {
+    const r = await api('/api/flashcards/due')
+    due.value = r.due || 0
+  } catch (e) { /* 静默 */ }
 }
 
 const loadTotal = async () => {
@@ -107,14 +124,18 @@ const grade = async (result) => {
   const card = current.value
   if (!card) return
   try {
-    await api('/api/flashcards/' + card.id + '/review', { method: 'POST', body: { result } })
+    const updated = await api('/api/flashcards/' + card.id + '/review', { method: 'POST', body: { result } })
+    // 排期反馈：与后端 Leitner 间隔一致（记住按盒序拉长，没记住 10 分钟后重现）
+    lastHint.value = result === 'ok'
+      ? `已排期：${BOX_DAYS[Math.max((updated.box || 1) - 1, 0)]} 天后再复习`
+      : '已排期：10 分钟后重现'
     queue.value.splice(idx.value, 1)
     revealed.value = false
-    total.value = Math.max(0, total.value)
     if (!queue.value.length) {
       finished.value = true
       loadTotal()
     }
+    loadDue()
   } catch (e) {
     error.value = e.message
   }
@@ -153,7 +174,7 @@ const exportAnki = () => {
 }
 
 onMounted(async () => {
-  await Promise.all([loadQueue(), loadTotal(), loadDocs()])
+  await Promise.all([loadQueue(), loadTotal(), loadDocs(), loadDue()])
 })
 </script>
 

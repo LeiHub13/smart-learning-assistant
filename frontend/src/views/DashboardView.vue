@@ -21,6 +21,7 @@
         <button class="btn" @click="go('/practice')"><AppIcon name="practice" :size="14" /> 开始练习</button>
         <button class="btn" @click="go('/mistakes')"><AppIcon name="target" :size="14" /> 错题本{{ mistakeTotal ? '（' + mistakeTotal + '）' : '' }}</button>
         <button class="btn" @click="go('/favorites')"><AppIcon name="star" :size="14" /> 收藏夹{{ favCount ? '（' + favCount + '）' : '' }}</button>
+        <button class="btn" @click="go('/flashcards')"><AppIcon name="zap" :size="14" /> 闪卡复习{{ dueCards ? '（今日 ' + dueCards + ' 张到期）' : '' }}</button>
         <button class="btn ghost" @click="go('/exam')"><AppIcon name="exam" :size="14" /> 进入考试</button>
         <button class="btn ghost" @click="go('/chat')"><AppIcon name="chat" :size="14" /> 智能答疑</button>
         <button class="btn ghost" @click="go('/progress')"><AppIcon name="progress" :size="14" /> 查看学情</button>
@@ -142,6 +143,7 @@ const practiceCount = ref(0)
 const favCount = ref(0)
 const unread = ref(0)
 const mistakeTotal = ref(0)
+const dueCards = ref(0)
 const chartRef = ref(null)
 let chart = null
 
@@ -284,6 +286,8 @@ onActivated(() => {
   // KeepAlive 回到首页时刷新错题/收藏数（错题重练出本、收藏增减都会变）
   api('/api/mistakes?size=1').then((m) => { mistakeTotal.value = m.total || 0 }).catch(() => {})
   api('/api/favorites/count').then((c) => { favCount.value = c.total || 0 }).catch(() => {})
+  // 复习义务随复习动作实时变化，回首页时同样刷新
+  api('/api/flashcards/due').then((r) => { dueCards.value = r.due || 0 }).catch(() => {})
 })
 
 onMounted(async () => {

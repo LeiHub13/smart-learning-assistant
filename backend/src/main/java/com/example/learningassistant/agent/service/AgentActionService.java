@@ -837,11 +837,21 @@ public class AgentActionService {
         }
         // 登记到确认之间题目可能已被删除；归属与收录（upsert）由 addManual 再核验
         mistakeService.addManual(a.getUserId(), a.getCourseId(), questionId);
+        // 联动生成一张立即到期的复习闪卡（与错题直转同构，同正面去重），错题由此进入 SRS 复习队列
+        boolean cardCreated = false;
+        Question q = questionMapper.selectById(questionId);
+        if (q != null && q.getStem() != null && q.getAnswer() != null) {
+            String front = clip("【" + (q.getKpName() == null ? "错题" : q.getKpName()) + "】" + q.getStem(), 500);
+            String back = clip(q.getAnswer()
+                    + (q.getAnalysis() == null || q.getAnalysis().isBlank() ? "" : "\n解析：" + q.getAnalysis()), 800);
+            cardCreated = flashcardService.createFromMistake(a.getUserId(), a.getCourseId(), questionId, front, back);
+        }
         a.setStatus("executed");
-        a.setResult(clip("已收录错题：「" + payload.getOrDefault("stem", "题 #" + questionId)
-                + "」，重练答对后会自动出本", RESULT_MAX));
+        a.setResult(clip("已收录错题：「" + payload.getOrDefault("stem", "题 #" + questionId) + "」"
+                + (cardCreated ? "，并生成复习闪卡（今日到期）" : "")
+                + "；重练答对后会自动出本", RESULT_MAX));
         actionMapper.updateById(a);
-        log.info("待确认动作 {} 已执行，错题 {} 收录", a.getId(), questionId);
+        log.info("待确认动作 {} 已执行，错题 {} 收录（联动闪卡={}）", a.getId(), questionId, cardCreated);
     }
 
     /** 提醒时间：yyyy-MM-dd 视为当天 09:00，ISO 日期时间原样解析，解析不了视为「立即」。 */

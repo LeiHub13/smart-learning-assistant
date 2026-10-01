@@ -37,6 +37,10 @@ public class FlashcardService {
 
     private static final int MAX_CARDS_PER_GEN = 10;
     private static final int MAX_MATERIAL_CHARS = 4000;
+    /** Leitner 盒 → 答对后的下次间隔（天）：盒越高记得越牢，间隔越长。 */
+    private static final int[] BOX_INTERVAL_DAYS = {1, 2, 4, 7, 15};
+    /** 没记住回盒 1 后的短间隔（分钟）：当天内重现巩固。 */
+    private static final int MISS_DELAY_MINUTES = 10;
 
     private final FlashcardMapper flashcardMapper;
     private final ChatModelFactory modelFactory;
@@ -125,29 +129,46 @@ public class FlashcardService {
         return createCard(userId, courseId, "chat", sessionId, front, back);
     }
 
-    /** 学习队列：box 小的（薄弱）优先，久未复习的在前。 */    public List<Flashcard> study(Long userId, Long courseId, int count) {
+    /** 错题直转单卡（收录错题时联动生成）：来源 mistake、sourceId 记题目 id，立即到期。 */
+    public boolean createFromMistake(Long userId, Long courseId, Long questionId, String front, String back) {
+        return createCard(userId, courseId, "mistake", questionId, front, back);
+    }
+
+    /** 学习队列：到期卡优先（SRS），未到期的按到期时间就近垫底；盒小（薄弱）再优先。 */
+    public List<Flashcard> study(Long userId, Long courseId, int count) {
         int c = Math.min(Math.max(count, 1), 30);
         LambdaQueryWrapper<Flashcard> w = new LambdaQueryWrapper<Flashcard>()
                 .eq(Flashcard::getUserId, userId)
                 .eq(courseId != null, Flashcard::getCourseId, courseId)
-                .orderByAsc(Flashcard::getBox)
-                .orderByAsc(Flashcard::getLastReviewedAt)
-                .last("LIMIT " + c);
+                .last("ORDER BY (due_at IS NULL OR due_at <= NOW()) DESC, due_at ASC, box ASC, "
+                        + "last_reviewed_at ASC LIMIT " + c);
         return flashcardMapper.selectList(w);
     }
 
-    /** 自评：记住升盒（最多 5），没记住回 1。 */
+    /** 自评：记住升盒（最多 5）并按盒序拉长下次间隔；没记住回盒 1，10 分钟后重现。 */
     public Flashcard review(Long userId, Long cardId, String result) {
         Flashcard card = flashcardMapper.selectById(cardId);
         if (card == null || !card.getUserId().equals(userId)) {
             throw new BizException("卡片不存在");
         }
         boolean ok = "ok".equals(result);
-        card.setBox(ok ? Math.min((card.getBox() == null ? 1 : card.getBox()) + 1, 5) : 1);
+        LocalDateTime now = LocalDateTime.now();
+        int newBox = ok ? Math.min((card.getBox() == null ? 1 : card.getBox()) + 1, 5) : 1;
+        card.setBox(newBox);
         card.setLastResult(ok ? "ok" : "miss");
-        card.setLastReviewedAt(LocalDateTime.now());
+        card.setLastReviewedAt(now);
+        card.setDueAt(ok ? now.plusDays(BOX_INTERVAL_DAYS[newBox - 1]) : now.plusMinutes(MISS_DELAY_MINUTES));
         flashcardMapper.updateById(card);
         return card;
+    }
+
+    /** 今日到期卡数（due_at 为空视为立即到期），供首页与闪卡页展示复习义务。 */
+    public long dueCount(Long userId, Long courseId) {
+        return flashcardMapper.selectCount(new LambdaQueryWrapper<Flashcard>()
+                .eq(Flashcard::getUserId, userId)
+                .eq(courseId != null, Flashcard::getCourseId, courseId)
+                .and(w -> w.le(Flashcard::getDueAt, LocalDateTime.now())
+                        .or().isNull(Flashcard::getDueAt)));
     }
 
     /** Anki 导出：制表符分隔的纯文本（front<TAB>back），换行转 <br>，可直接被 Anki 导入。 */
@@ -233,6 +254,7 @@ public class FlashcardService {
         card.setFront(front);
         card.setBack(back);
         card.setBox(1);
+        card.setDueAt(LocalDateTime.now());
         card.setCreatedAt(LocalDateTime.now());
         flashcardMapper.insert(card);
         return true;
