@@ -85,6 +85,36 @@ public class AuthService {
         userMapper.updateById(user);
     }
 
+    /** 通知邮件偏好：mailMute 为「不收邮件」的类型清单（逗号分隔）；空串/空白 = 全部恢复接收。 */
+    public void updateMailMute(Long userId, String mailMute) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BizException("用户不存在");
+        }
+        if (mailMute == null || mailMute.isBlank()) {
+            // updateById 默认忽略 null 字段，清空必须显式 SET
+            userMapper.update(null, new LambdaUpdateWrapper<User>()
+                    .set(User::getMailMute, null)
+                    .eq(User::getId, userId));
+            return;
+        }
+        java.util.Set<String> allowed = java.util.Set.of(
+                "review", "plan", "system", "exam", "practice", "dm", "friend", "announcement");
+        String normalized = java.util.Arrays.stream(mailMute.split(","))
+                .map(t -> t.trim().toLowerCase())
+                .filter(t -> {
+                    if (!allowed.contains(t)) {
+                        log.warn("忽略未知的通知类型: {}", t);
+                        return false;
+                    }
+                    return true;
+                })
+                .distinct()
+                .collect(java.util.stream.Collectors.joining(","));
+        user.setMailMute(normalized.isEmpty() ? null : normalized);
+        userMapper.updateById(user);
+    }
+
     public User me(Long userId) {
         return userMapper.selectById(userId);
     }

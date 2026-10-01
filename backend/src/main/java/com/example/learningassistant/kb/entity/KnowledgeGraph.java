@@ -24,5 +24,7 @@ public class KnowledgeGraph {
     private String content;
     private Integer nodeCount;
     private Integer edgeCount;
+    /** 资料过期标记：图谱生成后知识库文档有增删时置 1，提醒用户重建 */
+    private Boolean stale;
     private LocalDateTime updatedAt;
 }

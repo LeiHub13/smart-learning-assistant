@@ -31,6 +31,9 @@
         <span v-if="q.kpName" class="tag">{{ q.kpName }}</span>
         <span v-if="q.difficulty" class="tag">{{ q.difficulty }}</span>
         <span v-if="!courseId" class="tag">{{ q.courseName }}</span>
+        <button class="btn ghost small" style="margin-left:auto" :disabled="collecting === q.questionId" @click="collect(q)">
+          {{ collecting === q.questionId ? '收录中…' : '收录错题本' }}
+        </button>
         <button class="btn ghost small fi-unfav" :disabled="removing === q.questionId" @click="remove(q)">
           <AppIcon name="star" :size="12" />
           {{ removing === q.questionId ? '移除中…' : '取消收藏' }}
@@ -123,6 +126,23 @@ const remove = async (q) => {
     error.value = e.message
   } finally {
     removing.value = null
+  }
+}
+
+/* 手动收录进错题本：与 AI 答疑收录同链路，收录后重练答对自动出本 */
+const collecting = ref(null)
+let hintTimer = null
+const collect = async (q) => {
+  collecting.value = q.questionId
+  try {
+    await api('/api/mistakes/' + q.questionId + '/collect', { method: 'POST' })
+    error.value = '已收录错题本：「' + (q.stem || '').slice(0, 30) + '…」，重练答对后自动出本'
+    clearTimeout(hintTimer)
+    hintTimer = setTimeout(() => (error.value = ''), 2800)
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    collecting.value = null
   }
 }
 

@@ -26,5 +26,7 @@ public class User {
     private String email;
     /** 头像访问 URL（/files/avatars/...，可空，为空时前端显示昵称首字） */
     private String avatar;
+    /** 不接收邮件的通知类型（逗号分隔，如 "dm,friend"）；NULL/空 = 全部类型同步邮件 */
+    private String mailMute;
     private LocalDateTime createdAt;
 }

@@ -68,7 +68,8 @@ public class AuthController {
                 "username", user.getUsername(),
                 "nickname", user.getNickname() == null ? "" : user.getNickname(),
                 "email", user.getEmail() == null ? "" : user.getEmail(),
-                "avatar", user.getAvatar() == null ? "" : user.getAvatar()));
+                "avatar", user.getAvatar() == null ? "" : user.getAvatar(),
+                "mailMute", user.getMailMute() == null ? "" : user.getMailMute()));
     }
 
     @PutMapping("/me/email")
@@ -82,6 +83,14 @@ public class AuthController {
     public ApiResponse<Void> updateProfile(HttpServletRequest request, @RequestBody Map<String, String> body) {
         AuthUser u = CurrentUser.get(request);
         authService.updateNickname(u.id(), body.get("nickname"));
+        return ApiResponse.ok(null);
+    }
+
+    /** 通知邮件偏好：mailMute 为「不收邮件」的通知类型清单（逗号分隔），空 = 全部接收。 */
+    @PutMapping("/me/notify-pref")
+    public ApiResponse<Void> updateNotifyPref(HttpServletRequest request, @RequestBody Map<String, String> body) {
+        AuthUser u = CurrentUser.get(request);
+        authService.updateMailMute(u.id(), body.get("mailMute"));
         return ApiResponse.ok(null);
     }
 

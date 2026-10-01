@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS t_user (
     nickname    VARCHAR(50),
     email       VARCHAR(100),
     avatar      VARCHAR(500),
+    mail_mute   VARCHAR(200),
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -221,6 +222,7 @@ CREATE TABLE IF NOT EXISTS t_knowledge_graph (
     content    MEDIUMTEXT NOT NULL,
     node_count INT DEFAULT 0,
     edge_count INT DEFAULT 0,
+    stale      TINYINT DEFAULT 0,
     updated_at TIMESTAMP NULL,
     UNIQUE KEY uk_kg_kb (kb_id)
 );

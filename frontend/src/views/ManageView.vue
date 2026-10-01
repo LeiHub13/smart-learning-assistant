@@ -115,6 +115,9 @@
               {{ graphModal.data.nodeCount }} 个概念 · {{ graphModal.data.edgeCount }} 条关系 ·
               生成于 {{ fmtKgTime(graphModal.data.updatedAt) }}；拖拽平移、滚轮缩放，点击节点可发起答疑
             </div>
+            <div v-if="graphModal.data && graphModal.data.stale" class="kg-stale">
+              ⚠ 知识库资料在图谱生成后有增删，图谱可能已过期，建议「重新生成」
+            </div>
             <div class="detail-sub" v-else>尚未生成图谱，点下方按钮从知识库资料中抽取概念与关系</div>
           </div>
           <button class="btn ghost small" @click="closeGraph">关闭</button>
@@ -596,6 +599,10 @@ html.dark .pv-hit { background: rgba(210,153,34,.4); }
 .kg-legend { margin-left: auto; display: flex; gap: 12px; font-size: 12px; color: var(--muted); }
 .kg-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
 .kg-err { color: #d9534f; font-size: 13px; margin-bottom: 8px; }
+.kg-stale {
+  color: #9a6700; background: rgba(154, 103, 0, .08); border-radius: 8px;
+  font-size: 12px; padding: 6px 10px; margin-bottom: 8px;
+}
 .kg-wrap { position: relative; }
 .kg-canvas { height: 60vh; min-height: 380px; border-radius: 10px; background: var(--soft); }
 .kg-empty {

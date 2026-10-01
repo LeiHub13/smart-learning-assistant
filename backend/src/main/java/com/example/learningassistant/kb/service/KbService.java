@@ -1,6 +1,7 @@
 package com.example.learningassistant.kb.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.learningassistant.ai.PythonRagClient;
 import com.example.learningassistant.common.BizException;
 import com.example.learningassistant.infra.mq.MessagePublisher;
@@ -183,10 +184,22 @@ public class KbService {
         doc.setChunkCount(parts.size());
         documentMapper.updateById(doc);
         requestIndex(kbId, doc.getId());
+        // 资料有增删：已有知识图谱标记为过期（弹窗提示「建议重新生成」），重建时自动清除
+        markGraphStale(kbId);
         // 索引完成后后台生成 AI 速览（要点/考点），失败静默——用户可在预览面板手动重试
         triggerOverviewAsync(doc.getId());
         log.info("文档 {} 已分块落库，chunk 数={}", doc.getId(), parts.size());
         return doc;
+    }
+
+    /** 知识库文档变更后把已有图谱标记为过期（无图谱时是空更新，无副作用）。 */
+    private void markGraphStale(Long kbId) {
+        if (kbId == null) {
+            return;
+        }
+        knowledgeGraphMapper.update(null, new LambdaUpdateWrapper<KnowledgeGraph>()
+                .set(KnowledgeGraph::getStale, true)
+                .eq(KnowledgeGraph::getKbId, kbId));
     }
 
     /**
@@ -361,6 +374,7 @@ public class KbService {
         row.setContent(json);
         row.setNodeCount(nodes.size());
         row.setEdgeCount(edges.size());
+        row.setStale(false);
         row.setUpdatedAt(LocalDateTime.now());
         if (row.getId() == null) {
             knowledgeGraphMapper.insert(row);
@@ -451,6 +465,7 @@ public class KbService {
         view.put("edges", content.getOrDefault("edges", List.of()));
         view.put("nodeCount", row.getNodeCount());
         view.put("edgeCount", row.getEdgeCount());
+        view.put("stale", Boolean.TRUE.equals(row.getStale()));
         view.put("updatedAt", row.getUpdatedAt() == null ? null : row.getUpdatedAt().toString());
         return view;
     }
@@ -474,6 +489,8 @@ public class KbService {
             chunkMapper.deleteById(c.getId());
         }
         documentMapper.deleteById(docId);
+        // 资料有增删：已有知识图谱标记为过期
+        markGraphStale(doc == null ? null : doc.getKbId());
         // 对象存储里的原件一并清理（fileUrl 形如 /files/{bucket}/{objectName}）
         if (doc != null && doc.getFileUrl() != null && doc.getFileUrl().startsWith("/files/")) {
             String rest = doc.getFileUrl().substring("/files/".length());

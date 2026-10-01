@@ -48,6 +48,21 @@
     </div>
 
     <div class="card">
+      <h3>通知邮件偏好</h3>
+      <div class="hint" style="margin-bottom:8px">勾选的类型<b>不发送</b>邮件（站内通知不受影响）；未勾选且绑定了邮箱时同步外发邮件</div>
+      <div class="mute-grid">
+        <label v-for="(lab, t) in NOTIFY_TYPES" :key="t" class="mute-item">
+          <input type="checkbox" :checked="!mailMute.includes(t)" @change="toggleMute(t)" />
+          {{ lab }}
+        </label>
+      </div>
+      <div class="row" style="margin-top:10px;gap:10px">
+        <button class="btn small" :disabled="savingMute" @click="saveMute">保存偏好</button>
+        <span class="hint">当前：{{ mailMute ? '不收邮件：' + mailMuteLabels : '全部类型接收邮件' }}</span>
+      </div>
+    </div>
+
+    <div class="card">
       <h3>我的数据导出</h3>
       <div class="row" style="gap:12px">
         <!-- !! 转布尔：绑定空字符串到 disabled 会被 Vue 当作布尔属性存在，按钮永久禁用 -->
@@ -132,6 +147,39 @@ const loadMe = async () => {
   username.value = me.value.username || ''
   nickname.value = me.value.nickname || ''
   email.value = me.value.email || ''
+  mailMute.value = me.value.mailMute || ''
+}
+
+/* ===== 通知邮件偏好：勾选 = 该类型不发送邮件（存为 mailMute 清单） ===== */
+const NOTIFY_TYPES = {
+  review: '复习提醒', plan: '学习计划', system: '系统通知', exam: '考试',
+  practice: '练习', dm: '私信', friend: '好友', announcement: '公告',
+}
+const mailMute = ref('')
+const savingMute = ref(false)
+
+const toggleMute = (t) => {
+  const set = new Set(mailMute.value.split(',').map((x) => x.trim()).filter(Boolean))
+  set.has(t) ? set.delete(t) : set.add(t)
+  mailMute.value = [...set].join(',')
+}
+
+const mailMuteLabels = computed(() =>
+  mailMute.value.split(',').map((t) => NOTIFY_TYPES[t.trim()] || t.trim()).filter(Boolean).join('、'))
+
+const saveMute = async () => {
+  savingMute.value = true
+  err.value = ''
+  try {
+    await api('/api/auth/me/notify-pref', { method: 'PUT', body: { mailMute: mailMute.value } })
+    msg.value = '通知邮件偏好已保存'
+    setTimeout(() => (msg.value = ''), 2500)
+    await loadMe()
+  } catch (e) {
+    err.value = e.message
+  } finally {
+    savingMute.value = false
+  }
 }
 
 const isAdminAccount = computed(() => me.value?.username === 'admin')
@@ -339,4 +387,10 @@ onUnmounted(() => timer && clearInterval(timer))
 .field-row { display: flex; align-items: flex-end; gap: 12px; }
 .field-row + .field-row { margin-top: 14px; }
 .field { flex: 1; max-width: 320px; }
+.mute-grid { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.mute-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--text); cursor: pointer; user-select: none;
+}
+.mute-item input { width: auto; cursor: pointer; }
 </style>

@@ -74,7 +74,7 @@ public class NotifyService {
         if (!email) {
             return;
         }
-        mailIfAvailable(userId, title, content);
+        mailIfAvailable(userId, type, title, content);
     }
 
     /**
@@ -88,7 +88,7 @@ public class NotifyService {
                 .isNotNull(Notification::getScheduledAt)
                 .le(Notification::getScheduledAt, LocalDateTime.now()));
         for (Notification n : due) {
-            mailIfAvailable(n.getUserId(), n.getTitle(), n.getContent());
+            mailIfAvailable(n.getUserId(), n.getType(), n.getTitle(), n.getContent());
             // updateById 默认忽略 null 字段，清空必须走显式 SET
             notificationMapper.update(null, new UpdateWrapper<Notification>()
                     .set("scheduled_at", null)
@@ -107,15 +107,25 @@ public class NotifyService {
                 .and(w -> w.isNull(Notification::getScheduledAt).or().le(Notification::getScheduledAt, now));
     }
 
-    private void mailIfAvailable(Long userId, String title, String content) {
+    private void mailIfAvailable(Long userId, String type, String title, String content) {
         MailService mail = mailServiceProvider.getIfAvailable();
         if (mail == null) {
             return;
         }
         User user = userMapper.selectById(userId);
-        if (user != null && user.getEmail() != null && !user.getEmail().isBlank()) {
-            mail.send(userId, user.getEmail(), "【智学助手】" + title, content);
+        if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+            return;
         }
+        // 用户偏好：mailMute 是「不收邮件」的通知类型清单（逗号分隔），站内通知不受影响
+        String mute = user.getMailMute();
+        if (mute != null && !mute.isBlank() && type != null) {
+            for (String t : mute.split(",")) {
+                if (type.equalsIgnoreCase(t.trim())) {
+                    return;
+                }
+            }
+        }
+        mail.send(userId, user.getEmail(), "【智学助手】" + title, content);
     }
 
     public List<Notification> list(Long userId) {

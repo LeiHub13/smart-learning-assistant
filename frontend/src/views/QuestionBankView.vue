@@ -54,6 +54,7 @@
             <td><span class="tag" :class="q.source === 'AI' ? 'ok' : ''">{{ sourceName(q.source) }}</span></td>
             <td class="stem" :title="q.stem">{{ q.stem }}</td>
             <td class="nowrap">
+              <a class="link" @click="collect(q)">收录错题</a>
               <a class="link" @click="openEdit(q)">编辑</a>
               <a class="link danger" @click="confirmDel = q">删除</a>
             </td>
@@ -164,6 +165,19 @@ const confirmDel = ref(null)
 const deleting = ref(false)
 
 const pages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
+
+/* 手动收录进错题本：与 AI 答疑收录同链路，收录后重练答对自动出本 */
+let hintTimer = null
+const collect = async (q) => {
+  try {
+    await api('/api/mistakes/' + q.id + '/collect', { method: 'POST' })
+    error.value = '已收录错题本：「' + (q.stem || '').slice(0, 30) + '…」，重练答对后自动出本'
+    clearTimeout(hintTimer)
+    hintTimer = setTimeout(() => (error.value = ''), 2800)
+  } catch (e) {
+    error.value = e.message
+  }
+}
 
 onMounted(async () => {
   courses.value = await getCourses()
