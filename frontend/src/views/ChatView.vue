@@ -31,7 +31,7 @@
                  @click.stop @keyup.enter="doRename(s)" @keyup.esc="cancelRename" @blur="doRename(s)" />
           <template v-else>
             <span class="sess-title">{{ s.title }}</span>
-            <span class="sess-mode-tag">{{ s.socratic ? '引导' : (s.kbId ? '知识库' : '自由') }}</span>
+            <span class="sess-mode-tag">{{ s.feynman ? '费曼' : (s.socratic ? '引导' : (s.kbId ? '知识库' : '自由')) }}</span>
             <span class="sess-ops" @click.stop>
               <button class="sess-btn" title="重命名" @click="startRename(s)">✎</button>
               <button class="sess-btn" title="删除" @click="removeSession(s)">✕</button>
@@ -49,10 +49,15 @@
           <input type="checkbox" :checked="socratic" @change="toggleSocratic" />
           苏格拉底引导
         </label>
+        <label class="socratic-toggle" title="费曼技巧：角色互换，你把概念讲给 AI 听，AI 扮演不懂的学生追问；说「讲完了」可得讲解评分">
+          <input type="checkbox" :checked="feynman" @change="toggleFeynman" />
+          费曼讲解
+        </label>
         <template v-if="socratic">
           <span class="socratic-hint">引导模式：AI 逐步反问，不直接给答案</span>
           <a class="link" style="margin-left:auto;font-size:12px" @click="askDirect">卡住了？直接讲解</a>
         </template>
+        <span v-if="feynman" class="socratic-hint">费曼模式：你讲 AI 问，讲完后说「讲完了」可得评分</span>
       </div>
       <div class="msgs" ref="bodyRef">
         <div v-if="!messages.length" class="empty">
@@ -107,7 +112,10 @@
         </div>
       </div>
       <div class="input-bar">
-        <textarea v-model="input" :placeholder="socratic ? '输入你的思考或回答…（引导模式）' : '输入问题，Enter 发送'" :disabled="streaming"
+        <textarea v-model="input"
+                  :placeholder="feynman ? '用你的话把概念讲给 AI 听…（费曼模式，说「讲完了」可得评分）'
+                    : (socratic ? '输入你的思考或回答…（引导模式）' : '输入问题，Enter 发送')"
+                  :disabled="streaming"
                   @keydown.enter.exact.prevent="send()"></textarea>
         <button class="btn" :disabled="streaming || !input.trim()" @click="send()">
           {{ streaming ? '生成中…' : '发送' }}
@@ -148,6 +156,7 @@ const input = ref('')
 const streaming = ref(false)
 const mode = ref('kb')
 const socratic = ref(false)
+const feynman = ref(false)
 const courseId = ref(null)
 const kbId = ref(null)
 const kbScope = ref('single')
@@ -270,10 +279,33 @@ const toggleSocratic = async () => {
   }
   const next = !socratic.value
   try {
-    const up = await api('/api/chat/sessions/' + sessionId.value, { method: 'PUT', body: { socratic: next } })
+    // 与费曼模式互斥：开引导时显式关掉费曼
+    const body = next ? { socratic: true, feynman: false } : { socratic: false }
+    const up = await api('/api/chat/sessions/' + sessionId.value, { method: 'PUT', body })
+    socratic.value = !!up.socratic
+    feynman.value = !!up.feynman
+    const s = sessions.value.find((x) => x.id === sessionId.value)
+    if (s) { s.socratic = !!up.socratic; s.feynman = !!up.feynman }
+  } catch (e) {
+    showHint(e.message)
+  }
+}
+
+/* ===== 费曼讲解模式：角色互换，用户讲 AI 追问，说「讲完了」给评分 ===== */
+const toggleFeynman = async () => {
+  if (!sessionId.value) {
+    showHint('先选择或新建会话，再开启费曼模式')
+    return
+  }
+  const next = !feynman.value
+  try {
+    // 与引导模式互斥：开费曼时显式关掉引导
+    const body = next ? { feynman: true, socratic: false } : { feynman: false }
+    const up = await api('/api/chat/sessions/' + sessionId.value, { method: 'PUT', body })
+    feynman.value = !!up.feynman
     socratic.value = !!up.socratic
     const s = sessions.value.find((x) => x.id === sessionId.value)
-    if (s) s.socratic = !!up.socratic
+    if (s) { s.feynman = !!up.feynman; s.socratic = !!up.socratic }
   } catch (e) {
     showHint(e.message)
   }
@@ -386,6 +418,7 @@ const openSession = async (id) => {
   if (s) {
     mode.value = sessionMode(s)
     socratic.value = !!s.socratic
+    feynman.value = !!s.feynman
     if (mode.value === 'kb') {
       courseId.value = s.courseId || null
       kbId.value = s.kbId || null

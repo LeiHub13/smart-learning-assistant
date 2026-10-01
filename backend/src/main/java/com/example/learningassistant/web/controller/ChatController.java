@@ -62,9 +62,11 @@ public class ChatController {
         AuthUser u = CurrentUser.get(request);
         Boolean socratic = body.get("socratic") == null ? null
                 : Boolean.parseBoolean(String.valueOf(body.get("socratic")));
+        Boolean feynman = body.get("feynman") == null ? null
+                : Boolean.parseBoolean(String.valueOf(body.get("feynman")));
         return ApiResponse.ok(chatService.updateSession(id, u.id(), (String) body.get("title"),
                 asLong(body.get("courseId")), asLong(body.get("kbId")), (String) body.get("kbScope"),
-                socratic));
+                socratic, feynman));
     }
 
     @DeleteMapping("/{id}")

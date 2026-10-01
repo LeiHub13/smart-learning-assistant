@@ -196,7 +196,7 @@ public class PythonAIChatModel implements ChatModel {
                 extractMarker(system, "USER_ID"), extractMarker(system, "COURSE_ID"),
                 extractMarker(system, "KB_ID"), extractMarker(system, "KB_IDS"), extractMarker(system, "NOTE"),
                 extractMarker(system, "KB_NAME"), extractMarker(system, "KB_SCOPE"),
-                extractMarker(system, "SOCRATIC"));
+                extractMarker(system, "SOCRATIC"), extractMarker(system, "FEYNMAN"));
     }
 
     private String extractMarker(String system, String key) {
@@ -213,7 +213,7 @@ public class PythonAIChatModel implements ChatModel {
 
     private record RequestPayload(String scene, String question, String sessionId,
                                   String userId, String courseId, String kbId, String kbIds, String note,
-                                  String kbName, String kbScope, String socratic) {
+                                  String kbName, String kbScope, String socratic, String feynman) {
         Map<String, Object> toMap() {
             Map<String, Object> m = new java.util.LinkedHashMap<>();
             m.put("scene", scene);
@@ -236,6 +236,9 @@ public class PythonAIChatModel implements ChatModel {
             }
             if ("1".equals(socratic)) {
                 m.put("socratic", true);
+            }
+            if ("1".equals(feynman)) {
+                m.put("feynman", true);
             }
             return m;
         }

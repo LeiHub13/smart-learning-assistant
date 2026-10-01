@@ -64,6 +64,7 @@ class CompleteRequest(BaseModel):
     kbName: str | None = Field(default=None)
     kbScope: str | None = Field(default=None)
     socratic: bool = Field(default=False)
+    feynman: bool = Field(default=False)
 
 
 class StreamRequest(CompleteRequest):
@@ -126,7 +127,7 @@ def complete(req: CompleteRequest):
                                   note=req.note, meta=meta,
                                   course_id=req.courseId or None,
                                   kb_name=req.kbName, kb_scope=req.kbScope,
-                                  socratic=req.socratic)
+                                  socratic=req.socratic, feynman=req.feynman)
         return {"content": content, "sources": meta.get("sources", ""),
                 "sourceChunks": meta.get("sourceChunks", "")}
     except RuntimeError as e:
@@ -148,7 +149,7 @@ async def stream(req: StreamRequest):
                                        note=req.note, meta=meta,
                                        course_id=req.courseId or None,
                                        kb_name=req.kbName, kb_scope=req.kbScope,
-                                       socratic=req.socratic):
+                                       socratic=req.socratic, feynman=req.feynman):
                 yield {"event": "message", "data": json.dumps({"delta": delta}, ensure_ascii=False)}
             # sources：本服务自行检索时产出的引用编号；sourceChunks：对齐的 chunkId，供「点引用跳原文」；
             # followups：追问推荐（JSON 数组串），Java 落库后由前端渲染可点问的追问 chips

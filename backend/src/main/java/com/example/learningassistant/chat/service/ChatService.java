@@ -89,7 +89,7 @@ public class ChatService {
     }
 
     public ChatSession updateSession(Long id, Long userId, String title, Long courseId, Long kbId, String kbScope,
-                                     Boolean socratic) {
+                                     Boolean socratic, Boolean feynman) {
         ChatSession s = requireOwnedSession(id, userId);
         if (title != null && !title.isBlank()) {
             s.setTitle(title.trim());
@@ -107,6 +107,13 @@ public class ChatService {
         // 引导模式三态：null=不变（重命名场景），true/false=显式开关
         if (socratic != null) {
             s.setSocratic(socratic);
+        }
+        // 费曼模式与引导模式互斥：开费曼时前端会显式关掉引导
+        if (feynman != null) {
+            s.setFeynman(feynman);
+            if (Boolean.TRUE.equals(feynman)) {
+                s.setSocratic(false);
+            }
         }
         sessionMapper.updateById(s);
         return s;
@@ -191,6 +198,10 @@ public class ChatService {
         if (Boolean.TRUE.equals(session.getSocratic())) {
             // 苏格拉底引导：Python 侧 rag_qa/free 提示词据此切换为「只引导不给答案」
             system.append("\nSOCRATIC:1");
+        }
+        if (Boolean.TRUE.equals(session.getFeynman())) {
+            // 费曼讲解：角色互换，用户讲 AI 追问，讲完给评价
+            system.append("\nFEYNMAN:1");
         }
 
         system.append("\nUSER_ID:").append(userId)

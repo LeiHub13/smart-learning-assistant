@@ -24,6 +24,8 @@ public class ChatSession {
     private String kbScope;
     /** 苏格拉底引导模式：开启后 AI 不直接给答案，拆步骤反问引导。 */
     private Boolean socratic;
+    /** 费曼讲解模式：角色互换，用户讲 AI 追问，讲完给评价。 */
+    private Boolean feynman;
     private String title;
     private LocalDateTime createdAt;
 }

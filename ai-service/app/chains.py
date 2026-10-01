@@ -78,22 +78,24 @@ def _kb_suffix(kb_name: str | None, kb_scope: str | None) -> str:
 
 
 def _build_messages(scene: str, question: str, chunks, note: str = None,
-                    kb_name: str = None, kb_scope: str = None, socratic: bool = False) -> list:
+                    kb_name: str = None, kb_scope: str = None, socratic: bool = False,
+                    feynman: bool = False) -> list:
     chunks_text = _chunks_to_text(chunks)
     socratic_suffix = SOCRATIC_PROMPT if socratic else ""
+    feynman_suffix = FEYNMAN_PROMPT if feynman else ""
     if scene == "rag_qa":
         return [
             SystemMessage(
                 "你是智能学习助手，请结合下方课程知识库资料回答学生问题，引用资料时标注编号[1][2]等；"
                 "若资料与问题无关则如实说明。\n【知识库资料】\n" + chunks_text + "\n【资料结束】"
-                + _kb_suffix(kb_name, kb_scope) + _note_suffix(note) + socratic_suffix
+                + _kb_suffix(kb_name, kb_scope) + _note_suffix(note) + socratic_suffix + feynman_suffix
             ),
             HumanMessage(question),
         ]
     if scene == "free":
         return [
             SystemMessage("你是智能学习助手，用中文友好、准确地解答学生的学习问题。"
-                          + _kb_suffix(kb_name, kb_scope) + _note_suffix(note) + socratic_suffix),
+                          + _kb_suffix(kb_name, kb_scope) + _note_suffix(note) + socratic_suffix + feynman_suffix),
             HumanMessage(question),
         ]
     if scene == "flashcards":
@@ -327,12 +329,26 @@ SOCRATIC_PROMPT = (
     "并在讲解结尾建议学生稍后用自己的话复述一遍。"
 )
 
+FEYNMAN_PROMPT = (
+    "\n\n【费曼讲解模式（已开启）】\n"
+    "现在角色互换：用户是讲课的老师，你是听讲的学生。严格遵守：\n"
+    "1. 用户正在用自己的话讲解一个知识点，你的任务是扮演一名「认真但没听懂」的学生："
+    "只针对他讲解中没听懂、含糊带过、或听起来可疑的地方提问，一次只问一个最关键的追问，"
+    "语气好奇、具体（如「你说的 X 是指…吗？那 Y 为什么会…？」）；\n"
+    "2. 讲得清楚的部分简短确认「懂了」并用自己的话复述一句验证理解，不要长篇附和；\n"
+    "3. 绝不替老师讲课、不输出大段知识点、不主动总结——这是费曼技巧，讲的人必须是用户；\n"
+    "4. 当用户明确表示「讲完了 / 结束 / 帮我评价」时，切换为点评老师，给出讲解评价："
+    "按 概念准确性 / 完整性 / 深度 三个维度各打 0-100 分并给总分，"
+    "然后逐条列出「讲对了的要点」「遗漏的要点」「存在的误区」，最后给一条最优先的改进建议。"
+)
+
 
 def _assemble(scene: str, question: str, chunks, session_id: str, note: str = None,
-              kb_name: str = None, kb_scope: str = None, user_id=None, socratic: bool = False) -> list:
+              kb_name: str = None, kb_scope: str = None, user_id=None, socratic: bool = False,
+              feynman: bool = False) -> list:
     """组装消息：系统提示 + （学生画像）+ （摘要）+ 最近 N 轮 + 当前问题。"""
     msgs = _build_messages(scene, question, chunks, note, kb_name=kb_name, kb_scope=kb_scope,
-                           socratic=socratic)
+                           socratic=socratic, feynman=feynman)
     if session_id and scene in ("rag_qa", "free"):
         head = [msgs[0]]
         profile = memory.user_profile(user_id) if user_id else ""
@@ -378,7 +394,7 @@ def _prepare_rag(scene: str, question: str, chunks, session_id, kb_id, meta: dic
 def complete(scene: str, question: str, chunks=None, session_id: str = None,
              user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
              course_id=None, kb_name: str = None, kb_scope: str = None,
-             socratic: bool = False) -> str:
+             socratic: bool = False, feynman: bool = False) -> str:
     """非流式完整回答（生成/批改/建议），带记忆。"""
     meta = meta if meta is not None else {}
     if scene == "agent":
@@ -386,10 +402,10 @@ def complete(scene: str, question: str, chunks=None, session_id: str = None,
         return agent.complete_agent(get_model(), question, chunks=chunks, session_id=session_id,
                                     user_id=user_id, kb_id=kb_id, kb_ids=kb_ids, note=note, meta=meta,
                                     course_id=course_id, kb_name=kb_name, kb_scope=kb_scope,
-                                    socratic=socratic)
+                                    socratic=socratic, feynman=feynman)
     chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta, kb_ids=kb_ids)
     msgs = _assemble(scene, question, chunks, session_id, note, kb_name=kb_name,
-                     kb_scope=kb_scope, user_id=user_id, socratic=socratic)
+                     kb_scope=kb_scope, user_id=user_id, socratic=socratic, feynman=feynman)
     resp = _call_with_limit(lambda: get_model().invoke(msgs), scene)
     answer = resp.content
     if _memorable(scene):
@@ -405,7 +421,8 @@ def complete(scene: str, question: str, chunks=None, session_id: str = None,
 
 def stream(scene: str, question: str, chunks=None, session_id: str = None,
            user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
-           course_id=None, kb_name: str = None, kb_scope: str = None, socratic: bool = False):
+           course_id=None, kb_name: str = None, kb_scope: str = None, socratic: bool = False,
+           feynman: bool = False):
     """流式生成，yield 增量文本；检索到的引用编号通过 meta["sources"] 传出。"""
     meta = meta if meta is not None else {}
     if scene == "agent":
@@ -413,11 +430,11 @@ def stream(scene: str, question: str, chunks=None, session_id: str = None,
         yield from agent.stream_agent(get_model(), question, chunks=chunks, session_id=session_id,
                                       user_id=user_id, kb_id=kb_id, kb_ids=kb_ids, note=note, meta=meta,
                                       course_id=course_id, kb_name=kb_name, kb_scope=kb_scope,
-                                      socratic=socratic)
+                                      socratic=socratic, feynman=feynman)
         return
     chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta, kb_ids=kb_ids)
     msgs = _assemble(scene, question, chunks, session_id, note, kb_name=kb_name,
-                     kb_scope=kb_scope, user_id=user_id, socratic=socratic)
+                     kb_scope=kb_scope, user_id=user_id, socratic=socratic, feynman=feynman)
     model = get_model()
     full = ""
     usage = None

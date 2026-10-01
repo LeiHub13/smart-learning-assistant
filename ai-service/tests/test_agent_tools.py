@@ -301,6 +301,14 @@ def test_query_past_questions_scopes_to_user_and_excludes_current_session():
         agent._call_java_tool = original
 
 
+def test_system_prompt_carries_feynman(monkeypatch):
+    """agent 场景同样消费费曼提示：开启时附加角色互换指令，关闭时不带。"""
+    monkeypatch.setattr(config, "AGENT_WRITE_TOOLS", True)
+    on = agent._system_prompt([], feynman=True)
+    assert "费曼讲解模式" in on and "角色互换" in on
+    assert "费曼讲解模式" not in agent._system_prompt([])
+
+
 def test_system_prompt_carries_selected_kb_context():
     """会话选中的知识库名称/范围拼进系统提示，模型才能回答「当前选的是哪个库」。"""
     prompt = agent._system_prompt([], note=None, kb_name="电商项目开发实战（项目文档）", kb_scope="course")

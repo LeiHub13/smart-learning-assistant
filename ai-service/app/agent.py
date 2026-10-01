@@ -591,11 +591,12 @@ def _seed_materials(chunks, session_id, kb_id, question, meta, kb_ids=None):
 
 
 def _system_prompt(mcp_tools: list, note: str = None, kb_name: str = None, kb_scope: str = None,
-                   socratic: bool = False) -> str:
+                   socratic: bool = False, feynman: bool = False) -> str:
     from app import chains
     return (SYSTEM_PROMPT
             + _today_line()
             + (chains.SOCRATIC_PROMPT if socratic else "")
+            + (chains.FEYNMAN_PROMPT if feynman else "")
             + (MCP_PROMPT_SUFFIX if mcp_tools else "")
             + (WRITE_PROMPT_SUFFIX if config.AGENT_WRITE_TOOLS else "")
             + chains._kb_suffix(kb_name, kb_scope)
@@ -605,7 +606,7 @@ def _system_prompt(mcp_tools: list, note: str = None, kb_name: str = None, kb_sc
 def complete_agent(model, question: str, chunks=None, session_id: str = None,
                    user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
                    course_id=None, kb_name: str = None, kb_scope: str = None,
-                   socratic: bool = False) -> str:
+                   socratic: bool = False, feynman: bool = False) -> str:
     """非流式：跑完整 ReAct 循环后返回最终回答。"""
     meta = meta if meta is not None else {}
     start = time.time()
@@ -616,7 +617,7 @@ def complete_agent(model, question: str, chunks=None, session_id: str = None,
                         session_id=session_id) + mcp_tools
     agent = create_agent(model.with_config(callbacks=[usage]), tools,
                          system_prompt=_system_prompt(mcp_tools, note, kb_name, kb_scope,
-                                                      socratic=socratic))
+                                                      socratic=socratic, feynman=feynman))
     result = agent.invoke(
         {"messages": _build_messages(question, session_id, user_id=user_id)},
         config={"recursion_limit": RECURSION_LIMIT},
@@ -631,7 +632,8 @@ def complete_agent(model, question: str, chunks=None, session_id: str = None,
 
 def stream_agent(model, question: str, chunks=None, session_id: str = None,
                  user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
-                 course_id=None, kb_name: str = None, kb_scope: str = None, socratic: bool = False):
+                 course_id=None, kb_name: str = None, kb_scope: str = None, socratic: bool = False,
+                 feynman: bool = False):
     """流式：逐块 yield 最终回答的 token。"""
     meta = meta if meta is not None else {}
     start = time.time()
@@ -642,7 +644,7 @@ def stream_agent(model, question: str, chunks=None, session_id: str = None,
                         session_id=session_id) + mcp_tools
     agent = create_agent(model.with_config(callbacks=[usage]), tools,
                          system_prompt=_system_prompt(mcp_tools, note, kb_name, kb_scope,
-                                                      socratic=socratic))
+                                                      socratic=socratic, feynman=feynman))
     full = ""
     try:
         for item in agent.stream(

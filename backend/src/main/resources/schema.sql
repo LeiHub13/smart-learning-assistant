@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS t_chat_session (
     kb_id      BIGINT,
     kb_scope   VARCHAR(10),
     socratic   TINYINT DEFAULT 0,
+    feynman    TINYINT DEFAULT 0,
     title      VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

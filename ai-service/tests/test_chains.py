@@ -104,6 +104,18 @@ def test_doc_overview_prompt_shape():
     assert msgs[-1].content.startswith("【资料标题】")
 
 
+def test_feynman_prompt_shape():
+    """费曼讲解模式：角色互换（用户讲 AI 追问）、讲完切评分；默认不附加。"""
+    msgs_on = chains._build_messages("free", "我来讲一下 B+ 树", None, feynman=True)
+    sys_on = msgs_on[0].content
+    assert "费曼讲解模式" in sys_on and "角色互换" in sys_on
+    assert "一次只问一个" in sys_on and "讲完了" in sys_on
+    # 费曼的核心约束：不替用户讲课
+    assert "绝不替老师讲课" in sys_on
+    msgs_off = chains._build_messages("free", "我来讲一下 B+ 树", None)
+    assert "费曼讲解模式" not in msgs_off[0].content
+
+
 def test_kg_extract_prompt_shape():
     """知识图谱抽取场景：系统提示约束节点/边结构与「只输出 JSON」，材料走 user 消息。"""
     text = "【资料标题】x.md" + chr(10) + "【资料文本】正文"

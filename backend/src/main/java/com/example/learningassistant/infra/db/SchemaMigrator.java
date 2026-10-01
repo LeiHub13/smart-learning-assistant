@@ -47,7 +47,8 @@ public class SchemaMigrator implements CommandLineRunner {
             new ColumnSpec("t_notification", "announcement_id", "BIGINT NULL AFTER link"),
             new ColumnSpec("t_announcement", "email_sent", "TINYINT NOT NULL DEFAULT 0 AFTER content"),
             new ColumnSpec("t_note", "shared", "TINYINT NOT NULL DEFAULT 0 AFTER content"),
-            new ColumnSpec("t_flashcard", "due_at", "TIMESTAMP NULL AFTER last_reviewed_at"));
+            new ColumnSpec("t_flashcard", "due_at", "TIMESTAMP NULL AFTER last_reviewed_at"),
+            new ColumnSpec("t_chat_session", "feynman", "TINYINT DEFAULT 0 AFTER socratic"));
 
     @Override
     public void run(String... args) {
