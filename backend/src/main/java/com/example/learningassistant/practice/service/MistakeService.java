@@ -147,9 +147,14 @@ public class MistakeService {
      */
     private void mergeManual(Long userId, Long courseId, Map<Long, LocalDateTime> latest,
                              Map<Long, Boolean> latestCorrect, Map<Long, WrongInfo> wrong) {
-        List<ManualMistake> manuals = manualMistakeMapper.selectList(new LambdaQueryWrapper<ManualMistake>()
-                .eq(ManualMistake::getUserId, userId)
-                .eq(courseId != null, ManualMistake::getCourseId, courseId));
+        LambdaQueryWrapper<ManualMistake> w = new LambdaQueryWrapper<ManualMistake>()
+                .eq(ManualMistake::getUserId, userId);
+        if (courseId != null) {
+            // 兼容历史 NULL 课程行（修复前的直达收录未回填课程）：按课程筛选时同样可见
+            w.and(x -> x.eq(ManualMistake::getCourseId, courseId)
+                    .or().isNull(ManualMistake::getCourseId));
+        }
+        List<ManualMistake> manuals = manualMistakeMapper.selectList(w);
         for (ManualMistake m : manuals) {
             Long qid = m.getQuestionId();
             LocalDateTime addedAt = m.getCreatedAt() == null ? LocalDateTime.now() : m.getCreatedAt();
@@ -179,15 +184,17 @@ public class MistakeService {
     }
 
     /**
-     * 手动收录一道题（Agent 动作确认执行调用）：归属校验后 upsert——
+     * 手动收录一道题（错题本直达入口 / Agent 动作确认执行调用）：归属校验后 upsert——
      * 重复收录刷新收录时间，让「收录之后答对才出本」从本次收录重新起算。
+     * courseId 传空（直达入口无会话课程上下文）时回填题目所属课程，否则按课程筛选错题本时会漏掉该题。
      */
     public void addManual(Long userId, Long courseId, Long questionId) {
         Question q = questionMapper.selectById(questionId);
         if (q == null) {
             throw new BizException("题目已不存在，可能已被删除");
         }
-        if (courseId != null && !Objects.equals(q.getCourseId(), courseId)) {
+        Long targetCourse = courseId != null ? courseId : q.getCourseId();
+        if (targetCourse != null && !Objects.equals(q.getCourseId(), targetCourse)) {
             throw new BizException("题目不属于当前课程");
         }
         ManualMistake row = manualMistakeMapper.selectOne(new LambdaQueryWrapper<ManualMistake>()
@@ -198,13 +205,13 @@ public class MistakeService {
             row = new ManualMistake();
             row.setTenantId(1L);
             row.setUserId(userId);
-            row.setCourseId(courseId);
+            row.setCourseId(targetCourse);
             row.setQuestionId(questionId);
             row.setCreatedAt(LocalDateTime.now());
             manualMistakeMapper.insert(row);
             return;
         }
-        row.setCourseId(courseId);
+        row.setCourseId(targetCourse);
         row.setCreatedAt(LocalDateTime.now());
         manualMistakeMapper.updateById(row);
     }
