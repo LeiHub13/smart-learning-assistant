@@ -220,7 +220,7 @@ body {
 .btn.danger { background: var(--card); border-color: rgba(31,35,40,.15); color: var(--danger); }
 .btn.danger:hover { background: var(--danger); border-color: rgba(31,35,40,.15); color: #fff; }
 .btn.danger:active { box-shadow: inset 0 1px 2px rgba(0,0,0,.15); }
-.btn.small { padding: 4px 10px; font-size: 12px; border-radius: 6px; }
+.btn.small { padding: 6px 13px; font-size: 12.5px; border-radius: 6px; }
 button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 /* :where 零特异性：无 type 的文本输入也吃全局样式，且不压过 .global-search 等自定义类 */
 input:where([type=text], [type=password], [type=number], [type=email], [type=search], [type=tel], [type=url], [type=date], :not([type])), textarea, select {
@@ -229,6 +229,20 @@ input:where([type=text], [type=password], [type=number], [type=email], [type=sea
   outline: none; transition: .15s ease;
 }
 input:focus, textarea:focus, select:focus { border-color: var(--primary); outline: 2px solid rgba(9,105,218,.3); outline-offset: -1px; }
+/* 选择框：宽度按内容自适应（不再全长拉满），appearance 去原生外观、自绘箭头；
+   高度与文本输入一致（7px 上下内边距），放在共享规则之后以覆盖其 width:100% 与 background 简写 */
+select {
+  width: auto; min-width: 96px; max-width: 100%;
+  padding: 7px 30px 7px 12px; cursor: pointer;
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2359636e' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+}
+select:hover { border-color: var(--muted); }
+select:disabled { cursor: not-allowed; opacity: .6; }
+html.dark select {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239198a1' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
 /* Element Plus 输入框：外框由 .el-input__wrapper 负责，这里屏蔽上面的全局规则，
    否则内层 <input> 会长出第二层边框、内边距和聚焦光环。.el-input__inner 选择器特异性更高，顺序无关。 */
 .el-input .el-input__inner,
@@ -244,8 +258,8 @@ textarea { resize: vertical; min-height: 80px; }
 .label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 13px; }
 .row { display: flex; gap: 12px; align-items: center; }
 .row > * { flex: 1; }
-/* 按钮和图片不参与拉伸，保持自然宽度（避免被拉成长条） */
-.row > button, .row > img, .row > a, .row > span { flex: 0 0 auto; }
+/* 按钮和图片不参与拉伸，保持自然宽度（避免被拉成长条）；选择框同样按内容自适应 */
+.row > button, .row > img, .row > a, .row > span, .row > select { flex: 0 0 auto; }
 /* 上面把 span 一起钉成了不可压缩，装用户内容（文件名等无空格长串）时会把同行按钮顶出容器。
    .shrink 给这类文本格重新开放收缩并允许任意断行，按钮保持 flex:0 0 auto 钉在右侧。 */
 .row > .shrink { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
