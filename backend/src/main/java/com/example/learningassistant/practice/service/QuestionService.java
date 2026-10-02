@@ -113,6 +113,15 @@ public class QuestionService {
         q.setAnalysis(analysis);
         q.setKpName(kpName == null || kpName.isBlank() ? null : kpName.trim());
         q.setDifficulty(difficulty == null || difficulty.isBlank() ? "进阶" : difficulty);
+        // 判断题与 AI 生成链路同口径：答案归一为 对/错，缺省注入标准 对/错 选项，
+        // 否则手动题（存「正确/错误」）与判分（equalsIgnoreCase）和答题页选项都对不上
+        if ("判断".equals(q.getType())) {
+            q.setAnswer(com.example.learningassistant.generate.service.GeneratorService
+                    .normalizeJudgeAnswer(q.getAnswer()));
+            if (q.getOptions() == null || q.getOptions().isBlank()) {
+                q.setOptions(com.example.learningassistant.generate.service.GeneratorService.JUDGE_OPTIONS);
+            }
+        }
     }
 
     private Question requireOwnedQuestion(Long userId, Long id) {

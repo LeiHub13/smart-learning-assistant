@@ -46,6 +46,13 @@ public class GradingService {
         boolean ok;
         if ("多选".equals(type)) {
             ok = normMulti(userAnswer).equals(normMulti(q.getAnswer()));
+        } else if ("判断".equals(type)) {
+            // 双端归一为 对/错：兼容历史手动题存「正确/错误」等写法（与 AI 生成链路同口径）
+            String ua = com.example.learningassistant.generate.service.GeneratorService
+                    .normalizeJudgeAnswer(userAnswer);
+            String ra = com.example.learningassistant.generate.service.GeneratorService
+                    .normalizeJudgeAnswer(q.getAnswer());
+            ok = !ua.isBlank() && ua.equalsIgnoreCase(ra == null ? "" : ra);
         } else {
             ok = userAnswer != null && userAnswer.trim().equalsIgnoreCase(q.getAnswer() == null ? "" : q.getAnswer().trim());
         }

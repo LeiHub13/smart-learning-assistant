@@ -107,8 +107,8 @@
 
         <span class="label" style="margin-top:10px">{{ form.type === '判断' ? '答案' : form.type === '问答' ? '参考答案' : '正确答案' }}</span>
         <select v-if="form.type === '判断'" v-model="form.answer">
-          <option value="正确">正确</option>
-          <option value="错误">错误</option>
+          <option value="对">对</option>
+          <option value="错">错</option>
         </select>
         <textarea v-else v-model="form.answer" :rows="form.type === '问答' ? 3 : 1"
                   :placeholder="form.type === '单选' ? '如：A' : form.type === '多选' ? '如：ABD' : '参考答案内容'"></textarea>
@@ -219,7 +219,10 @@ const openEdit = (q) => {
     difficulty: q?.difficulty || '进阶',
     kpName: q?.kpName || '',
     stem: q?.stem || '',
-    answer: q?.answer || '',
+    // 判断题归一到 对/错（兼容历史行存的 正确/错误），与下拉选项对齐
+    answer: q?.type === '判断'
+      ? ({ '正确': '对', '错误': '错' }[q.answer] || q.answer || '')
+      : (q?.answer || ''),
     analysis: q?.analysis || ''
   }
   formOptions.value = q && parseOptions(q.options).length
