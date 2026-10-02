@@ -3,6 +3,7 @@
     <div class="page-title">题库管理</div>
     <div class="page-sub">查看、录入、编辑课程题目；AI 生成的题目自动入库，可在此维护</div>
 
+    <div v-if="hint" class="ok-hint">{{ hint }}</div>
     <div v-if="error" class="err">{{ error }}</div>
 
     <div class="card">
@@ -167,13 +168,14 @@ const deleting = ref(false)
 const pages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 
 /* 手动收录进错题本：与 AI 答疑收录同链路，收录后重练答对自动出本 */
+const hint = ref('')
 let hintTimer = null
 const collect = async (q) => {
   try {
     await api('/api/mistakes/' + q.id + '/collect', { method: 'POST' })
-    error.value = '已收录错题本：「' + (q.stem || '').slice(0, 30) + '…」，重练答对后自动出本'
+    hint.value = '已收录错题本：「' + (q.stem || '').slice(0, 30) + '…」，重练答对后自动出本'
     clearTimeout(hintTimer)
-    hintTimer = setTimeout(() => (error.value = ''), 2800)
+    hintTimer = setTimeout(() => (hint.value = ''), 2800)
   } catch (e) {
     error.value = e.message
   }
@@ -283,5 +285,9 @@ const doDelete = async () => {
 .nowrap { white-space: nowrap; }
 .pager { margin-top: 8px; display: flex; align-items: center; gap: 10px; }
 .link + .link { margin-left: 8px; }
+.ok-hint {
+  background: var(--ok-soft); border: 1px solid var(--ok-line); color: var(--ok-strong);
+  padding: 10px 14px; border-radius: 6px; margin-bottom: 14px;
+}
 .link.danger { color: var(--bad-strong); }
 </style>

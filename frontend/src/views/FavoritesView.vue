@@ -3,6 +3,7 @@
     <div class="page-title">收藏夹</div>
     <div class="page-sub">收藏的好题集中回顾，支持一键重练</div>
 
+    <div v-if="hint" class="ok-hint">{{ hint }}</div>
     <div v-if="error" class="err">{{ error }}</div>
 
     <!-- 工具栏 -->
@@ -131,14 +132,15 @@ const remove = async (q) => {
 
 /* 手动收录进错题本：与 AI 答疑收录同链路，收录后重练答对自动出本 */
 const collecting = ref(null)
+const hint = ref('')
 let hintTimer = null
 const collect = async (q) => {
   collecting.value = q.questionId
   try {
     await api('/api/mistakes/' + q.questionId + '/collect', { method: 'POST' })
-    error.value = '已收录错题本：「' + (q.stem || '').slice(0, 30) + '…」，重练答对后自动出本'
+    hint.value = '已收录错题本：「' + (q.stem || '').slice(0, 30) + '…」，重练答对后自动出本'
     clearTimeout(hintTimer)
-    hintTimer = setTimeout(() => (error.value = ''), 2800)
+    hintTimer = setTimeout(() => (hint.value = ''), 2800)
   } catch (e) {
     error.value = e.message
   } finally {
@@ -253,5 +255,9 @@ const markOption = (q, k) => {
   .fi-filter { min-width: 0; }
   .fi-filter select { max-width: none; }
   .fi-stat { margin-left: 0; }
+}
+.ok-hint {
+  background: var(--ok-soft); border: 1px solid var(--ok-line); color: var(--ok-strong);
+  padding: 10px 14px; border-radius: 6px; margin-bottom: 14px;
 }
 </style>
