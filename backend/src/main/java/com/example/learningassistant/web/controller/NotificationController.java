@@ -42,6 +42,13 @@ public class NotificationController {
         return ApiResponse.ok(Map.of("count", notifyService.unreadCount(u.id())));
     }
 
+    /** 通知实时流（SSE）：新通知落库即推 refresh 信号，前端收到后重拉列表与未读数，替代秒级轮询。 */
+    @GetMapping("/stream")
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter stream(HttpServletRequest request) {
+        AuthUser u = CurrentUser.get(request);
+        return notifyService.stream(u.id());
+    }
+
     @PostMapping("/{id}/read")
     public ApiResponse<Void> markRead(HttpServletRequest request, @PathVariable Long id) {
         AuthUser u = CurrentUser.get(request);

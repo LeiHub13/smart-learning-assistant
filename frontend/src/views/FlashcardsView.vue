@@ -32,12 +32,12 @@
 
       <template v-if="queue.length && current">
         <div v-if="!revealed" class="fc-card" @click="revealed = true">
-          <div class="fc-tag">{{ sourceLabel(current.source) }} · 盒 {{ current.box }}</div>
+          <div class="fc-tag">{{ sourceLabel(current.source) }} · 盒 {{ current.box }} · {{ dueLabel(current) }}</div>
           <div class="fc-front">{{ current.front }}</div>
           <div class="fc-hint">点击卡片显示答案</div>
         </div>
         <div v-else class="fc-card open">
-          <div class="fc-tag">{{ sourceLabel(current.source) }} · 盒 {{ current.box }}</div>
+          <div class="fc-tag">{{ sourceLabel(current.source) }} · 盒 {{ current.box }} · {{ dueLabel(current) }}</div>
           <div class="fc-front">{{ current.front }}</div>
           <div class="fc-divider"></div>
           <div class="fc-back">{{ current.back }}</div>
@@ -83,6 +83,16 @@ const error = ref('')
 
 const current = computed(() => queue.value[idx.value] || null)
 const sourceLabel = (s) => ({ mistake: '错题', doc: '文档', chat: '答疑' }[s] || s)
+
+// 卡片到期状态：到期（或未排期的存量卡）显示「今日到期」，未到期显示下次复习日期
+const dueLabel = (c) => {
+  if (!c.dueAt) return '今日到期'
+  const d = new Date(c.dueAt)
+  const now = new Date()
+  if (d <= now) return '今日到期'
+  const p = (x) => String(x).padStart(2, '0')
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} 复习`
+}
 // 与后端 BOX_INTERVAL_DAYS 对齐：盒 1-5 答对后的下次间隔（天）
 const BOX_DAYS = [1, 2, 4, 7, 15]
 

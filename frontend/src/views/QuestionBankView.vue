@@ -55,7 +55,8 @@
             <td><span class="tag" :class="q.source === 'AI' ? 'ok' : ''">{{ sourceName(q.source) }}</span></td>
             <td class="stem" :title="q.stem">{{ q.stem }}</td>
             <td class="nowrap">
-              <a class="link" @click="collect(q)">收录错题</a>
+              <span v-if="collected.has(q.id)" class="tag ok">已收录</span>
+              <a v-else class="link" @click="collect(q)">收录错题</a>
               <a class="link" @click="openEdit(q)">编辑</a>
               <a class="link danger" @click="confirmDel = q">删除</a>
             </td>
@@ -169,10 +170,17 @@ const pages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 
 /* 手动收录进错题本：与 AI 答疑收录同链路，收录后重练答对自动出本 */
 const hint = ref('')
+const collected = ref(new Set())
 let hintTimer = null
+const loadCollected = async () => {
+  try {
+    collected.value = new Set(await api('/api/mistakes/collected' + (courseId.value ? '?courseId=' + courseId.value : '')))
+  } catch (e) { /* 标记加载失败不影响列表 */ }
+}
 const collect = async (q) => {
   try {
     await api('/api/mistakes/' + q.id + '/collect', { method: 'POST' })
+    collected.value = new Set([...collected.value, q.id])
     hint.value = '已收录错题本：「' + (q.stem || '').slice(0, 30) + '…」，重练答对后自动出本'
     clearTimeout(hintTimer)
     hintTimer = setTimeout(() => (hint.value = ''), 2800)
@@ -183,8 +191,15 @@ const collect = async (q) => {
 
 onMounted(async () => {
   courses.value = await getCourses()
-  if (courses.value.length) courseId.value = courses.value[0].id
+  // 课程筛选记忆：优先恢复上次选择（课程仍存在时）
+  const saved = Number(localStorage.getItem('bank-courseId'))
+  if (saved && courses.value.some((c) => c.id === saved)) {
+    courseId.value = saved
+  } else if (courses.value.length) {
+    courseId.value = courses.value[0].id
+  }
   load(1)
+  loadCollected()
 })
 
 const load = async (p = 1) => {
@@ -207,7 +222,11 @@ const load = async (p = 1) => {
 const search = () => load(1)
 
 watch([fType, fDiff], () => load(1))
-watch(courseId, () => { fType.value = ''; fDiff.value = ''; keyword.value = ''; load(1) })
+watch(courseId, () => loadCollected())
+watch(courseId, () => {
+  if (courseId.value) localStorage.setItem('bank-courseId', String(courseId.value))
+  fType.value = ''; fDiff.value = ''; keyword.value = ''; load(1)
+})
 
 const sourceName = (s) => ({ AI: 'AI 生成', SEED: '内置', 手动: '手动' }[s] || s || '-')
 

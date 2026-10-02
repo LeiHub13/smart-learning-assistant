@@ -32,7 +32,9 @@
         <span v-if="q.kpName" class="tag">{{ q.kpName }}</span>
         <span v-if="q.difficulty" class="tag">{{ q.difficulty }}</span>
         <span v-if="!courseId" class="tag">{{ q.courseName }}</span>
-        <button class="btn ghost small" style="margin-left:auto" :disabled="collecting === q.questionId" @click="collect(q)">
+        <span v-if="collected.has(q.questionId)" class="tag ok" style="margin-left:auto">已收录</span>
+        <button class="btn ghost small" style="margin-left:auto" :disabled="collecting === q.questionId"
+                v-else @click="collect(q)">
           {{ collecting === q.questionId ? '收录中…' : '收录错题本' }}
         </button>
         <button class="btn ghost small fi-unfav" :disabled="removing === q.questionId" @click="remove(q)">
@@ -103,7 +105,7 @@ const error = ref('')
 
 onMounted(async () => {
   courses.value = await getCourses()
-  await load()
+  await Promise.all([load(), loadCollected()])
 })
 
 const load = async () => {
@@ -115,7 +117,7 @@ const load = async () => {
   }
 }
 
-watch(courseId, load)
+watch(courseId, () => { load(); loadCollected() })
 
 const remove = async (q) => {
   removing.value = q.questionId
@@ -133,11 +135,18 @@ const remove = async (q) => {
 /* 手动收录进错题本：与 AI 答疑收录同链路，收录后重练答对自动出本 */
 const collecting = ref(null)
 const hint = ref('')
+const collected = ref(new Set())
 let hintTimer = null
+const loadCollected = async () => {
+  try {
+    collected.value = new Set(await api('/api/mistakes/collected' + (courseId.value ? '?courseId=' + courseId.value : '')))
+  } catch (e) { /* 标记加载失败不影响列表 */ }
+}
 const collect = async (q) => {
   collecting.value = q.questionId
   try {
     await api('/api/mistakes/' + q.questionId + '/collect', { method: 'POST' })
+    collected.value = new Set([...collected.value, q.questionId])
     hint.value = '已收录错题本：「' + (q.stem || '').slice(0, 30) + '…」，重练答对后自动出本'
     clearTimeout(hintTimer)
     hintTimer = setTimeout(() => (hint.value = ''), 2800)

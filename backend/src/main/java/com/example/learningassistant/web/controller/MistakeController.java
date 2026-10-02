@@ -40,6 +40,14 @@ public class MistakeController {
         return ApiResponse.ok(mistakeService.page(u.id(), courseId, page, size));
     }
 
+    /** 在册题目 id 集（作答推导 + 手动收录合并，含兼容的空课程行），供题库/收藏夹标注「已收录」。 */
+    @GetMapping("/collected")
+    public ApiResponse<List<Long>> collected(HttpServletRequest request,
+                                             @RequestParam(required = false) Long courseId) {
+        AuthUser u = CurrentUser.get(request);
+        return ApiResponse.ok(mistakeService.mistakeIds(u.id(), courseId));
+    }
+
     /**
      * 手动收录错题：把题库中的题加入错题本（与 Agent 收录同链路），收录后重练答对自动出本。
      * 重复收录幂等（刷新收录时间重新起算）。

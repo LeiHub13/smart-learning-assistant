@@ -119,3 +119,27 @@ export async function setNoteShared(id, shared) { return api(`/api/notes/${id}/s
 export async function streamLecture(body, onDelta, onDone) {
   return sseStream('/api/generate/lecture/stream', body, onDelta, (d) => onDone(d && d.saved))
 }
+
+/** 通知实时流（GET + fetch 流式 SSE，带 Authorization 头）：
+ *  新通知落库时后端推 event:refresh，onRefresh 里重拉列表与未读数；
+ *  返回的 Promise 在连接关闭时 resolve（调用方负责断线重连）。 */
+export async function notifyStream(onRefresh) {
+  const res = await fetch('/api/notifications/stream', {
+    headers: { Authorization: 'Bearer ' + getToken() }
+  })
+  if (!res.ok) throw new Error('通知流连接失败')
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let buffer = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let idx
+    while ((idx = buffer.indexOf('\n\n')) >= 0) {
+      const event = buffer.slice(0, idx)
+      buffer = buffer.slice(idx + 2)
+      if (event.split('\n').some((l) => l.startsWith('event:refresh'))) onRefresh()
+    }
+  }
+}

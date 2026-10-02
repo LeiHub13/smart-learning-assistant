@@ -131,7 +131,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElInput } from 'element-plus'
 import 'element-plus/es/components/input/style/css'
-import { api, getToken, clearToken, resetApiCache, listNotifications, unreadCount, markRead, markAllRead } from './api'
+import { api, getToken, clearToken, resetApiCache, listNotifications, unreadCount, markRead, markAllRead, notifyStream } from './api'
 import AppIcon from './components/AppIcon.vue'
 import { isDarkTheme, toggleTheme as switchTheme } from './theme'
 
@@ -254,6 +254,19 @@ const loadNotify = async () => {
   } catch (e) { /* ignore */ }
 }
 
+/* 通知 SSE 订阅循环：断连 5 秒后重连；登出/卸载时置停 */
+let streamStopped = false
+const runNotifyStream = async () => {
+  streamStopped = false
+  while (!streamStopped && getToken()) {
+    try {
+      await notifyStream(() => loadNotify())
+    } catch (e) { /* 连接失败走重试 */ }
+    if (streamStopped) break
+    await new Promise((r) => setTimeout(r, 5000))
+  }
+}
+
 const toggleBell = async () => {
   bellOpen.value = !bellOpen.value
   if (bellOpen.value) {
@@ -352,7 +365,9 @@ onMounted(async () => {
   try {
     me.value = await api('/api/auth/me')
     await loadNotify()
-    notifyTimer = setInterval(loadNotify, 30000)
+    // 秒级通道：SSE 断连自动重连；轮询降为 120s 兜底（防 SSE 被中间设备掐断）
+    runNotifyStream()
+    notifyTimer = setInterval(loadNotify, 120000)
     startHeartbeat()
   } catch (e) {
     clearToken()
@@ -363,6 +378,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   document.removeEventListener('click', closeBell)
+  streamStopped = true
   if (notifyTimer) clearInterval(notifyTimer)
   if (heartbeatTimer) clearInterval(heartbeatTimer)
 })

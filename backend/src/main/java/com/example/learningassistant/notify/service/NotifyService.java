@@ -11,9 +11,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 通知中心：站内通知落库 + 未读查询 + 标记已读。
@@ -27,6 +31,44 @@ public class NotifyService {
     private final NotificationMapper notificationMapper;
     private final UserMapper userMapper;
     private final ObjectProvider<MailService> mailServiceProvider;
+
+    /** 在线用户的通知 SSE 通道：新通知落库后推刷新信号，前端收到即重拉列表与未读数。 */
+    private final Map<Long, List<SseEmitter>> emitters = new ConcurrentHashMap<>();
+
+    /** 通知实时流：注册当前用户的 SSE 通道（不过期，断线由前端重连兜底）。 */
+    public SseEmitter stream(Long userId) {
+        SseEmitter emitter = new SseEmitter(0L);
+        List<SseEmitter> list = emitters.computeIfAbsent(userId, k -> new CopyOnWriteArrayList<>());
+        list.add(emitter);
+        Runnable cleanup = () -> {
+            List<SseEmitter> cur = emitters.get(userId);
+            if (cur != null) {
+                cur.remove(emitter);
+            }
+        };
+        emitter.onCompletion(cleanup);
+        emitter.onTimeout(cleanup);
+        emitter.onError(e -> cleanup.run());
+        return emitter;
+    }
+
+    /** 向该用户的所有在线通道推刷新信号；失败连接交由回调清理，不影响主流程。 */
+    private void pushRefresh(Long userId) {
+        List<SseEmitter> list = emitters.get(userId);
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        for (SseEmitter e : list) {
+            try {
+                e.send(SseEmitter.event().name("refresh").data(Map.of("t", System.currentTimeMillis())));
+            } catch (Exception ex) {
+                try {
+                    e.complete();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
 
     /**
      * 发送站内通知；已启用邮件渠道且用户绑定了邮箱时同步外发邮件。
@@ -71,6 +113,7 @@ public class NotifyService {
         if (pending) {
             return;
         }
+        pushRefresh(userId);
         if (!email) {
             return;
         }
@@ -89,6 +132,7 @@ public class NotifyService {
                 .le(Notification::getScheduledAt, LocalDateTime.now()));
         for (Notification n : due) {
             mailIfAvailable(n.getUserId(), n.getType(), n.getTitle(), n.getContent());
+            pushRefresh(n.getUserId());
             // updateById 默认忽略 null 字段，清空必须走显式 SET
             notificationMapper.update(null, new UpdateWrapper<Notification>()
                     .set("scheduled_at", null)
