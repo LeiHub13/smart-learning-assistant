@@ -40,21 +40,12 @@
       </div>
 
       <div class="card">
-        <h3>学习时长</h3>
+        <h3>学习时长（近 12 周）</h3>
         <div class="row">
           <div class="stat" style="flex:1"><div class="num">{{ fmtHours(study?.totalMinutes) }}</div><div class="lab">总时长</div></div>
           <div class="stat" style="flex:1"><div class="num">{{ study?.activeDays ?? 0 }}</div><div class="lab">活跃天数</div></div>
         </div>
-        <div v-if="study?.calendar?.length" class="heatmap">
-          <span v-for="c in study.calendar" :key="c.date" class="hm-cell" :class="hmLevel(c.minutes)" :title="c.date + '：' + c.minutes + ' 分钟'"></span>
-        </div>
-        <div class="hm-legend">近 12 周 ·
-          <span class="hm-cell hm-0"></span>无
-          <span class="hm-cell hm-1"></span>&lt;30m
-          <span class="hm-cell hm-2"></span>&lt;1h
-          <span class="hm-cell hm-3"></span>&lt;2h
-          <span class="hm-cell hm-4"></span>≥2h
-        </div>
+        <StudyHeatmap v-if="study?.calendar?.length" :calendar="study?.calendar || []" />
         <table v-if="study?.byCourse?.length">
           <thead><tr><th>课程</th><th>累计时长</th></tr></thead>
           <tbody>
@@ -130,6 +121,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { api, getCourses } from '../api'
 import { fmtTime, mdToHtml } from '../utils'
+import StudyHeatmap from '../components/StudyHeatmap.vue'
 
 defineOptions({ name: 'ProgressView' })
 
@@ -159,14 +151,6 @@ const refreshAdvice = async () => {
 const fmtHours = (m) => {
   if (!m) return '0h'
   return m >= 60 ? Math.round(m / 6) / 10 + 'h' : m + 'min'
-}
-
-const hmLevel = (minutes) => {
-  if (!minutes) return 'hm-0'
-  if (minutes < 30) return 'hm-1'
-  if (minutes < 60) return 'hm-2'
-  if (minutes < 120) return 'hm-3'
-  return 'hm-4'
 }
 
 onMounted(async () => {
@@ -200,13 +184,7 @@ const load = async () => {
 .md :deep(strong) { color: var(--text); }
 .md :deep(code) { background: #f4f1ea; border-radius: 4px; padding: 1px 5px; font-size: 13px; }
 .heatmap { display: grid; grid-template-rows: repeat(7, 12px); grid-auto-flow: column; gap: 3px; margin: 12px 0 4px; width: fit-content; }
-.hm-cell { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
-.hm-0 { background: #ebedf0; }
-.hm-1 { background: #9be9a8; }
-.hm-2 { background: #40c463; }
-.hm-3 { background: #30a14e; }
-.hm-4 { background: #216e39; }
-.hm-legend { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; margin-bottom: 10px; }
+
 
 .wb-list { display: flex; flex-direction: column; gap: 16px; }
 .wb-card {
@@ -252,9 +230,4 @@ const load = async () => {
 
 /* 深色：代码底与热力图梯度 */
 html.dark .md :deep(code), html.dark .md :deep(pre) { background: var(--soft); }
-html.dark .hm-0 { background: #1c2128; }
-html.dark .hm-1 { background: #033a16; }
-html.dark .hm-2 { background: #196c2e; }
-html.dark .hm-3 { background: #2ea043; }
-html.dark .hm-4 { background: #56d364; }
 </style>
