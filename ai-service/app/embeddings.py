@@ -2,7 +2,8 @@
 
 provider 由 RAG_EMBEDDING_PROVIDER 切换：
 - hash       字符 n-gram 哈希（128 维，离线零依赖，移植自原 Java HashEmbeddingService）
-- dashscope  通义 text-embedding-v3（OpenAI 兼容 /embeddings）
+- siliconflow  硅基流动 BAAI/bge-m3（OpenAI 兼容 /embeddings）
+- dashscope    通义 text-embedding-v3（OpenAI 兼容 /embeddings）
 
 注意：hash 版必须跨进程稳定，否则重启后新算的向量与库里旧向量不可比。
 Python 内置 hash() 受 PYTHONHASHSEED 随机化，这里改用 zlib.crc32。
@@ -20,7 +21,7 @@ logger = logging.getLogger("ai-service.embeddings")
 HASH_DIM = 128
 
 _lock = threading.Lock()
-_dashscope_cache: dict[str, list[float]] = {}
+_remote_cache: dict[tuple[str, str, str], list[float]] = {}
 
 
 def dim() -> int:
@@ -29,11 +30,11 @@ def dim() -> int:
 
 def embed(text: str) -> list[float]:
     provider = config.EMBEDDING_PROVIDER
-    if provider == "dashscope":
-        return _embed_dashscope(text)
+    if provider in ("siliconflow", "dashscope"):
+        return _embed_remote(text)
     if provider == "hash":
         return _embed_hash(text)
-    raise RuntimeError(f"未知的 RAG_EMBEDDING_PROVIDER: {provider}（支持 hash / dashscope）")
+    raise RuntimeError(f"未知的 RAG_EMBEDDING_PROVIDER: {provider}（支持 siliconflow / hash / dashscope）")
 
 
 def embed_many(texts: list[str]) -> list[list[float]]:
@@ -59,15 +60,16 @@ def _embed_hash(text: str) -> list[float]:
     return vec
 
 
-def _embed_dashscope(text: str) -> list[float]:
+def _embed_remote(text: str) -> list[float]:
     if not text or not text.strip():
         raise RuntimeError("Embedding 输入为空")
+    cache_key = (config.EMBEDDING_BASE_URL, config.EMBEDDING_MODEL, text)
     with _lock:
-        hit = _dashscope_cache.get(text)
+        hit = _remote_cache.get(cache_key)
     if hit is not None:
         return hit
     if not config.EMBEDDING_API_KEY:
-        raise RuntimeError("使用 dashscope embedding 但未配置 RAG_EMBEDDING_API_KEY / AI_API_KEY")
+        raise RuntimeError(f"使用 {config.EMBEDDING_PROVIDER} embedding 但未配置 RAG_EMBEDDING_API_KEY")
     url = config.EMBEDDING_BASE_URL.rstrip("/") + "/embeddings"
     body = json.dumps({"model": config.EMBEDDING_MODEL, "input": [text]}).encode("utf-8")
     req = urllib.request.Request(
@@ -88,9 +90,9 @@ def _embed_dashscope(text: str) -> list[float]:
         raise RuntimeError("Embedding 接口未返回向量")
     vec = [float(v) for v in data[0]["embedding"]]
     with _lock:
-        if len(_dashscope_cache) > 20000:
-            _dashscope_cache.clear()
-        _dashscope_cache[text] = vec
+        if len(_remote_cache) > 20000:
+            _remote_cache.clear()
+        _remote_cache[cache_key] = vec
     return vec
 
 

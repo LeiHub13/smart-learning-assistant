@@ -36,15 +36,19 @@ AGENT_WRITE_TOOLS = os.getenv("AGENT_WRITE_TOOLS", "false").lower() in ("1", "tr
 CHROMA_DIR = os.getenv(
     "RAG_CHROMA_DIR",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "chroma"))
-RAG_COLLECTION = os.getenv("RAG_COLLECTION", "learnassist_chunks")
+RAG_COLLECTION = os.getenv("RAG_COLLECTION", "learnassist_bge_m3")
 
-# 向量化：hash（离线字符 n-gram，128 维，默认）| dashscope（通义 text-embedding-v3）
-EMBEDDING_PROVIDER = os.getenv("RAG_EMBEDDING_PROVIDER", "hash").lower()
-EMBEDDING_MODEL = os.getenv("RAG_EMBEDDING_MODEL", "text-embedding-v3")
-EMBEDDING_BASE_URL = os.getenv(
-    "RAG_EMBEDDING_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-# 不单独配置时复用 AI_API_KEY（通义场景下与生成模型同一把 key）
-EMBEDDING_API_KEY = os.getenv("RAG_EMBEDDING_API_KEY", API_KEY)
+# 向量化：siliconflow（免费 BGE-M3，默认）| hash（离线字符 n-gram）| dashscope（通义）
+EMBEDDING_PROVIDER = os.getenv("RAG_EMBEDDING_PROVIDER", "siliconflow").lower()
+EMBEDDING_MODEL = (os.getenv("RAG_EMBEDDING_MODEL")
+                   or ("text-embedding-v3" if EMBEDDING_PROVIDER == "dashscope" else "BAAI/bge-m3"))
+EMBEDDING_BASE_URL = (os.getenv("RAG_EMBEDDING_BASE_URL")
+                      or ("https://dashscope.aliyuncs.com/compatible-mode/v1"
+                          if EMBEDDING_PROVIDER == "dashscope" else "https://api.siliconflow.cn/v1"))
+# 硅基流动使用独立 key；通义保持原有的 AI_API_KEY 复用方式。
+EMBEDDING_API_KEY = (os.getenv("RAG_EMBEDDING_API_KEY")
+                     or (os.getenv("SILICONFLOW_API_KEY", "") if EMBEDDING_PROVIDER == "siliconflow"
+                         else API_KEY))
 
 # 召回与重排参数（原 Java 侧 app.rag.* / ChatService 常量）
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))

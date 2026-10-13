@@ -52,18 +52,41 @@ def java_stub(tmp_path, monkeypatch):
     threading.Thread(target=server.serve_forever, daemon=True).start()
     monkeypatch.setattr(config, "JAVA_TOOL_BASE", f"http://127.0.0.1:{server.server_port}")
     monkeypatch.setattr(config, "RAG_CHUNK_PAGE_SIZE", 1)
+    monkeypatch.setattr(config, "EMBEDDING_PROVIDER", "hash")
     monkeypatch.setattr(retriever, "_client", None)
     monkeypatch.setattr(config, "CHROMA_DIR", str(tmp_path / "chroma"))
     yield server
     server.shutdown()
 
 
-def test_hash_embedding_is_stable_and_normalized():
+def test_hash_embedding_is_stable_and_normalized(monkeypatch):
+    monkeypatch.setattr(config, "EMBEDDING_PROVIDER", "hash")
     v1 = embeddings.embed("HashMap 原理")
     v2 = embeddings.embed("HashMap 原理")
     assert v1 == v2, "hash 向量必须跨调用稳定"
     assert len(v1) == 128
     assert abs(sum(v * v for v in v1) - 1.0) < 1e-6
+
+
+def test_siliconflow_embedding_request(monkeypatch):
+    from io import BytesIO
+
+    monkeypatch.setattr(config, "EMBEDDING_PROVIDER", "siliconflow")
+    monkeypatch.setattr(config, "EMBEDDING_MODEL", "BAAI/bge-m3")
+    monkeypatch.setattr(config, "EMBEDDING_BASE_URL", "https://api.siliconflow.cn/v1")
+    monkeypatch.setattr(config, "EMBEDDING_API_KEY", "test-key")
+    requests = []
+
+    def fake_urlopen(request, timeout):
+        requests.append(request)
+        assert timeout == 30
+        return BytesIO(b'{"data":[{"embedding":[0.1,0.2,0.3]}]}')
+
+    monkeypatch.setattr(embeddings.urllib.request, "urlopen", fake_urlopen)
+    assert embeddings.embed("BGE-M3 API test") == [0.1, 0.2, 0.3]
+    assert requests[0].full_url == "https://api.siliconflow.cn/v1/embeddings"
+    assert json.loads(requests[0].data) == {"model": "BAAI/bge-m3", "input": ["BGE-M3 API test"]}
+    assert requests[0].get_header("Authorization") == "Bearer test-key"
 
 
 def test_index_document_pulls_all_chunks_via_pagination(java_stub):

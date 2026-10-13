@@ -12,6 +12,12 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 健康检查：`GET http://localhost:8000/ai/health`
 
+知识库向量默认使用硅基流动的免费 `BAAI/bge-m3` API。申请硅基流动 API Key 后，
+在 `ai-service/.env` 设置 `RAG_EMBEDDING_API_KEY`；Docker 部署则在根目录 `.env`
+设置 `SILICONFLOW_API_KEY`。模型默认使用独立的 Chroma 集合 `learnassist_bge_m3`，
+从旧模型切换后调用 `POST /api/kb/reindex` 全量重建索引。未配置向量 API Key 时，
+知识库索引和召回会报错；生成模型的 `AI_API_KEY` 不会被当作硅基流动 Key 使用。
+
 ## 接口
 
 | 接口 | 说明 |

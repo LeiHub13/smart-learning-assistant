@@ -131,11 +131,12 @@ services:
       AI_PORT: 8000
       # RAG 检索链路（自 Java 侧迁移过来）：Chroma 向量索引落在 ai-data 卷内，随容器重启保留
       RAG_CHROMA_DIR: /app/data/chroma
-      # 向量化模型：hash（离线字符 n-gram，默认）| dashscope（通义 text-embedding-v3）
-      # 切换 provider 后需调用一次 POST /api/kb/reindex 重建索引（维度不同）
-      RAG_EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
-      RAG_EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-v3}
-      RAG_EMBEDDING_API_KEY: ${DASHSCOPE_API_KEY:-}
+      # 免费 BGE-M3 API；切换模型后需重建索引
+      RAG_COLLECTION: ${RAG_COLLECTION:-learnassist_bge_m3}
+      RAG_EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-siliconflow}
+      RAG_EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      RAG_EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+      RAG_EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-${SILICONFLOW_API_KEY:-${DASHSCOPE_API_KEY:-}}}
       RAG_TOP_K: ${RAG_TOP_K:-5}
       # 文档解析与分块（自 Java 侧迁移）：定长切块块大小，与原 Java CHUNK_SIZE 同值
       RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-200}
