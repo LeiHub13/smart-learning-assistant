@@ -45,3 +45,4 @@ Thumbs.db
 
 # ===== 本地智能体工作数据（不入库）=====
 .workbuddy/
+.zcode/
