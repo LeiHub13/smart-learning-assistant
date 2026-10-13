@@ -13,7 +13,7 @@ spring:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:learning_assistant}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${DB_USER:root}
-    password: ${DB_PASSWORD:1234}
+    password: ${DB_PASSWORD:123456}
   sql:
     init:
       mode: always
