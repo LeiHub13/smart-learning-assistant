@@ -1,4 +1,4 @@
-# 生产编排：CI 构建并发布应用镜像；服务器只保留本文件、deploy.sh 和私有 .env。
+# 生产编排：服务器从固定提交的部署包构建三个应用镜像。
 # 用法：./deploy.sh <完整 Git 提交 SHA>（镜像 tag 为 sha-<SHA>）
 name: learning-assistant
 
@@ -62,7 +62,10 @@ services:
     networks: [la-net]
 
   backend:
-    image: ${IMAGE_PREFIX:-ghcr.io/leihub13/smart-learning-assistant}-backend:${APP_VERSION:?请通过 deploy.sh 指定已发布的提交 SHA}
+    build: ./backend
+    # 沿用旧镜像名以兼容已有版本回滚；构建和启动均不从 GHCR 拉取应用镜像。
+    image: ${IMAGE_PREFIX:-ghcr.io/leihub13/smart-learning-assistant}-backend:${APP_VERSION:?请通过 deploy.sh 指定部署包的提交 SHA}
+    pull_policy: never
     container_name: la-backend
     restart: unless-stopped
     environment:
@@ -118,7 +121,9 @@ services:
         condition: service_healthy
 
   ai-service:
-    image: ${IMAGE_PREFIX:-ghcr.io/leihub13/smart-learning-assistant}-ai-service:${APP_VERSION:?请通过 deploy.sh 指定已发布的提交 SHA}
+    build: ./ai-service
+    image: ${IMAGE_PREFIX:-ghcr.io/leihub13/smart-learning-assistant}-ai-service:${APP_VERSION:?请通过 deploy.sh 指定部署包的提交 SHA}
+    pull_policy: never
     container_name: la-ai
     restart: unless-stopped
     environment:
@@ -163,7 +168,9 @@ services:
       start_period: 10s
 
   frontend:
-    image: ${IMAGE_PREFIX:-ghcr.io/leihub13/smart-learning-assistant}-frontend:${APP_VERSION:?请通过 deploy.sh 指定已发布的提交 SHA}
+    build: ./frontend
+    image: ${IMAGE_PREFIX:-ghcr.io/leihub13/smart-learning-assistant}-frontend:${APP_VERSION:?请通过 deploy.sh 指定部署包的提交 SHA}
+    pull_policy: never
     container_name: la-web
     restart: unless-stopped
     ports:

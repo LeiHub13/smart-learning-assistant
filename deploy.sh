@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在服务器上部署 CI 发布的三个应用镜像。服务器无需项目源码或 Dockerfile。
+# 在服务器上从固定提交的部署包构建三个应用镜像。
 set -euo pipefail
 umask 077
 cd "$(dirname "$0")"
@@ -15,7 +15,7 @@ fail() {
 }
 
 compose() {
-  docker compose -f docker-compose.yml "$@"
+  docker compose --env-file "$env_file" -f docker-compose.yml "$@"
 }
 
 read_version() {
@@ -35,10 +35,37 @@ save_version() {
 
 save_env_version() {
   local version="$1"
-  sed '/^APP_VERSION=/d' .env > .env.tmp
-  printf '\nAPP_VERSION=%s\n' "$version" >> .env.tmp
-  chmod 600 .env.tmp
-  mv -f .env.tmp .env
+  sed '/^APP_VERSION=/d' "$env_file" > "${env_file}.tmp"
+  printf '\nAPP_VERSION=%s\n' "$version" >> "${env_file}.tmp"
+  chmod 600 "${env_file}.tmp"
+  mv -f "${env_file}.tmp" "$env_file"
+}
+
+check_app_images() {
+  local service candidate image
+  local -a images
+  mapfile -t images < <(compose config --images)
+  for service in backend ai-service frontend; do
+    image=
+    for candidate in "${images[@]}"; do
+      if [[ "$candidate" == *-"${service}:${APP_VERSION}" ]]; then
+        image="$candidate"
+        break
+      fi
+    done
+    [ -n "$image" ] || fail "编排中找不到 ${service}:${APP_VERSION} 镜像"
+    docker image inspect "$image" >/dev/null 2>&1 || fail "本机缺少镜像 $image；回滚需要保留上一版镜像"
+  done
+}
+
+ensure_service_images() {
+  local image
+  for image in mysql:8.4 redis:7-alpine minio/minio:RELEASE.2023-03-20T20-16-18Z; do
+    if ! docker image inspect "$image" >/dev/null 2>&1; then
+      echo "拉取缺少的基础服务镜像 $image ..."
+      docker pull "$image" || fail "无法拉取 $image"
+    fi
+  done
 }
 
 wait_for_ai() {
@@ -83,35 +110,45 @@ wait_ready() {
 
 [ "$#" -eq 1 ] || usage
 [ -f .env ] || fail "缺少 .env；请从 .env.example 创建，并填写私有配置"
-chmod 600 .env
-if grep -Eq '^AI_API_KEY=sk-x{8,}$' .env; then
+env_file=$(readlink -f .env) || fail "无法解析 .env"
+[ -f "$env_file" ] || fail "缺少 .env 目标文件"
+previous_file="$(dirname "$env_file")/.previous.env"
+chmod 600 "$env_file"
+if grep -Eq '^AI_API_KEY=sk-x{8,}$' "$env_file"; then
   fail "AI_API_KEY 仍是 .env.example 中的模板值"
 fi
 
-current=$(read_version .env || true)
+current=$(read_version "$env_file" || true)
 if [ "$1" = rollback ]; then
-  target=$(read_version .previous.env || true)
+  target=$(read_version "$previous_file" || true)
   [ -n "$target" ] || fail "没有可回滚的上一个版本"
 else
   target="sha-${1#sha-}"
   [[ "$target" =~ ^sha-[0-9a-f]{40}$ ]] || usage
+  [ -f RELEASE_SHA ] || fail "缺少 RELEASE_SHA；请解压对应提交的完整部署包"
+  bundle_sha=$(tr -d '\r\n' < RELEASE_SHA)
+  [ "$bundle_sha" = "${target#sha-}" ] || fail "部署包版本 $bundle_sha 与请求的 ${target#sha-} 不一致"
 fi
 
-if [ "$target" = "$current" ]; then
-  echo "当前已是 $target"
-  exit 0
-fi
-
-echo "部署 $target"
 export APP_VERSION="$target"
 compose config --quiet || fail "编排配置无效；请检查 .env 的必填变量"
-compose pull backend ai-service frontend || fail "镜像拉取失败；原有容器未切换"
+ensure_service_images
 
-if ! compose up -d --no-build || ! wait_ready; then
+if [ "$target" != "$current" ] && [ "$1" != rollback ]; then
+  echo "在服务器构建 $target；构建失败不会切换原有容器"
+  df -h .
+  compose build backend ai-service frontend || fail "镜像构建失败；原有容器未切换"
+else
+  echo "使用本机已有镜像 $target"
+fi
+check_app_images
+
+if ! compose up -d --no-build --pull never || ! wait_ready; then
   if [ -n "$current" ]; then
     echo "尝试恢复上一版本 $current ..." >&2
     export APP_VERSION="$current"
-    if ! compose up -d --no-build || ! wait_ready; then
+    check_app_images || fail "本机缺少上一版镜像，无法自动恢复"
+    if ! compose up -d --no-build --pull never || ! wait_ready; then
       fail "新版本未就绪，自动恢复也失败；请查看 docker compose logs"
     fi
     fail "新版本未就绪，已恢复 $current；请查看 docker compose logs"
@@ -121,7 +158,7 @@ fi
 
 save_env_version "$target"
 if [ -n "$current" ]; then
-  save_version .previous.env "$current"
+  save_version "$previous_file" "$current"
 fi
 echo "部署完成: $target"
 echo "前端: http://<服务器 IP>/；查看状态: docker compose ps"

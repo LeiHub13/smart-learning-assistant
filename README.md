@@ -25,12 +25,20 @@ mobile/      uni-app 移动端（对话 / 练习 / 报告等，后端地址在 c
 
 **生产部署**
 
-GitHub Actions 构建并发布前端、后端、AI 服务三个镜像到 GHCR，镜像版本为 `sha-<完整提交 SHA>`。服务器只需部署包（`docker-compose.yml`、`deploy.sh`、`.env.example`、本说明）和私有 `.env`，无需同步源码或在服务器构建镜像。首次迁移、私有镜像登录、回滚和数据卷说明见 [DEPLOYMENT.md](DEPLOYMENT.md)。
+CI 将前端、后端、AI 服务的 Docker 构建目录打成 `deployment-package.tar.gz`，包内有 `RELEASE_SHA` 和部署文件，不含 `.git`、`.env` 或本地依赖目录。将部署包上传到服务器，服务器按提交 SHA 本地构建三个应用镜像并启动容器；无需在服务器维护 Git 仓库或单独上传 JAR。构建仍需下载基础镜像及 Maven、PyPI、npm 依赖。上传、配置、磁盘空间和回滚步骤见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
 ```bash
-cp .env.example .env      # 填入 AI_API_KEY、数据库/JWT/MinIO/内部接口密钥
-chmod 600 .env
-./deploy.sh <完整 Git 提交 SHA>
+sha=$(tar -xOzf deployment-package.tar.gz RELEASE_SHA)
+[[ "$sha" =~ ^[0-9a-f]{40}$ ]] || exit 1
+release_dir="/opt/learning-assistant/releases/$sha"
+mkdir -p "$release_dir"
+tar -xzf deployment-package.tar.gz -C "$release_dir"
+test -f /opt/learning-assistant/.env || cp "$release_dir/.env.example" /opt/learning-assistant/.env
+# 首次部署时先编辑 /opt/learning-assistant/.env，填写私有密钥
+chmod 600 /opt/learning-assistant/.env
+test -e "$release_dir/.env" || ln -s /opt/learning-assistant/.env "$release_dir/.env"
+cd "$release_dir"
+./deploy.sh "$sha"
 ```
 
 **本地手动启动**
