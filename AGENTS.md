@@ -19,7 +19,7 @@
 - 内部接口鉴权：`X-Internal-Token`（Java `app.internal-tool-token` ↔ Python `JAVA_TOOL_TOKEN`，两侧默认值必须一致）
 - LLM provider 仅支持 `python` / `openai-compatible`，无 mock 降级；`openai-compatible`/`spring-ai` 不经过 ai-service，因此没有知识库检索能力
 - 系统无用户角色概念：所有用户权限一致，资源按 userId 隔离；仅显式开启 `APP_DEMO_SEED_ENABLED=true` 时播种演示账号 pg13/xiaozhang/xiaodi（密码 123456），生产默认关闭
-- 生产部署：CI 把三个应用的 Docker 构建目录及编排文件打成源码包；服务器保留私有 `.env`，按 `RELEASE_SHA` 在本机构建并运行三个应用镜像，不从 GHCR 拉取应用镜像；详见 `DEPLOYMENT.md`
+- 生产部署：CI 从提交编译后端 JAR 与前端 `dist/`，连同 AI 服务源码、Dockerfile 和编排文件打成发布包；服务器保留私有 `.env`，按 `RELEASE_SHA` 只把 JAR/`dist/` 装进后端与前端运行镜像、按源码构建 AI 服务，不从 GHCR 拉取应用镜像；详见 `DEPLOYMENT.md`
 - 一个任务完成后,你觉着可以commit了,你就commit,要push的时候询问我!!
 
 ## 验证

@@ -1,12 +1,12 @@
-# 生产部署：服务器本地构建
+# 生产部署：预编译产物，服务器封装运行镜像
 
-CI 将一个 Git 提交的 `backend/`、`ai-service/`、`frontend/` 构建目录与 `docker-compose.yml`、`deploy.sh`、配置示例和本指南打成 `deployment-package.tar.gz`。包内的 `RELEASE_SHA` 记录完整提交 SHA；不包含 `.git`、私有 `.env`、`node_modules`、`.venv`、运行数据或本地构建产物。服务器上传此包后本地构建三个应用镜像，不需要用 Git 同步整个仓库，也不需要单独上传 JAR 或前端 `dist/`。
+CI 从一个 Git 提交编译后端 JAR 和前端 `dist/`，再把它们、AI 服务运行源码、三个运行镜像的 Dockerfile、`docker-compose.yml`、`deploy.sh` 与配置示例打成 `deployment-package.tar.gz`。包内的 `RELEASE_SHA` 记录完整提交 SHA；不包含 `.git`、私有 `.env`、后端和前端源码、`node_modules`、`.venv` 或运行数据。上传一个部署包即可，JAR 和 `dist/` 已在包内，无需分别传输。
 
-服务器需要 Docker Engine、Docker Compose 插件和足够的磁盘空间。JDK、Maven、Python、Node 在 Docker 构建阶段使用，宿主机无需安装。构建仍需下载 Maven、JRE、Python、Node、Nginx 等基础镜像，以及 Maven、PyPI、npm 依赖；MySQL、Redis、MinIO 容器所用镜像也需存在或下载。基础镜像通常来自 Docker Hub，应用镜像不从 GHCR 拉取。
+服务器需要 Docker Engine、Docker Compose 插件和足够的磁盘空间，不需要安装 JDK、Maven 或 Node，也不需要下载 Maven/Node 构建镜像或编译依赖。首次构建仍可能下载 JRE、Python、Nginx 运行基础镜像，以及 AI 服务的 Python/Node 依赖；MySQL、Redis、MinIO 容器所用镜像也需存在或下载。基础镜像通常来自 Docker Hub，应用镜像不从 GHCR 拉取。
 
 ## 准备发布包
 
-可从 CI 的部署产物下载 `deployment-package.tar.gz`。尚未推送时，也可在本机把修改提交后运行 `python scripts/package_deploy.py deployment-package.tar.gz --ref HEAD`。两种方式均从已提交版本生成发布包；不要手工把工作区、`.git`、`.env` 或依赖目录打包上传。每个 SHA 使用独立的空目录，避免旧版已删除的源码文件留在下一次构建上下文中。
+可从 CI 的部署产物下载 `deployment-package.tar.gz`。尚未推送时，也可在本机安装 JDK 17、Maven、Node 20 和 npm，把修改提交后运行 `python scripts/package_deploy.py deployment-package.tar.gz --ref HEAD`。脚本从指定的已提交版本构建 JAR 和 `dist/`，不会混入工作区未提交的文件。不要手工把工作区、`.git`、`.env` 或依赖目录打包上传。每个 SHA 使用独立的空目录，避免旧版文件留在下一次构建上下文中。
 
 在本机上传发布包：
 
@@ -43,7 +43,7 @@ cd "$release_dir"
 
 ## 构建并启动
 
-先查看当前剩余空间与 Docker 占用；三个应用的多阶段构建需要额外空间：
+先查看当前剩余空间与 Docker 占用；AI 服务依赖和运行镜像构建仍需要空间：
 
 ~~~bash
 df -h / /var/lib/docker
@@ -60,7 +60,7 @@ chmod +x deploy.sh
 docker compose ps
 ~~~
 
-脚本验证参数与 `RELEASE_SHA` 一致，在服务器构建三个应用镜像，构建成功后用 `docker compose up -d --no-build --pull never` 切换容器，并检查 AI、后端、前端健康。成功后将 `APP_VERSION=sha-<完整 SHA>` 写入服务器私有 `.env`。构建失败时不应切换现有容器；首次安装则等待镜像构建和基础设施启动。
+脚本验证参数与 `RELEASE_SHA` 一致，在服务器将 JAR、`dist/` 装入后端和前端运行镜像，并构建 AI 服务镜像。镜像构建成功后用 `docker compose up -d --no-build --pull never` 切换容器，并检查 AI、后端、前端健康。成功后将 `APP_VERSION=sha-<完整 SHA>` 写入服务器私有 `.env`。构建失败时不应切换现有容器；首次安装则等待镜像构建和基础设施启动。
 
 镜像名默认仍使用 `ghcr.io/leihub13/smart-learning-assistant-{backend,ai-service,frontend}:sha-<完整 SHA>` 格式，**这里仅作为本机镜像标签和回滚标识**。本地构建不会向 GHCR 推送镜像，部署脚本也不会从 GHCR 拉取这三个应用镜像；无需 `docker login ghcr.io`。可以用 `.env` 的 `IMAGE_PREFIX` 改本机镜像名前缀，但同一服务器升级和回滚应保持一致。
 
@@ -78,4 +78,4 @@ docker compose logs --tail 100 backend ai-service frontend
 ./deploy.sh rollback
 ~~~
 
-每次成功升级把上一个版本写入服务器私有 `.previous.env`。`rollback` 只使用服务器本地保留的旧版应用镜像；清理旧镜像前先确认不再需要回滚。部署脚本在新版本健康检查失败时也会尝试恢复上一版。版本目录保留各版源码、编排文件和 `RELEASE_SHA`，方便核对与重建；私有 `.env`、`.previous.env` 和备份放在版本目录外，不随发布包更换。
+每次成功升级把上一个版本写入服务器私有 `.previous.env`。`rollback` 只使用服务器本地保留的旧版应用镜像；清理旧镜像前先确认不再需要回滚。部署脚本在新版本健康检查失败时也会尝试恢复上一版。版本目录保留各版 JAR、`dist/`、AI 服务运行源码、编排文件和 `RELEASE_SHA`，方便核对与重建；私有 `.env`、`.previous.env` 和备份放在版本目录外，不随发布包更换。

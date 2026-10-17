@@ -1,16 +1,7 @@
-# 后端：多阶段构建（maven 构建 → jre 运行）
-FROM maven:3.9-eclipse-temurin-17 AS build
-WORKDIR /build
-# 国内镜像加速（mvn-settings.xml 把 central 指到阿里云）
-COPY mvn-settings.xml /root/.m2/settings.xml
-COPY pom.xml .
-RUN mvn dependency:go-offline -B || true
-COPY src ./src
-RUN mvn package -DskipTests -B
-
+# 后端：CI 生成 app.jar，服务器仅组装运行镜像
 FROM eclipse-temurin:17-jre
 WORKDIR /app
-COPY --from=build /build/target/learning-assistant-1.0.0.jar app.jar
+COPY app.jar app.jar
 # 上传文件 + 日志（挂载卷；数据库在独立 mysql 容器）
 VOLUME /app/data
 EXPOSE 8080
