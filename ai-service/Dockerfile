@@ -1,5 +1,6 @@
 # AI 服务：FastAPI + langchain
-FROM python:3.12-slim
+# 基础镜像走国内加速源：Docker Hub 直连在 ECS 上常超时，daocloud 镜像站也会 502
+FROM docker.1ms.run/library/python:3.12-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
