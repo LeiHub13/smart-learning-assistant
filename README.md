@@ -25,7 +25,7 @@ mobile/      uni-app 移动端（对话 / 练习 / 报告等，后端地址在 c
 
 **生产部署**
 
-CI 将前端、后端、AI 服务的 Docker 构建目录打成 `deployment-package.tar.gz`，包内有 `RELEASE_SHA` 和部署文件，不含 `.git`、`.env` 或本地依赖目录。将部署包上传到服务器，服务器按提交 SHA 本地构建三个应用镜像并启动容器；无需在服务器维护 Git 仓库或单独上传 JAR。构建仍需下载基础镜像及 Maven、PyPI、npm 依赖。上传、配置、磁盘空间和回滚步骤见 [DEPLOYMENT.md](DEPLOYMENT.md)。
+CI 从提交编译后端 JAR 和前端 `dist/`，连同 AI 服务源码、三个运行镜像的 Dockerfile 和部署文件打成 `deployment-package.tar.gz`，包内有 `RELEASE_SHA`，不含 `.git`、`.env`、后端和前端源码或本地依赖目录。将部署包上传到服务器，服务器把 JAR 和 `dist/` 装进后端、前端运行镜像，并按源码构建 AI 服务镜像后启动容器；无需在服务器维护 Git 仓库，也无需安装 JDK、Maven 或 Node。上传、配置、磁盘空间和回滚步骤见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
 ```bash
 sha=$(tar -xOzf deployment-package.tar.gz RELEASE_SHA)
