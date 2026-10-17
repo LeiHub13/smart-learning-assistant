@@ -1,69 +1,127 @@
 #!/usr/bin/env bash
-# 一键部署：构建镜像并启动全部服务
+# 在服务器上部署 CI 发布的三个应用镜像。服务器无需项目源码或 Dockerfile。
 set -euo pipefail
+umask 077
 cd "$(dirname "$0")"
 
-# 1. 校验 .env
-if [ ! -f .env ]; then
-  echo "[1/4] 未找到 .env，正在从 .env.example 创建，请编辑填写 AI_API_KEY"
-  cp .env.example .env
-  echo "     请先执行: nano .env  填入 AI_API_KEY 后重新运行 $0"
+usage() {
+  echo "用法: $0 <40 位 Git 提交 SHA | sha-<40 位 SHA> | rollback>" >&2
+  exit 2
+}
+
+fail() {
+  echo "部署失败: $*" >&2
   exit 1
+}
+
+compose() {
+  docker compose -f docker-compose.yml "$@"
+}
+
+read_version() {
+  local file="$1" value
+  [ -f "$file" ] || return 1
+  value=$(sed -n 's/^APP_VERSION=//p' "$file" | head -n 1)
+  [[ "$value" =~ ^sha-[0-9a-f]{40}$ ]] || return 1
+  printf '%s' "$value"
+}
+
+save_version() {
+  local file="$1" version="$2"
+  printf 'APP_VERSION=%s\n' "$version" > "${file}.tmp"
+  chmod 600 "${file}.tmp"
+  mv -f "${file}.tmp" "$file"
+}
+
+save_env_version() {
+  local version="$1"
+  sed '/^APP_VERSION=/d' .env > .env.tmp
+  printf '\nAPP_VERSION=%s\n' "$version" >> .env.tmp
+  chmod 600 .env.tmp
+  mv -f .env.tmp .env
+}
+
+wait_for_ai() {
+  local i status health
+  for i in $(seq 1 90); do
+    status=$(docker inspect --format='{{.State.Status}}' la-ai 2>/dev/null || true)
+    health=$(docker inspect --format='{{.State.Health.Status}}' la-ai 2>/dev/null || true)
+    [ "$health" = healthy ] && return 0
+    if [ "$status" != running ] && [ "$status" != created ]; then
+      echo "ai-service 状态异常: ${status:-missing}" >&2
+      return 1
+    fi
+    sleep 2
+  done
+  echo "ai-service 在 180 秒内未通过健康检查" >&2
+  return 1
+}
+
+wait_for_http() {
+  local url="$1" name="$2" container="$3" i status
+  for i in $(seq 1 90); do
+    if curl --fail --silent --max-time 3 "$url" >/dev/null; then
+      return 0
+    fi
+    status=$(docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null || true)
+    if [ "$status" != running ] && [ "$status" != created ]; then
+      echo "$name 状态异常: ${status:-missing}" >&2
+      return 1
+    fi
+    sleep 2
+  done
+  echo "$name 在 180 秒内未就绪" >&2
+  return 1
+}
+
+wait_ready() {
+  echo "等待 AI、后端和前端就绪..."
+  wait_for_ai || return 1
+  wait_for_http http://127.0.0.1:8080/api/health backend la-backend || return 1
+  wait_for_http http://127.0.0.1/api/health frontend la-web || return 1
+}
+
+[ "$#" -eq 1 ] || usage
+[ -f .env ] || fail "缺少 .env；请从 .env.example 创建，并填写私有配置"
+chmod 600 .env
+if grep -Eq '^AI_API_KEY=sk-x{8,}$' .env; then
+  fail "AI_API_KEY 仍是 .env.example 中的模板值"
 fi
-# 模板值/空值提醒：不阻塞部署，但 AI 问答会不可用
-# 注：拆成两条简单正则，避免部分 grep 实现（如 ugrep）不支持空交替分支 (a|)
-if grep -qE '^AI_API_KEY=sk-x{5,}' .env || grep -qE '^AI_API_KEY=[[:space:]]*$' .env; then
-  echo "[1/4] ⚠ 警告：.env 中 AI_API_KEY 仍是模板值或为空，部署后 AI 问答/生成会失败"
+
+current=$(read_version .env || true)
+if [ "$1" = rollback ]; then
+  target=$(read_version .previous.env || true)
+  [ -n "$target" ] || fail "没有可回滚的上一个版本"
+else
+  target="sha-${1#sha-}"
+  [[ "$target" =~ ^sha-[0-9a-f]{40}$ ]] || usage
 fi
 
-# 2. 构建镜像并启动（向量索引由 ai-service 自带 Chroma 持久化，无需额外中间件）
-echo "[2/4] 构建镜像并启动服务..."
-docker compose up -d --build
+if [ "$target" = "$current" ]; then
+  echo "当前已是 $target"
+  exit 0
+fi
 
-# 3. 等待 AI 服务健康（ai-service 未映射宿主机端口，直接查容器 healthcheck）
-#    首次部署 Python 依赖导入较慢，最多等 120 秒；容器异常退出则立即失败，不白等
-echo "[3/4] 等待 ai-service 健康检查..."
-for i in $(seq 1 60); do
-  state=$(docker inspect --format='{{.State.Status}}' la-ai 2>/dev/null || echo missing)
-  health=$(docker inspect --format='{{.State.Health.Status}}' la-ai 2>/dev/null || echo none)
-  if [ "$health" = "healthy" ]; then
-    echo "      ai-service 就绪 ✓"
-    break
-  fi
-  if [ "$state" != "running" ] && [ "$state" != "created" ]; then
-    echo "      ai-service 容器状态异常（$state），请查看: docker compose logs ai-service"
-    exit 1
-  fi
-  if [ "$i" = 60 ]; then
-    echo "      ai-service 未在 120 秒内就绪，请查看: docker compose logs ai-service"
-    exit 1
-  fi
-  sleep 2
-done
+echo "部署 $target"
+export APP_VERSION="$target"
+compose config --quiet || fail "编排配置无效；请检查 .env 的必填变量"
+compose pull backend ai-service frontend || fail "镜像拉取失败；原有容器未切换"
 
-# 4. 等待后端（本机回环探测；容器异常退出则立即失败）
-echo "[4/4] 等待 backend 就绪..."
-for i in $(seq 1 60); do
-  if curl -sf http://127.0.0.1:8080/api/health >/dev/null 2>&1; then
-    echo "      backend 就绪 ✓"
-    break
+if ! compose up -d --no-build || ! wait_ready; then
+  if [ -n "$current" ]; then
+    echo "尝试恢复上一版本 $current ..." >&2
+    export APP_VERSION="$current"
+    if ! compose up -d --no-build || ! wait_ready; then
+      fail "新版本未就绪，自动恢复也失败；请查看 docker compose logs"
+    fi
+    fail "新版本未就绪，已恢复 $current；请查看 docker compose logs"
   fi
-  state=$(docker inspect --format='{{.State.Status}}' la-backend 2>/dev/null || echo missing)
-  if [ "$state" != "running" ] && [ "$state" != "created" ]; then
-    echo "      backend 容器状态异常（$state），请查看: docker compose logs backend"
-    exit 1
-  fi
-  if [ "$i" = 60 ]; then
-    echo "      backend 未在 120 秒内就绪，请查看: docker compose logs backend"
-    exit 1
-  fi
-  sleep 2
-done
+  fail "首次部署未就绪；请查看 docker compose logs"
+fi
 
-echo ""
-echo "部署完成："
-echo "  前端    http://<服务器IP>      (pg13/123456)"
-echo "  后端    http://127.0.0.1:8080  (仅宿主机可访问)"
-echo "  AI 服务 容器内网 ai-service:8000（不对外）"
-echo "查看日志: docker compose logs -f"
-echo "停止:     docker compose down"
+save_env_version "$target"
+if [ -n "$current" ]; then
+  save_version .previous.env "$current"
+fi
+echo "部署完成: $target"
+echo "前端: http://<服务器 IP>/；查看状态: docker compose ps"

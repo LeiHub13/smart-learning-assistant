@@ -1,5 +1,5 @@
-# Docker Compose 一键编排：前端(nginx) + 后端(Java) + AI 服务(Python) + MySQL
-# 用法：根目录建 .env（复制 .env.example）→ 填 AI_API_KEY → ./deploy.sh up
+# 生产编排：CI 构建并发布应用镜像；服务器只保留本文件、deploy.sh 和私有 .env。
+# 用法：./deploy.sh <完整 Git 提交 SHA>（镜像 tag 为 sha-<SHA>）
 name: learning-assistant
 
 services:
@@ -11,12 +11,12 @@ services:
       # 时区：MySQL NOW()/CURRENT_TIMESTAMP 与存量数据统一北京时间为准（全库曾以 UTC 落库，切换时做过 +8h 校正）
       TZ: Asia/Shanghai
       MYSQL_DATABASE: ${DB_NAME:-learning_assistant}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 配置 MYSQL_ROOT_PASSWORD}
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-123456}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:?请在 .env 配置 MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -46,8 +46,8 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?请在 .env 配置 MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?请在 .env 配置 MINIO_SECRET_KEY}
     volumes:
       - minio-data:/data
     ports:
@@ -62,8 +62,7 @@ services:
     networks: [la-net]
 
   backend:
-    build:
-      context: ./backend
+    image: ${IMAGE_PREFIX:-ghcr.io/leihub13/smart-learning-assistant}-backend:${APP_VERSION:?请通过 deploy.sh 指定已发布的提交 SHA}
     container_name: la-backend
     restart: unless-stopped
     environment:
@@ -72,13 +71,16 @@ services:
       # 数据库：连接 compose 内的 mysql 服务（镜像内 schema.sql 自动建表）
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME:-learning_assistant}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 配置 MYSQL_ROOT_PASSWORD}
       # 容器内访问 ai-service 容器名，覆盖 application.yml 的 localhost:8000
       # 注意：属性路径为 app.model.*，对应环境变量前缀 APP_MODEL_*（此前误写为 SPRING_APP_*，覆盖不生效）
       APP_MODEL_PYTHON_BASE_URL: http://ai-service:8000
       APP_MODEL_PROVIDER: python
+      INTERNAL_TOOL_TOKEN: ${INTERNAL_TOOL_TOKEN:?请在 .env 配置 INTERNAL_TOOL_TOKEN}
+      APP_DEMO_SEED_ENABLED: ${DEMO_SEED_ENABLED:-false}
+      ADMIN_USERNAMES: ${ADMIN_USERNAMES:-admin}
       # 生产建议通过环境变量覆盖默认密钥（属性路径 app.security.jwt-secret）
-      APP_SECURITY_JWT_SECRET: ${JWT_SECRET:-learning-assistant-v2-jwt-secret-please-change-me-0123456789}
+      APP_SECURITY_JWT_SECRET: ${JWT_SECRET:?请在 .env 配置 JWT_SECRET}
       # Redis 缓存：默认启用，指向 compose 内 redis 服务
       APP_INFRA_CACHE_MODE: ${CACHE_MODE:-redis}
       SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
@@ -88,8 +90,8 @@ services:
       # 对象存储：默认 MinIO（.env 设 STORAGE_MODE=local 可回退容器内本地文件）
       APP_INFRA_STORAGE_MODE: ${STORAGE_MODE:-minio}
       APP_INFRA_STORAGE_MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
-      APP_INFRA_STORAGE_MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      APP_INFRA_STORAGE_MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      APP_INFRA_STORAGE_MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?请在 .env 配置 MINIO_ACCESS_KEY}
+      APP_INFRA_STORAGE_MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?请在 .env 配置 MINIO_SECRET_KEY}
       # 邮件通知渠道：.env 配置 MAIL_ENABLED=true + SMTP 参数后启用
       MAIL_ENABLED: ${MAIL_ENABLED:-false}
       MAIL_HOST: ${MAIL_HOST:-}
@@ -116,8 +118,7 @@ services:
         condition: service_healthy
 
   ai-service:
-    build:
-      context: ./ai-service
+    image: ${IMAGE_PREFIX:-ghcr.io/leihub13/smart-learning-assistant}-ai-service:${APP_VERSION:?请通过 deploy.sh 指定已发布的提交 SHA}
     container_name: la-ai
     restart: unless-stopped
     environment:
@@ -147,7 +148,7 @@ services:
       AI_MCP_CONFIG: ${AI_MCP_CONFIG:-}
       # Agent 工具回调 + chunk 下发：Java 内部 API（容器间访问）
       JAVA_TOOL_BASE: http://backend:8080
-      JAVA_TOOL_TOKEN: ${INTERNAL_TOOL_TOKEN:-internal-tool-token}
+      JAVA_TOOL_TOKEN: ${INTERNAL_TOOL_TOKEN:?请在 .env 配置 INTERNAL_TOOL_TOKEN}
       # Agent 写动作（记笔记/打卡/出题/建任务/加题等）：全部走「提议+用户确认」门禁。
       # 默认关闭；置 true 后答疑 Agent 才挂载写工具，用户须在聊天里点「确认执行」才真正落库
       AGENT_WRITE_TOOLS: ${AGENT_WRITE_TOOLS:-false}
@@ -162,8 +163,7 @@ services:
       start_period: 10s
 
   frontend:
-    build:
-      context: ./frontend
+    image: ${IMAGE_PREFIX:-ghcr.io/leihub13/smart-learning-assistant}-frontend:${APP_VERSION:?请通过 deploy.sh 指定已发布的提交 SHA}
     container_name: la-web
     restart: unless-stopped
     ports:

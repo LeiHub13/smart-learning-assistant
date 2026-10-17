@@ -23,11 +23,14 @@ mobile/      uni-app 移动端（对话 / 练习 / 报告等，后端地址在 c
 
 ## 快速开始
 
-**Docker 一键部署（推荐）**
+**生产部署**
+
+GitHub Actions 构建并发布前端、后端、AI 服务三个镜像到 GHCR，镜像版本为 `sha-<完整提交 SHA>`。服务器只需部署包（`docker-compose.yml`、`deploy.sh`、`.env.example`、本说明）和私有 `.env`，无需同步源码或在服务器构建镜像。首次迁移、私有镜像登录、回滚和数据卷说明见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
 ```bash
-cp .env.example .env      # 填入 AI_API_KEY（DeepSeek）
-./deploy.sh               # 前端(80) / 后端(8080) / AI服务(8000) / MySQL / Redis / MinIO
+cp .env.example .env      # 填入 AI_API_KEY、数据库/JWT/MinIO/内部接口密钥
+chmod 600 .env
+./deploy.sh <完整 Git 提交 SHA>
 ```
 
 **本地手动启动**
@@ -43,10 +46,10 @@ java -jar target/learning-assistant-1.0.0.jar
 ```
 
 环境：JDK 17+ / Maven 3.8+ / Python 3.10+ / MySQL 8。
-数据库默认 `localhost:3306/learning_assistant`（连接参数可用 `DB_*` 环境变量覆盖），首次启动自动建表并写入演示数据。
+数据库默认 `localhost:3306/learning_assistant`（连接参数可用 `DB_*` 环境变量覆盖），首次启动自动建表；演示数据需显式启用。
 
-## 演示账号（密码均 `123456`）
+## 演示账号
 
-`pg13` · `xiaozhang` · `xiaodi`（无角色概念，资源按 userId 隔离；接口文档 `/swagger-ui.html`）
+仅显式设置 `APP_DEMO_SEED_ENABLED=true`（Docker 为 `.env` 的 `DEMO_SEED_ENABLED=true`）时创建 `pg13`、`xiaozhang`、`xiaodi` 等固定密码测试账号。生产默认关闭自动播种；已有数据库中的账号不受影响。系统无角色概念，资源按 userId 隔离；接口文档为 `/swagger-ui.html`。
 
 

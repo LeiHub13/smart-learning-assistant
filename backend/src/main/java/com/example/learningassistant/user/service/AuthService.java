@@ -48,6 +48,9 @@ public class AuthService {
         if (username == null || username.isBlank() || password == null || password.isBlank()) {
             throw new BizException("用户名与密码不能为空");
         }
+        if (adminService.isAdmin(username.trim())) {
+            throw new BizException("该用户名不可注册");
+        }
         if (email == null || email.isBlank()) {
             throw new BizException("请填写邮箱并完成验证码校验");
         }
@@ -175,6 +178,9 @@ public class AuthService {
         }
         if (adminService.isAdmin(user.getUsername())) {
             throw new BizException("管理员账号不允许修改用户名");
+        }
+        if (adminService.isAdmin(name)) {
+            throw new BizException("该用户名不可使用");
         }
         if (name.equals(user.getUsername())) {
             return;

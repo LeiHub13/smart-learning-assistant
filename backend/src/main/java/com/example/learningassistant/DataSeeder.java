@@ -18,6 +18,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -26,10 +27,11 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 演示数据初始化：账号、课程、掌握度与练习样例（供 AnalyticsMapper 聚合查询演示）。
+ * 演示数据初始化：仅在 app.demo.seed-enabled=true 时创建账号、课程和练习样例。
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(prefix = "app.demo", name = "seed-enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class DataSeeder implements CommandLineRunner {
 

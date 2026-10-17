@@ -25,8 +25,8 @@ spring:
     # QQ 邮箱示例：MAIL_HOST=smtp.qq.com，密码填授权码（非登录密码）
     host: ${MAIL_HOST:smtp.qq.com}
     port: ${MAIL_PORT:465}
-    username: ${MAIL_USERNAME:3917997689@qq.com}
-    password: ${MAIL_PASSWORD:jdnazkyybfmmcgdd}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     default-encoding: UTF-8
     properties:
       mail:
@@ -48,6 +48,8 @@ mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
 
 app:
+  demo:
+    seed-enabled: ${APP_DEMO_SEED_ENABLED:false}
   admin:
     # 管理员用户名白名单（逗号分隔，忽略大小写）：系统看板等管理功能的访问门禁
     usernames: ${ADMIN_USERNAMES:admin}
