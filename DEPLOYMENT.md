@@ -6,7 +6,7 @@ CI 从一个 Git 提交编译后端 JAR 和前端 `dist/`，再把它们、AI �
 
 ## 准备发布包
 
-可从 CI 的部署产物下载 `deployment-package.tar.gz`。尚未推送时，也可在本机安装 JDK 17、Maven、Node 20 和 npm，把修改提交后运行 `python scripts/package_deploy.py deployment-package.tar.gz --ref HEAD`。脚本从指定的已提交版本构建 JAR 和 `dist/`，不会混入工作区未提交的文件。不要手工把工作区、`.git`、`.env` 或依赖目录打包上传。每个 SHA 使用独立的空目录，避免旧版文件留在下一次构建上下文中。
+可从 CI 的部署产物下载 `deployment-package.tar.gz`。尚未推送时，也可在本机安装 JDK 17、Maven、Node 20、npm 和 Python 3.12+，把修改提交后运行 `python scripts/package_deploy.py deployment-package.tar.gz --ref HEAD`。脚本从指定的已提交版本构建 JAR 和 `dist/`，不会混入工作区未提交的文件。不要手工把工作区、`.git`、`.env` 或依赖目录打包上传。每个 SHA 使用独立的空目录，避免旧版文件留在下一次构建上下文中。
 
 在本机上传发布包：
 
