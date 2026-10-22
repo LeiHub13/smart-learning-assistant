@@ -114,7 +114,7 @@ def assemble(sha: str, source: Path, jar: Path, dist: Path, stage: Path) -> None
         shutil.copy2(source / "frontend" / name, frontend / name)
     shutil.copytree(dist, frontend / "dist")
 
-    (stage / "RELEASE_SHA").write_text(sha + "\n", encoding="ascii")
+    (stage / "RELEASE_SHA").write_bytes((sha + "\n").encode("ascii"))
 
 
 def package(output: Path, ref: str) -> str:

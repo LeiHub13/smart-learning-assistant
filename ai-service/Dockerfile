@@ -1,6 +1,6 @@
 # AI 服务：FastAPI + langchain
-# 基础镜像走国内加速源：Docker Hub 直连在 ECS 上常超时，daocloud 镜像站也会 502
-FROM docker.1ms.run/library/python:3.12-slim
+# 显式使用 DaoCloud 公共镜像源，与后端、前端和 Compose 的基础服务一致
+FROM docker.m.daocloud.io/library/python:3.12-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 

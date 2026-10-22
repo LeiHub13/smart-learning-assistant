@@ -59,13 +59,27 @@ check_app_images() {
 }
 
 ensure_service_images() {
-  local image
-  for image in mysql:8.4 redis:7-alpine minio/minio:RELEASE.2023-03-20T20-16-18Z; do
-    if ! docker image inspect "$image" >/dev/null 2>&1; then
-      echo "拉取缺少的基础服务镜像 $image ..."
-      docker pull "$image" || fail "无法拉取 $image"
+  local image upstream images
+  images=$(compose config --images mysql redis minio) || fail "无法读取基础服务镜像配置"
+  while IFS= read -r image; do
+    [ -n "$image" ] || continue
+    if docker image inspect "$image" >/dev/null 2>&1; then
+      continue
     fi
-  done
+    # 切换镜像源时复用此前已下载的同名同版本 Docker Hub 镜像。
+    upstream=
+    case "$image" in
+      docker.m.daocloud.io/library/*) upstream=${image#docker.m.daocloud.io/library/} ;;
+      docker.m.daocloud.io/*) upstream=${image#docker.m.daocloud.io/} ;;
+    esac
+    if [ -n "$upstream" ] && docker image inspect "$upstream" >/dev/null 2>&1; then
+      echo "复用本机镜像 $upstream 为 $image ..."
+      docker tag "$upstream" "$image" || fail "无法标记本机镜像 $upstream"
+      continue
+    fi
+    echo "拉取缺少的基础服务镜像 $image ..."
+    docker pull "$image" || fail "无法拉取 $image；请确认镜像源可访问且该版本仍然存在"
+  done <<< "$images"
 }
 
 wait_for_ai() {

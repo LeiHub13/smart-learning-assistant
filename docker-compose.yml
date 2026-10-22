@@ -4,7 +4,7 @@ name: learning-assistant
 
 services:
   mysql:
-    image: mysql:8.4
+    image: docker.m.daocloud.io/library/mysql:8.4
     container_name: la-mysql
     restart: unless-stopped
     environment:
@@ -25,7 +25,7 @@ services:
 
   # Redis 缓存：backend 默认 cache-mode=redis，经 healthcheck 就绪后再启动 backend
   redis:
-    image: redis:7-alpine
+    image: docker.m.daocloud.io/library/redis:7-alpine
     container_name: la-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
@@ -41,7 +41,8 @@ services:
 
   # MinIO 对象存储：头像/文档原件（backend 默认 storage-mode=minio）
   minio:
-    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    # 镜像版本必须在源仓库中可用；也可指定已离线导入的本地镜像名。
+    image: ${MINIO_IMAGE:-docker.m.daocloud.io/minio/minio:RELEASE.2023-03-20T20-16-18Z}
     container_name: la-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"

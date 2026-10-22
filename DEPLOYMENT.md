@@ -2,7 +2,9 @@
 
 CI 从一个 Git 提交编译后端 JAR 和前端 `dist/`，再把它们、AI 服务运行源码、三个运行镜像的 Dockerfile、`docker-compose.yml`、`deploy.sh` 与配置示例打成 `deployment-package.tar.gz`。包内的 `RELEASE_SHA` 记录完整提交 SHA；不包含 `.git`、私有 `.env`、后端和前端源码、`node_modules`、`.venv` 或运行数据。上传一个部署包即可，JAR 和 `dist/` 已在包内，无需分别传输。
 
-服务器需要 Docker Engine、Docker Compose 插件和足够的磁盘空间，不需要安装 JDK、Maven 或 Node，也不需要下载 Maven/Node 构建镜像或编译依赖。首次构建仍可能下载 JRE、Python、Nginx 运行基础镜像，以及 AI 服务的 Python/Node 依赖；MySQL、Redis、MinIO 容器所用镜像也需存在或下载。基础镜像通常来自 Docker Hub，应用镜像不从 GHCR 拉取。
+服务器需要 Docker Engine、Docker Compose 插件和足够的磁盘空间，不需要安装 JDK、Maven 或 Node，也不需要下载 Maven/Node 构建镜像或编译依赖。首次构建仍可能下载 JRE、Python、Nginx 运行基础镜像，以及 AI 服务的 Python/Node 依赖；MySQL、Redis、MinIO 容器所用镜像也需存在或下载。Dockerfile 的 `FROM` 和 Compose 的基础服务 `image` 显式使用 `docker.m.daocloud.io`（[DaoCloud 公共镜像源](https://github.com/DaoCloud/public-image-mirror)），无需修改 Docker 全局镜像源配置。应用镜像不从 GHCR 拉取。
+
+`deploy.sh` 从 Compose 读取基础服务镜像名，已有的同名同版本 Docker Hub 镜像会重新打标签后复用。换源不能保证旧镜像仍可用：2026-10-22 检查 `minio/minio:RELEASE.2023-03-20T20-16-18Z` 时，DaoCloud 返回 403。若仍不可拉取，需要准备兼容的可用 MinIO 镜像或离线导入原版本，并在私有 `.env` 中设置 `MINIO_IMAGE=<可用镜像名:版本>`；部署脚本会使用该配置。新版本须同时核对 MinIO 的启动参数、凭据、数据格式及健康检查，不能直接换成未知的 `latest`。
 
 ## 准备发布包
 
@@ -11,15 +13,15 @@ CI 从一个 Git 提交编译后端 JAR 和前端 `dist/`，再把它们、AI �
 在本机上传发布包：
 
 ~~~bash
-scp deployment-package.tar.gz root@115.29.230.205:/tmp/
-ssh root@115.29.230.205
+scp deployment-package.tar.gz root@101.37.65.217:/tmp/
+ssh root@101.37.65.217
 ~~~
 
 在服务器上读取包内 SHA 并解压。`/opt/learning-assistant/.env` 是服务器私有配置；每个版本目录的 `.env` 链接到这一个文件，升级时不要用模板覆盖它：
 
 ~~~bash
 set -e
-sha=$(tar -xOzf /tmp/deployment-package.tar.gz RELEASE_SHA)
+sha=$(tar -xOzf /tmp/deployment-package.tar.gz RELEASE_SHA | tr -d '\r\n')
 [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo 'RELEASE_SHA 无效' >&2; exit 1; }
 release_dir="/opt/learning-assistant/releases/$sha"
 test ! -e "$release_dir" || { echo "版本目录已存在：$release_dir；请先核对后重试" >&2; exit 1; }
