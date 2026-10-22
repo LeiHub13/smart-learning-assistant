@@ -1,5 +1,5 @@
 # 后端：CI 生成 app.jar，服务器仅组装运行镜像
-FROM docker.m.daocloud.io/library/eclipse-temurin:17-jre
+FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY app.jar app.jar
 # 上传文件 + 日志（挂载卷；数据库在独立 mysql 容器）

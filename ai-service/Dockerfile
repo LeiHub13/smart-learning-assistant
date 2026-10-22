@@ -1,6 +1,6 @@
 # AI 服务：FastAPI + langchain
-# 显式使用 DaoCloud 公共镜像源，与后端、前端和 Compose 的基础服务一致
-FROM docker.m.daocloud.io/library/python:3.12-slim
+# 使用 Docker Hub 镜像名，由服务器的 registry-mirrors 配置选择加速器
+FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 

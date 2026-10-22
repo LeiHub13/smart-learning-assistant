@@ -2,9 +2,11 @@
 
 CI 从一个 Git 提交编译后端 JAR 和前端 `dist/`，再把它们、AI 服务运行源码、三个运行镜像的 Dockerfile、`docker-compose.yml`、`deploy.sh` 与配置示例打成 `deployment-package.tar.gz`。包内的 `RELEASE_SHA` 记录完整提交 SHA；不包含 `.git`、私有 `.env`、后端和前端源码、`node_modules`、`.venv` 或运行数据。上传一个部署包即可，JAR 和 `dist/` 已在包内，无需分别传输。
 
-服务器需要 Docker Engine、Docker Compose 插件和足够的磁盘空间，不需要安装 JDK、Maven 或 Node，也不需要下载 Maven/Node 构建镜像或编译依赖。首次构建仍可能下载 JRE、Python、Nginx 运行基础镜像，以及 AI 服务的 Python/Node 依赖；MySQL、Redis、MinIO 容器所用镜像也需存在或下载。Dockerfile 的 `FROM` 和 Compose 的基础服务 `image` 显式使用 `docker.m.daocloud.io`（[DaoCloud 公共镜像源](https://github.com/DaoCloud/public-image-mirror)），无需修改 Docker 全局镜像源配置。应用镜像不从 GHCR 拉取。
+服务器需要 Docker Engine、Docker Compose 插件和足够的磁盘空间，不需要安装 JDK、Maven 或 Node，也不需要下载 Maven/Node 构建镜像或编译依赖。首次构建仍可能下载 JRE、Python、Nginx 运行基础镜像，以及 AI 服务的 Python/Node 依赖；MySQL、Redis、MinIO 容器所用镜像也需存在或下载。Dockerfile 的 `FROM` 和 Compose 的基础服务 `image` 使用 Docker Hub 镜像名，服务器通过 Docker 的 `registry-mirrors` 配置阿里云等加速器。直接写入其他仓库域名的镜像不会使用 Docker Hub 加速器；应用镜像不从 GHCR 拉取。
 
-`deploy.sh` 从 Compose 读取基础服务镜像名，已有的同名同版本 Docker Hub 镜像会重新打标签后复用。换源不能保证旧镜像仍可用：2026-10-22 检查 `minio/minio:RELEASE.2023-03-20T20-16-18Z` 时，DaoCloud 返回 403。若仍不可拉取，需要准备兼容的可用 MinIO 镜像或离线导入原版本，并在私有 `.env` 中设置 `MINIO_IMAGE=<可用镜像名:版本>`；部署脚本会使用该配置。新版本须同时核对 MinIO 的启动参数、凭据、数据格式及健康检查，不能直接换成未知的 `latest`。
+阿里云加速器按账号提供 `https://<账号标识>.mirror.aliyuncs.com` 地址。将实际地址写入服务器 `/etc/docker/daemon.json` 的 `registry-mirrors` 数组，保留已有的其他配置，验证配置后重新加载 Docker。该地址属于服务器配置，不写入 Dockerfile，也不上传到 Git。官方说明及可用范围见[阿里云配置文档](https://help.aliyun.com/zh/acr/user-guide/accelerate-the-pulls-of-docker-official-images)；加速器已停止同步最新镜像，不能保证所有版本可拉取。
+
+`deploy.sh` 从 Compose 读取基础服务镜像名，本机已有的目标镜像会直接复用。换源不能保证旧镜像仍可用：2026-10-22 检查 `minio/minio:RELEASE.2023-03-20T20-16-18Z` 时，DaoCloud 返回 403。若仍不可拉取，需要准备兼容的可用 MinIO 镜像或离线导入原版本，并在私有 `.env` 中设置 `MINIO_IMAGE=<可用镜像名:版本>`；部署脚本会使用该配置。新版本须同时核对 MinIO 的启动参数、凭据、数据格式及健康检查，不能直接换成未知的 `latest`。
 
 ## 准备发布包
 

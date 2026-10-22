@@ -1,5 +1,5 @@
 # 前端：CI 生成 dist，服务器仅组装 Nginx 镜像
-FROM docker.m.daocloud.io/library/nginx:1.27-alpine
+FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY dist/ /usr/share/nginx/html/
 EXPOSE 80
