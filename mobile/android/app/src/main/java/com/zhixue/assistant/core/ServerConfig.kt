@@ -61,6 +61,19 @@ class ServerConfig(
 
     fun restoredOrDefault(): String = store.getString(key)?.let { normalize(it).getOrNull() } ?: ref.get()
 
+    /**
+     * 局域网/本机地址判定。Android 16+ 访问这些地址需要「本地网络」权限，
+     * 否则连接会被静默丢弃并表现为超时（shell 的 nc/curl 不受此限制，容易误判成后端没起）。
+     */
+    fun isLanHost(host: String): Boolean {
+        val h = host.lowercase().trim('[', ']')
+        if (h == "localhost" || h == "127.0.0.1" || h == "::1" || h == "0.0.0.0") return true
+        val parts = h.split('.').mapNotNull { it.toIntOrNull() }
+        if (parts.size != 4) return false
+        val (a, b) = parts
+        return a == 10 || (a == 172 && b in 16..31) || (a == 192 && b == 168) || (a == 169 && b == 254)
+    }
+
     /** 把后端返回的相对地址（/files/...、/api/...）解析成绝对地址。 */
     fun resolve(path: String): String = when {
         path.isBlank() -> ""

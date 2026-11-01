@@ -245,6 +245,13 @@
 7. 深色模式**完全没有入口**（Web 顶栏有）→ 已在顶栏加「主题·自动/浅色/深色」切换，并用截图像素验证（浅色亮度采样 255/248，深色 27.7/17.7）。
 8. 仪器测试最初 5 例全失败：debug 的 `applicationIdSuffix` 使 `ComponentActivity` 只存在于测试进程 → 在 `src/debug/AndroidManifest.xml` 声明宿主进程内 Activity 后全绿。
 
+### 12.1.1 联调中发现的平台限制（已修）
+
+登录/请求一直「连接后端超时」，而宿主机 curl 与模拟器 shell 的 `nc` 都正常。原因是 **Android 16（API 36）起
+访问局域网地址需要 `ACCESS_LOCAL_NETWORK` 权限**，未授权时 netd 直接丢弃连接，客户端只能看到超时。
+已做三件事：清单声明该权限；App 检测到「局域网后端 + 未授权」时在顶部提示并可一键授权
+（`ui/components/LocalNetworkGate.kt`）；超时文案补充了该提示。低版本系统不受影响，公网 HTTPS 也用不到。
+
 ### 12.2 真机（模拟器）联调
 
 环境：本机后端 `backend/target/learning-assistant-1.0.0.jar`（`mvn package` 重新构建）跑在 **8123**（8080 被其它项目占用，未动它），`ai-service` 跑在 8000，MySQL 为既有本地实例；次数包按 `BILLING_ENABLED=true` 打开以验证人工核对流程。模拟器通过 `adb reverse tcp:8123 tcp:8123` 连本机后端（跨宿主机网络被防火墙拦，属环境问题，不是客户端缺陷）。

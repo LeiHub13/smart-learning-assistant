@@ -87,7 +87,7 @@ class ApiClient(
         val response = try {
             client.newCall(builder.build()).execute()
         } catch (e: SocketTimeoutException) {
-            throw NetworkException("连接后端超时，请确认地址与后端服务已启动", e)
+            throw NetworkException("连接后端超时：请确认后端已启动、地址可达；Android 16+ 访问局域网还需允许「本地网络」权限", e)
         } catch (e: IOException) {
             throw NetworkException(describe(e), e)
         }

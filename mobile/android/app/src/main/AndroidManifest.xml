@@ -4,6 +4,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!--
+      Android 16 (API 36) 起访问局域网地址（10.0.2.2、192.168.x、10.x…）需要「本地网络」权限，
+      否则连接会被系统静默拦掉并表现为超时。调试连本机后端、真机连局域网后端都依赖它。
+    -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <!-- Android 12 以下写公共下载目录需要；13+ 走 MediaStore 无需该权限 -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"

@@ -29,6 +29,9 @@ import com.zhixue.assistant.ui.nav.Routes
 import com.zhixue.assistant.ui.nav.WebRoute
 import com.zhixue.assistant.ui.theme.ZhixueTheme
 import kotlinx.coroutines.launch
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.statusBarsPadding
+import com.zhixue.assistant.ui.components.LocalNetworkGate
 
 /**
  * 应用根：装配三件全局能力（容器、轻提示、Web 路由翻译），并按登录态在
@@ -134,6 +137,14 @@ private fun GlobalProviders(
         LocalNavigator provides navigator,
         LocalNavController provides navController,
     ) {
-        Box(Modifier.fillMaxSize()) { content() }
+        Box(Modifier.fillMaxSize()) {
+            content()
+            // 局域网后端 + Android 16：没有「本地网络」权限时请求会被系统丢弃，这里给出可恢复的入口
+            LocalNetworkGate(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+            )
+        }
     }
 }
