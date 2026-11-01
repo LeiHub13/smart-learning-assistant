@@ -176,9 +176,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onActivated, watch, nextTick } from 'vue'
 import DocViewer from '../components/DocViewer.vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api, getCourses } from '../api'
 import CourseCard from '../components/CourseCard.vue'
 import * as echarts from 'echarts/core'
@@ -191,6 +191,7 @@ echarts.use([GraphChart, TooltipComponent, CanvasRenderer])
 defineOptions({ name: 'ManageView' })
 
 const router = useRouter()
+const route = useRoute()
 const goPractice = (c) => router.push('/practice?courseId=' + c.id)
 
 const courses = ref([])
@@ -285,6 +286,22 @@ onMounted(async () => {
   try {
     meId.value = Number((await api('/api/auth/me')).id)
   } catch (e) { /* 忽略 */ }
+  await openRequestedCourse()
+})
+
+// 个人中心的课程卡片可直接打开对应知识库；KeepAlive 返回时同步最新课程列表。
+const openRequestedCourse = async () => {
+  if (route.path !== '/manage' || !route.query.courseId) return
+  const course = courses.value.find((c) => String(c.id) === String(route.query.courseId))
+  if (course && (expanded.value !== course.id || !Array.isArray(course.kbs))) await openDetail(course)
+}
+watch(() => [route.path, route.query.courseId], () => { openRequestedCourse().catch(() => {}) })
+onActivated(async () => {
+  if (route.path !== '/manage' || !route.query.courseId) return
+  try {
+    courses.value = await getCourses(true)
+    await openRequestedCourse()
+  } catch (e) { showHint('加载课程失败，请稍后重试') }
 })
 
 const askDeleteCourse = (c) => {

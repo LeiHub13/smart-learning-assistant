@@ -37,7 +37,7 @@ import { computed } from 'vue'
 
 /** 学习热力图（GitHub 贡献图风格）：列=周、行=星期；顶部中文月份、左侧周一/周三/周五，悬停看完整日期。 */
 const props = defineProps({
-  /** [{ date: 'YYYY-MM-DD', minutes: Number }]，按日期升序，近 12 周 */
+  /** [{ date: 'YYYY-MM-DD', minutes: Number }]，按日期升序 */
   calendar: { type: Array, default: () => [] }
 })
 
@@ -90,15 +90,15 @@ const columns = computed(() => grid.value?.columns || [])
 
 <style scoped>
 .shm-months {
-  display: grid; grid-auto-flow: column; grid-auto-columns: 13px; gap: 3px;
+  display: grid; grid-auto-flow: column; grid-auto-columns: var(--shm-size, 13px); gap: var(--shm-gap, 3px);
   margin: 0 0 4px 34px; font-size: 11px; color: var(--muted);
 }
 .shm-months span { white-space: nowrap; }
 .shm-main { display: flex; gap: 6px; }
-.shm-dow { display: grid; grid-template-rows: repeat(7, 13px); gap: 3px; width: 28px; font-size: 11px; color: var(--muted); }
-.shm-dow span { line-height: 13px; }
-.shm-grid { display: grid; grid-template-rows: repeat(7, 13px); grid-auto-flow: column; grid-auto-columns: 13px; gap: 3px; width: fit-content; }
-.shm-cell { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
+.shm-dow { display: grid; grid-template-rows: repeat(7, var(--shm-size, 13px)); gap: var(--shm-gap, 3px); width: 28px; font-size: 11px; color: var(--muted); }
+.shm-dow span { line-height: var(--shm-size, 13px); }
+.shm-grid { display: grid; grid-template-rows: repeat(7, var(--shm-size, 13px)); grid-auto-flow: column; grid-auto-columns: var(--shm-size, 13px); gap: var(--shm-gap, 3px); width: fit-content; }
+.shm-cell { width: var(--shm-size, 13px); height: var(--shm-size, 13px); border-radius: 3px; display: inline-block; }
 .shm-cell.pad { visibility: hidden; }
 .shm-legend { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
 .shm-leg { display: inline-flex; align-items: center; gap: 3px; }

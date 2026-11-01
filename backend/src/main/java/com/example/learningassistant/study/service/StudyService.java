@@ -28,8 +28,9 @@ public class StudyService {
     private final StudyLogMapper studyLogMapper;
     private final CourseMapper courseMapper;
 
-    /** 热力图回溯天数（12 周） */
+    /** 默认回溯 12 周；个人中心可查看近一年。 */
     private static final int CALENDAR_DAYS = 84;
+    private static final int MAX_CALENDAR_DAYS = 366;
 
     public void heartbeat(Long userId, Long courseId, int minutes) {
         int delta = Math.max(0, Math.min(minutes, 5));
@@ -61,20 +62,27 @@ public class StudyService {
      * 学习时长汇总：总时长、活跃天数、近 12 周热力图、分课程统计。
      */
     public Map<String, Object> summary(Long userId) {
-        LocalDate since = LocalDate.now().minusDays(CALENDAR_DAYS - 1L);
+        return summary(userId, CALENDAR_DAYS);
+    }
+
+    public Map<String, Object> summary(Long userId, int days) {
+        int calendarDays = Math.max(1, Math.min(days, MAX_CALENDAR_DAYS));
+        LocalDate today = LocalDate.now();
+        LocalDate since = today.minusDays(calendarDays - 1L);
         List<StudyLog> logs = studyLogMapper.selectList(new LambdaQueryWrapper<StudyLog>()
                 .eq(StudyLog::getUserId, userId)
                 .ge(StudyLog::getStudyDate, since)
+                .le(StudyLog::getStudyDate, today)
                 .orderByAsc(StudyLog::getStudyDate));
 
         int totalMinutes = logs.stream().mapToInt(StudyLog::getMinutes).sum();
         long activeDays = logs.stream().map(StudyLog::getStudyDate).distinct().count();
 
-        // 热力图：补齐 84 天（无记录填 0）
+        // 热力图：按请求范围补齐日期（无记录填 0）
         Map<LocalDate, Integer> byDate = logs.stream().collect(Collectors.groupingBy(
                 StudyLog::getStudyDate, Collectors.summingInt(StudyLog::getMinutes)));
         List<Map<String, Object>> calendar = new ArrayList<>();
-        for (int i = 0; i < CALENDAR_DAYS; i++) {
+        for (int i = 0; i < calendarDays; i++) {
             LocalDate d = since.plusDays(i);
             Map<String, Object> cell = new LinkedHashMap<>();
             cell.put("date", d.toString());

@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -35,8 +36,9 @@ public class StudyController {
     }
 
     @GetMapping("/summary")
-    public ApiResponse<Map<String, Object>> summary(HttpServletRequest request) {
+    public ApiResponse<Map<String, Object>> summary(HttpServletRequest request,
+                                                     @RequestParam(defaultValue = "84") int days) {
         AuthUser u = CurrentUser.get(request);
-        return ApiResponse.ok(studyService.summary(u.id()));
+        return ApiResponse.ok(studyService.summary(u.id(), days));
     }
 }

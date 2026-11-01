@@ -356,9 +356,11 @@ const readAll = async () => {
 }
 
 const closeBell = () => { bellOpen.value = false }
+const syncProfile = (event) => { if (event.detail) me.value = event.detail }
 
 onMounted(async () => {
   document.addEventListener('click', closeBell)
+  window.addEventListener('profile-updated', syncProfile)
   if (!getToken()) {
     router.replace('/login')
     return
@@ -379,6 +381,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   document.removeEventListener('click', closeBell)
+  window.removeEventListener('profile-updated', syncProfile)
   streamStopped = true
   if (notifyTimer) clearInterval(notifyTimer)
   if (heartbeatTimer) clearInterval(heartbeatTimer)
@@ -555,5 +558,11 @@ html.dark .sess.on .sess-btn:hover { background: rgba(56,139,253,.35); }
     align-items: center; justify-content: center;
     background: var(--soft);
   }
+}
+
+@media (max-width: 480px) {
+  .topbar .tb-title { display: none; }
+  .global-search { flex: 1 1 auto; min-width: 0; margin-left: 0; }
+  .topbar .tb-right { flex-shrink: 0; }
 }
 </style>
