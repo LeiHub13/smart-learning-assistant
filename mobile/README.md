@@ -1,6 +1,18 @@
-# mobile — 移动端（uni-app / Vue3）
+# mobile — 移动端
+
+**当前主力是原生 Android 工程：[`mobile/android`](android/README.md)**（Kotlin + Jetpack Compose，
+复刻 Web 端全部功能，直连现有 Java 后端）。打开方式、后端地址配置、构建与测试命令都在
+[android/README.md](android/README.md)，功能验收清单在 [android/FEATURE_MATRIX.md](android/FEATURE_MATRIX.md)。
+
+本目录下层的 `pages/`、`utils/`、`components/`、`manifest.json`、`pages.json` 是**旧的 uni-app 版本**，
+保留作为移动端交互参考与迁移对照，不参与原生工程构建，也不再新增功能。
+
+---
+
+## 以下为旧 uni-app 版本说明（仅作参考）
 
 独立 uni-app 工程，一套代码编译 **Android / iOS App（还可顺带出 H5）**，直接复用 `backend`(8080) 的全部 REST 接口，后端零改动。
+
 
 ## 目录结构
 

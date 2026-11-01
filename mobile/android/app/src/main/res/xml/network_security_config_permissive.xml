@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 调试包 / 自托管 HTTP 部署（-PZHIXUE_RELEASE_ALLOW_HTTP=true）使用：允许明文，便于连本机与局域网后端 -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -22,6 +22,19 @@ frontend/node_modules/
 frontend/dist/
 frontend/*.log
 
+# ===== Android 原生工程（mobile/android）=====
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/android/captures/
+mobile/android/**/*.apk
+mobile/android/**/*.aab
+mobile/android/**/output-metadata.json
+mobile/android/.kotlin/
+*.keystore
+!debug.keystore
+
 # ===== 本地个人产物（简历/照片等，与项目无关）=====
 output/
 tmp/

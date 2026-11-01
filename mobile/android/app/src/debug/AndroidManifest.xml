@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  仅调试变体：Compose 的 createComposeRule 会启动 androidx.activity.ComponentActivity，
+  而本工程 debug 用了 applicationIdSuffix，instrumentation 目标进程是应用本身，
+  所以这个 Activity 必须存在于应用清单里，否则报
+  "Intent in process ... resolved to different process ...test"。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="androidx.activity.ComponentActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Zhixue" />
+    </application>
+</manifest>
