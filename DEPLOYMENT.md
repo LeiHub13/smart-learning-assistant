@@ -45,6 +45,8 @@ cd "$release_dir"
 
 首次部署时，编辑 `/opt/learning-assistant/.env`，至少填写 `AI_API_KEY`、`JWT_SECRET`、`MYSQL_ROOT_PASSWORD`、`MINIO_ACCESS_KEY`、`MINIO_SECRET_KEY` 和 `INTERNAL_TOOL_TOKEN`。`INTERNAL_TOOL_TOKEN` 必须在 Java 与 AI 服务间一致，编排文件从同一个变量注入。新库注册和找回密码需要配置 `MAIL_HOST`、`MAIL_USERNAME`、`MAIL_PASSWORD` 等 SMTP 参数；`MAIL_ENABLED` 只控制通知邮件。若旧库已有账号，保留原 MySQL、MinIO 凭据，不能只改 `.env` 就变更已初始化数据库的密码。`.env` 和 SMTP 授权码不能进入发布包或 Git；旧仓库历史中出现过的 SMTP 授权码应撤销重发。
 
+Agent 联网搜索使用 DeepSeek 官方 Search API：在服务器私有 `.env` 设置 `DEEPSEEK_API_KEY`；若模型本身的 `AI_BASE_URL` 直接指向 `https://api.deepseek.com`，可留空复用 `AI_API_KEY`。其他模型提供商必须填写独立 DeepSeek Key。设置 `DEEPSEEK_SEARCH_ENABLED=false` 可关闭搜索；`AI_MCP_CONFIG=none` 只关闭其他 MCP 工具。修改配置后重建 ai-service 容器。搜索成功且有结果时按次计费，价格见 [DeepSeek 官方文档](https://api-docs.deepseek.com/zh-cn/guides/search/)。
+
 ## 构建并启动
 
 先查看当前剩余空间与 Docker 占用；AI 服务依赖和运行镜像构建仍需要空间：

@@ -50,6 +50,14 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
   agent 场景（`PythonAIChatModel` 内完成映射），接口与前端零改动；
 - **记忆**：与 rag_qa/free 共用 sessionId 维度的 JSONL 会话记忆。
 
+### 联网搜索
+
+Agent 使用 DeepSeek 官方 Search API，而不是原来的 Bing 网页搜索 MCP。将 DeepSeek 平台的 Key 写入 `DEEPSEEK_API_KEY`；如果生成模型本身直连 `https://api.deepseek.com`，也可留空并复用 `AI_API_KEY`。使用 Agnes 等其他模型时必须单独填写 DeepSeek Key；没有配置或调用失败时，工具会如实报告失败，不会自动切换搜索源。设置 `DEEPSEEK_SEARCH_ENABLED=false` 可关闭搜索。
+
+`GET /ai/health` 的 `webSearch.enabled` 和 `webSearch.configured` 只反映开关与 Key 是否配置，不会发起搜索，也不能证明 Key 有效或余额充足。搜索结果携带网页链接，与知识库来源编号分开。Search 按成功且有结果的请求计费，具体价格以 [DeepSeek 搜索与抓取文档](https://api-docs.deepseek.com/zh-cn/guides/search/)为准。
+
+其他 MCP 工具仍可通过 `AI_MCP_CONFIG` 接入；留空或 `none` 均不启用 MCP，且不影响 DeepSeek 搜索。旧配置中指向 `mcp_servers.web_search_server` 的项目会被跳过；自定义 MCP 若也提供名为 `web_search` 的工具，DeepSeek 搜索启用时优先使用 DeepSeek。
+
 ## 记忆
 
 `agent` / `rag_qa` / `free` 场景按 `sessionId` 将对话写入 `data/memory/*.jsonl`，生成时拼入最近 5 轮历史，支持多轮指代。
@@ -62,4 +70,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 | AI_API_KEY | -                        | 必填 |
 | AI_BASE_URL | https://apihub.agnes-ai.com/v1 | DeepSeek：https://api.deepseek.com；通义：https://dashscope.aliyuncs.com/compatible-mode/v1 |
 | AI_MODEL | agnes-3.0-flash          | DeepSeek 示例：deepseek-chat；通义示例：qwen-plus |
+| DEEPSEEK_API_KEY | -                 | 官方搜索 Key；模型直连 DeepSeek 官方地址时可复用 AI_API_KEY |
+| DEEPSEEK_SEARCH_ENABLED | true        | 是否向 Agent 提供 DeepSeek 联网搜索 |
+| AI_MCP_CONFIG | 空                    | 其他 MCP server 的 JSON 配置；none 关闭 MCP |
 | AI_PORT | 8000                     | 服务端口（Java 端 `app.model.python-base-url` 需一致） |

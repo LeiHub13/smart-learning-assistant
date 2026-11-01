@@ -4,7 +4,7 @@ FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
-# nodejs：MCP stdio 服务（如联网搜索 tavily-mcp）通过 npx 拉起时需要；不启用 MCP 可删
+# nodejs：自定义 MCP stdio 服务通过 npx 拉起时需要；DeepSeek 搜索不依赖 MCP。
 # apt 换阿里云源：deb.debian.org 国内 ECS 上慢且不稳；npm 换 npmmirror 供运行时 npx 加速
 RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
@@ -17,7 +17,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 
 COPY app ./app
-# 自研 MCP server（联网搜索等，AI_MCP_CONFIG 引用）
+# 自定义 MCP server 的源码目录（按需通过 AI_MCP_CONFIG 引用）
 COPY mcp_servers ./mcp_servers
 # 会话记忆（挂载卷）
 RUN mkdir -p /app/data/memory

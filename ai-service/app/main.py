@@ -105,7 +105,7 @@ def check_internal_token(x_internal_token: str | None) -> None:
 
 @app.get("/ai/health")
 def health():
-    from app import agent
+    from app import agent, deepseek_search
     return {
         "status": "ok",
         "provider": config.PROVIDER,
@@ -113,6 +113,7 @@ def health():
         "baseUrl": config.BASE_URL,
         "agentScene": True,
         "mcp": agent.mcp_status(),
+        "webSearch": deepseek_search.status(),
     }
 
 

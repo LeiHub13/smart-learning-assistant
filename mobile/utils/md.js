@@ -17,6 +17,17 @@ function splitRow(line) {
   return t.split('|').map((c) => c.trim())
 }
 
+/** 搜索来源链接只允许 HTTP(S)，且不转换行内代码中的文本。 */
+function inlineLinks(text) {
+  return text.split(/(`[^`\n]+`)/g).map((part, i) => {
+    if (i % 2) return part
+    return part.replace(/\[([^\]\n]+)\]\((https?:\/\/(?:[^\s()]|\([^()\s]*\))+)\)/gi, (match, label, url) => {
+      if (/["'`<>]/.test(url)) return match
+      return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + label + '</a>'
+    })
+  }).join('')
+}
+
 /** 管道表格 → HTML（支持 :--: 对齐；外层容器横向滚动，窄屏不撑破布局） */
 function buildTable(header, sep, rows) {
   const aligns = splitRow(sep).map((c) => {
@@ -25,7 +36,7 @@ function buildTable(header, sep, rows) {
     return l && r ? 'center' : r ? 'right' : l ? 'left' : ''
   })
   const cell = (tag, v, i) =>
-    '<' + tag + (aligns[i] ? ' style="text-align:' + aligns[i] + '"' : '') + '>' + v + '</' + tag + '>'
+    '<' + tag + (aligns[i] ? ' style="text-align:' + aligns[i] + '"' : '') + '>' + inlineLinks(v) + '</' + tag + '>'
   let html = '<div class="md-table-wrap"><table class="md-table"><thead><tr>'
     + header.map((c, i) => cell('th', c, i)).join('')
     + '</tr></thead><tbody>'
@@ -71,20 +82,21 @@ export function mdToHtml(text) {
       i = j - 1
       continue
     }
+    const rendered = inlineLinks(raw)
     if (/^#{1,4}\s/.test(raw)) {
       const lv = raw.match(/^#+/)[0].length
-      html += '<h' + lv + '>' + raw.replace(/^#+\s*/, '') + '</h' + lv + '>'
+      html += '<h' + lv + '>' + rendered.replace(/^#+\s*/, '') + '</h' + lv + '>'
     } else if (/^\s*([-*_])\1{2,}\s*$/.test(raw)) {
       html += '<hr class="md-divider">'
     } else if (/^\s*[-*]\s+/.test(raw)) {
-      html += '<p>· ' + raw.replace(/^\s*[-*]\s+/, '') + '</p>'
+      html += '<p>· ' + rendered.replace(/^\s*[-*]\s+/, '') + '</p>'
     } else if (raw.startsWith('&gt;')) {
       // 注意：esc() 已把 > 转义为 &gt;，此处需按转义后的形式判断（原写 '>' 导致引用从未生效）
-      html += '<blockquote>' + raw.replace(/^&gt;\s?/, '') + '</blockquote>'
+      html += '<blockquote>' + rendered.replace(/^&gt;\s?/, '') + '</blockquote>'
     } else if (raw.trim() === '') {
       html += '<p></p>'
     } else {
-      html += '<p>' + raw + '</p>'
+      html += '<p>' + rendered + '</p>'
     }
   }
   if (inCode) html += '<pre>' + codeBuf.join('\n') + '</pre>'

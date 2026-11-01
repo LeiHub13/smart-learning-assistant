@@ -1,6 +1,7 @@
 """AI 服务配置：从环境变量读取模型提供商参数。"""
 import json
 import os
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -12,6 +13,22 @@ BASE_URL = os.getenv("AI_BASE_URL", "https://apihub.agnes-ai.com/v1")
 MODEL = os.getenv("AI_MODEL", "agnes-3.0-flash")
 HOST = os.getenv("AI_HOST", "0.0.0.0")
 PORT = int(os.getenv("AI_PORT", "8000"))
+
+def _search_key(explicit_key: str, model_key: str, model_url: str) -> str:
+    """仅生成模型明确直连 DeepSeek 官方 HTTPS 地址时才复用模型 Key。"""
+    if explicit_key.strip():
+        return explicit_key.strip()
+    try:
+        parsed = urlparse(model_url)
+        if parsed.scheme.lower() == "https" and parsed.hostname == "api.deepseek.com":
+            return model_key.strip()
+    except ValueError:
+        pass
+    return ""
+
+
+DEEPSEEK_API_KEY = _search_key(os.getenv("DEEPSEEK_API_KEY", ""), API_KEY, BASE_URL)
+DEEPSEEK_SEARCH_ENABLED = os.getenv("DEEPSEEK_SEARCH_ENABLED", "true").strip().lower() in ("1", "true", "yes")
 
 # 记忆：按 sessionId 持久化的目录
 MEMORY_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "memory")
@@ -64,27 +81,36 @@ RAG_CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "200"))
 
 # ===== MCP（Model Context Protocol）外部工具接入 =====
 # 通过 AI_MCP_CONFIG 传入 JSON（格式与 Claude/Cursor 的 mcpServers 一致，transport 缺省为 stdio）。
-# 未配置时默认启用自带 web-search（Bing 中文，免 key 零依赖）；设 AI_MCP_CONFIG=none 显式关闭；
-# 或传自定义 JSON 替换，如社区 tavily-mcp（质量更好，需 key）：
-#   AI_MCP_CONFIG={"web-search":{"command":"npx","args":["-y","tavily-mcp@latest"],"env":{"TAVILY_API_KEY":"xxx"}}}
-DEFAULT_MCP_SERVERS = {
-    "web-search": {"command": "python", "args": ["-m", "mcp_servers.web_search_server"]}
-}
-MCP_SERVERS: dict = {}
-_raw_mcp = os.getenv("AI_MCP_CONFIG", "").strip()
-if _raw_mcp.lower() == "none":
-    MCP_SERVERS = {}
-elif _raw_mcp:
+# 联网搜索已改为直接调用 DeepSeek API；MCP 默认为空，仅承载显式配置的其他工具。
+def _parse_mcp_servers(raw: str) -> dict:
+    raw = raw.strip()
+    if not raw or raw.lower() == "none":
+        return {}
     try:
-        parsed = json.loads(_raw_mcp)
+        parsed = json.loads(raw)
         if not isinstance(parsed, dict):
             raise ValueError("必须是 JSON 对象，如 {\"server-name\": {...}}")
-        MCP_SERVERS = parsed
+        servers = {}
+        for name, server in parsed.items():
+            args = server.get("args", []) if isinstance(server, dict) else []
+            args = args if isinstance(args, list) else []
+            # 兼容旧配置：不再启动已经替换的自带 Bing 搜索 server。
+            legacy_search = any(
+                isinstance(arg, str) and (arg == "mcp_servers.web_search_server"
+                                          or arg.replace("\\", "/").endswith("mcp_servers/web_search_server.py"))
+                for arg in args
+            )
+            if legacy_search:
+                print(f"[config] 已跳过旧联网搜索 MCP: {name}")
+            else:
+                servers[name] = server
+        return servers
     except (json.JSONDecodeError, ValueError) as e:
-        print(f"[config] AI_MCP_CONFIG 解析失败，回退自带 web-search: {e}")
-        MCP_SERVERS = dict(DEFAULT_MCP_SERVERS)
-else:
-    MCP_SERVERS = dict(DEFAULT_MCP_SERVERS)
+        print(f"[config] AI_MCP_CONFIG 解析失败，未启用 MCP: {type(e).__name__}")
+        return {}
+
+
+MCP_SERVERS: dict = _parse_mcp_servers(os.getenv("AI_MCP_CONFIG", ""))
 
 # MCP server 进程启动/加载失败后的重试冷却（秒），避免每个请求都去拉起 npx 子进程
 MCP_RETRY_COOLDOWN = int(os.getenv("AI_MCP_RETRY_COOLDOWN", "60"))
