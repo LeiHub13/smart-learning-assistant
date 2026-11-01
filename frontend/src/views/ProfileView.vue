@@ -7,6 +7,14 @@
     <div v-if="err" class="err">{{ err }}</div>
 
     <div class="card">
+      <h3>AI 次数与套餐</h3>
+      <div class="row" style="justify-content:space-between;gap:12px">
+        <span class="hint">查看剩余次数、套餐和订单进度</span>
+        <router-link class="btn small" to="/billing">查看套餐</router-link>
+      </div>
+    </div>
+
+    <div class="card">
       <h3>头像</h3>
       <div class="row" style="align-items:center">
         <img v-if="me?.avatar" :src="me.avatar" class="avatar-preview" alt="头像" />

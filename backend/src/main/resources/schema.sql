@@ -13,6 +13,47 @@ CREATE TABLE IF NOT EXISTS t_user (
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- AI 次数包：订单快照和次数流水均由服务端维护。
+CREATE TABLE IF NOT EXISTS t_billing_account (
+    user_id BIGINT NOT NULL PRIMARY KEY,
+    balance INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS t_billing_order (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(40) NOT NULL,
+    user_id BIGINT NOT NULL,
+    package_code VARCHAR(40) NOT NULL,
+    package_name VARCHAR(80) NOT NULL,
+    credits INT NOT NULL,
+    price_fen INT NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    submitted_channel VARCHAR(20),
+    submitted_reference VARCHAR(120),
+    verified_channel VARCHAR(20),
+    verified_reference VARCHAR(120),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    submitted_at TIMESTAMP NULL,
+    paid_at TIMESTAMP NULL,
+    UNIQUE KEY uk_billing_order_no (order_no),
+    UNIQUE KEY uk_billing_verified_payment (verified_channel, verified_reference),
+    KEY idx_billing_order_user (user_id, id),
+    KEY idx_billing_order_status (status, id)
+);
+
+CREATE TABLE IF NOT EXISTS t_billing_usage (
+    reservation_id VARCHAR(36) NOT NULL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    scene VARCHAR(30) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_billing_usage_user (user_id, created_at),
+    KEY idx_billing_usage_status (status, created_at)
+);
+
 CREATE TABLE IF NOT EXISTS t_study_log (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
     tenant_id   BIGINT DEFAULT 1,

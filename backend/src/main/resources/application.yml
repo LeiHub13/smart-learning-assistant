@@ -48,6 +48,17 @@ mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
 
 app:
+  billing:
+    # 默认不限制现有用户；确认套餐、收款方式和运营密钥后再开启。
+    enabled: ${BILLING_ENABLED:false}
+    initial-credits: ${BILLING_INITIAL_CREDITS:10}
+    payment-instructions: ${BILLING_PAYMENT_INSTRUCTIONS:}
+    payment-url: ${BILLING_PAYMENT_URL:}
+    operator-token: ${BILLING_OPERATOR_TOKEN:}
+    starter-credits: ${BILLING_STARTER_CREDITS:100}
+    starter-price-fen: ${BILLING_STARTER_PRICE_FEN:990}
+    standard-credits: ${BILLING_STANDARD_CREDITS:250}
+    standard-price-fen: ${BILLING_STANDARD_PRICE_FEN:1990}
   demo:
     seed-enabled: ${APP_DEMO_SEED_ENABLED:false}
   admin:

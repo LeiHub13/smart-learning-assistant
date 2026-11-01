@@ -87,6 +87,7 @@ public class PythonAIChatModel implements ChatModel {
         String sources = "";
         String chunkIds = "";
         String followups = "";
+        boolean finished = false;
             try {
                 conn = (HttpURLConnection) URI.create(baseUrl + "/ai/stream").toURL().openConnection();
                 conn.setRequestMethod("POST");
@@ -117,6 +118,7 @@ public class PythonAIChatModel implements ChatModel {
                         if (d.containsKey("delta")) {
                             onDelta.accept(String.valueOf(d.get("delta")));
                         } else if (Boolean.TRUE.equals(d.get("done"))) {
+                            finished = true;
                             Object s = d.get("sources");
                             sources = s == null ? "" : String.valueOf(s);
                             Object sc = d.get("sourceChunks");
@@ -132,6 +134,7 @@ public class PythonAIChatModel implements ChatModel {
                         log.warn("SSE 行解析跳过: {}", data);
                     }
                 }
+                if (!finished) throw new IllegalStateException("ai-service 流在完成前中断");
                 onDone.accept(new SourceRefs(sources, chunkIds, followups));
             } catch (Exception e) {
                 onError.accept(e);

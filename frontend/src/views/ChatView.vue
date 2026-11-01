@@ -44,6 +44,7 @@
 
     <div class="chatbox">
       <div class="chat-toolbar">
+        <QuotaBadge />
         <button class="btn ghost small" :disabled="streaming || !sessionId" @click="genFlashcards">生成闪卡</button>
         <label class="socratic-toggle" title="开启后 AI 不直接给答案，拆步骤反问引导你思考">
           <input type="checkbox" :checked="socratic" @change="toggleSocratic" />
@@ -140,6 +141,7 @@
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { api, sseStream, getCourses } from '../api'
+import QuotaBadge from '../components/QuotaBadge.vue'
 import { mdToHtml } from '../utils'
 
 defineOptions({ name: 'ChatView' })
@@ -480,6 +482,7 @@ const send = async (textArg) => {
     if (activeStream.target) activeStream.target.content = '（请求失败：' + e.message + '）'
   } finally {
     streaming.value = false
+    window.dispatchEvent(new Event('billing-changed'))
     activeStream.sid = null
     activeStream.target = null
     sessions.value = await api('/api/chat/sessions')

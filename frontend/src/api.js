@@ -54,10 +54,16 @@ export async function sseStream(path, body, onDelta, onDone) {
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getToken() },
     body: JSON.stringify(body)
   })
+  const contentType = res.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    const json = await res.json().catch(() => null)
+    throw new Error((json && json.message) || '请求失败')
+  }
   if (!res.ok) throw new Error('请求失败')
   const reader = res.body.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
+  let completed = false
   for (;;) {
     const { done, value } = await reader.read()
     if (done) break
@@ -68,13 +74,17 @@ export async function sseStream(path, body, onDelta, onDone) {
       buffer = buffer.slice(idx + 2)
       const line = event.split('\n').find((l) => l.startsWith('data:'))
       if (!line) continue
-      try {
-        const d = JSON.parse(line.slice(5).trim())
-        if (d.delta !== undefined) onDelta(d.delta)
-        else if (d.sources !== undefined || d.saved !== undefined || d.actions !== undefined || d.done) onDone(d)
-      } catch (e) { /* ignore */ }
+      let d
+      try { d = JSON.parse(line.slice(5).trim()) } catch { continue }
+      if (d.error !== undefined) throw new Error(d.error || '生成失败，请重试')
+      if (d.delta !== undefined) onDelta(d.delta)
+      else if (d.sources !== undefined || d.saved !== undefined || d.actions !== undefined || d.done) {
+        completed = true
+        onDone(d)
+      }
     }
   }
+  if (!completed) throw new Error('连接中断，请稍后查看生成结果')
 }
 
 /** 学习计划 */

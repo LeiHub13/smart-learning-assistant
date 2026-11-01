@@ -52,11 +52,8 @@ public class GenerateController {
                 },
                 e -> {
                     log.warn("讲义流式生成失败: {}", e.getMessage());
-                    try {
-                        emitter.completeWithError(e);
-                    } catch (Exception ex) {
-                        log.debug("SSE completeWithError 失败（忽略）: {}", ex.getMessage());
-                    }
+                    safeSend(emitter, clientGone, Map.of("error", "生成失败，请重试"));
+                    safeComplete(emitter, clientGone);
                 });
         return emitter;
     }

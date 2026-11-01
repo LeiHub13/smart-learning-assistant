@@ -41,6 +41,8 @@ public class ChatService {
     private final KnowledgeMasteryMapper masteryMapper;
     private final PythonRagClient pythonRagClient;
     private final com.example.learningassistant.kb.service.KbService kbService;
+    private final com.example.learningassistant.billing.BillingService billing;
+    private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     private static final int HISTORY_ROUNDS = 5;
 
@@ -139,8 +141,9 @@ public class ChatService {
     /**
      * 流式对话：可选 query 改写 -> RAG 检索（可选 Rerank） -> 历史拼装 -> 流式生成 -> 落库。
      */
-    public void streamMessage(Long sessionId, String question, Long userId,
-                              Consumer<String> onDelta, Consumer<com.example.learningassistant.ai.ChatModel.SourceRefs> onDone) {
+    public void streamMessage(Long sessionId, String question, Long userId, String reservation,
+                              Consumer<String> onDelta, Consumer<com.example.learningassistant.ai.ChatModel.SourceRefs> onDone,
+                              Consumer<Throwable> onError) {
         ChatSession session = requireOwnedSession(sessionId, userId);
         LocalDateTime now = LocalDateTime.now();
 
@@ -234,12 +237,15 @@ public class ChatService {
             // 追问推荐（JSON 数组串）：前端渲染可点问的追问 chips
             aiMsg.setFollowups(followups.isEmpty() ? null : followups);
             aiMsg.setCreatedAt(LocalDateTime.now());
-            messageMapper.insert(aiMsg);
+            transactionTemplate.executeWithoutResult(status -> {
+                messageMapper.insert(aiMsg);
+                billing.settle(reservation);
+            });
             onDone.accept(r);
-        }, e ->
-                // 运行在 ai-stream 守护线程里，异常无人接收：只记日志，rethrow 只会以
-                // 未捕获异常形式杀掉线程并留下噪音栈
-                log.error("对话流式生成失败: sessionId={}", sessionId, e));
+        }, e -> {
+            log.error("对话流式生成失败: sessionId={}", sessionId, e);
+            onError.accept(e);
+        });
     }
 
     private List<AIChatMessage> historyMessages(Long sessionId, int rounds) {

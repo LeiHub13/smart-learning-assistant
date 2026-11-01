@@ -2,6 +2,7 @@
   <div>
     <div class="page-title">讲义/练习题生成</div>
     <div class="page-sub">AI 一键生成讲义与练习题，题目自动进入题库供学生练习</div>
+    <div style="margin-bottom:12px"><QuotaBadge /></div>
 
     <div v-if="error" class="err">{{ error }}</div>
 
@@ -82,6 +83,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { api, getCourses, streamLecture, downloadFile } from '../api'
+import QuotaBadge from '../components/QuotaBadge.vue'
 import { parseOptions, mdToHtml } from '../utils'
 
 defineOptions({ name: 'GenerateView' })
@@ -153,6 +155,7 @@ const genLecture = async () => {
     error.value = e.message
   } finally {
     busy.value = false
+    window.dispatchEvent(new Event('billing-changed'))
   }
 }
 
@@ -199,6 +202,7 @@ const genQuestions = async () => {
     error.value = e.message
   } finally {
     busy.value = false
+    window.dispatchEvent(new Event('billing-changed'))
   }
 }
 </script>

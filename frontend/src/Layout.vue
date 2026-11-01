@@ -196,6 +196,7 @@ const menus = [
 const flatMenus = menus.flatMap((m) => m.children || [m])
 
 const pageTitle = computed(() => {
+  if (route.path.startsWith('/billing')) return 'AI 次数与套餐'
   const m = flatMenus.find((x) => x.path && route.path.startsWith(x.path))
   return m ? m.title : ''
 })

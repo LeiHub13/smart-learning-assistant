@@ -37,6 +37,15 @@ public class GeneratorService {
     private final com.example.learningassistant.kb.service.KbService kbService;
     private final com.example.learningassistant.ai.PythonRagClient pythonRagClient;
     private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+    private final com.example.learningassistant.billing.BillingService billing;
+
+    private void releaseReservation(String reservation) {
+        try {
+            billing.release(reservation);
+        } catch (RuntimeException e) {
+            log.error("退回生成次数失败，预留单号 {}", reservation, e);
+        }
+    }
 
     /** 生成时从知识库检索的资料条数与单段截断长度（控制提示词体积）。 */
     private static final int MATERIAL_TOP_K = 6;
@@ -111,22 +120,31 @@ public class GeneratorService {
      * 生成讲义（Markdown）并入库。kbIds 非空时先在指定知识库检索资料，讲义基于资料生成。
      */
     public GeneratedContent generateLecture(Long userId, Long courseId, String topic, String kp, List<Long> kbIds) {
-        List<String> materials = retrieveMaterials(topic, kbIds);
-        ChatModel model = modelFactory.get();
-        String md = model.complete(List.of(
-                new AIChatMessage("system", "GEN_LECTURE\n你是课程教师助手，请为课程生成一份结构清晰的 Markdown 讲义。"),
-                new AIChatMessage("user", "主题:" + topic + "\n知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
-                        + "\n请生成讲义。" + materialsBlock(materials))));
+        String reservation = billing.reserve(userId, "lecture");
+        try {
+            List<String> materials = retrieveMaterials(topic, kbIds);
+            ChatModel model = modelFactory.get();
+            String md = model.complete(List.of(
+                    new AIChatMessage("system", "GEN_LECTURE\n你是课程教师助手，请为课程生成一份结构清晰的 Markdown 讲义。"),
+                    new AIChatMessage("user", "主题:" + topic + "\n知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
+                            + "\n请生成讲义。" + materialsBlock(materials))));
 
-        GeneratedContent g = new GeneratedContent();
-        g.setUserId(userId);
-        g.setCourseId(courseId);
-        g.setType("lecture");
-        g.setTitle(topic);
-        g.setContent(md);
-        g.setCreatedAt(LocalDateTime.now());
-        contentMapper.insert(g);
-        return g;
+            GeneratedContent g = new GeneratedContent();
+            g.setUserId(userId);
+            g.setCourseId(courseId);
+            g.setType("lecture");
+            g.setTitle(topic);
+            g.setContent(md);
+            g.setCreatedAt(LocalDateTime.now());
+            transactionTemplate.executeWithoutResult(status -> {
+                contentMapper.insert(g);
+                billing.settle(reservation);
+            });
+            return g;
+        } catch (RuntimeException e) {
+            releaseReservation(reservation);
+            throw e;
+        }
     }
 
     /**
@@ -136,18 +154,24 @@ public class GeneratorService {
      * 中途失败不能留下半批题目——否则重试会叠加重复题，练习记录也指向不存在的题目。
      */
     public List<Question> generateQuestions(Long userId, Long courseId, String kp, int count, List<Long> kbIds) {
-        String difficulty = determineDifficulty(userId, courseId, kp);
-        // 选了知识库且填了知识点时，先检索该知识点的课程资料，题目基于资料出（kp 为空无法定向检索）
-        List<String> materials = retrieveMaterials(kp, kbIds);
-        ChatModel model = modelFactory.get();
-        String raw = model.complete(List.of(
-                new AIChatMessage("system",
-                        "GEN_QUESTIONS\n你是出题老师，只输出 JSON 数组，字段: type(单选/多选/判断/问答), stem, options(数组[{k,v}]), answer, analysis, kpName, difficulty。难度要求：" + difficulty),
-                new AIChatMessage("user", "知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
-                        + "\n数量:" + count + "\n难度:" + difficulty
-                        + "\n请生成练习题。" + materialsBlock(materials))));
-        List<Map<String, Object>> parsed = parseQuestionArray(raw);
-        return persistQuestions(userId, courseId, kp, difficulty, raw, parsed, "AI 生成练习（" + parsed.size() + " 题）");
+        String reservation = billing.reserve(userId, "questions");
+        try {
+            String difficulty = determineDifficulty(userId, courseId, kp);
+            // 选了知识库且填了知识点时，先检索该知识点的课程资料，题目基于资料出（kp 为空无法定向检索）
+            List<String> materials = retrieveMaterials(kp, kbIds);
+            ChatModel model = modelFactory.get();
+            String raw = model.complete(List.of(
+                    new AIChatMessage("system",
+                            "GEN_QUESTIONS\n你是出题老师，只输出 JSON 数组，字段: type(单选/多选/判断/问答), stem, options(数组[{k,v}]), answer, analysis, kpName, difficulty。难度要求：" + difficulty),
+                    new AIChatMessage("user", "知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
+                            + "\n数量:" + count + "\n难度:" + difficulty
+                            + "\n请生成练习题。" + materialsBlock(materials))));
+            List<Map<String, Object>> parsed = parseQuestionArray(raw);
+            return persistQuestions(userId, courseId, kp, difficulty, raw, parsed, "AI 生成练习（" + parsed.size() + " 题）", reservation);
+        } catch (RuntimeException e) {
+            releaseReservation(reservation);
+            throw e;
+        }
     }
 
     /**
@@ -159,24 +183,30 @@ public class GeneratorService {
         if (origin == null) {
             throw new com.example.learningassistant.common.BizException("原题不存在或已被删除");
         }
-        String kp = origin.getKpName();
-        String difficulty = determineDifficulty(userId, origin.getCourseId(), kp);
-        ChatModel model = modelFactory.get();
-        String raw = model.complete(List.of(
-                new AIChatMessage("system",
-                        "GEN_QUESTIONS\n你是出题老师，只输出 JSON 数组，字段: type(单选/多选/判断/问答), stem, options(数组[{k,v}]), answer, analysis, kpName, difficulty。难度要求：" + difficulty),
-                new AIChatMessage("user",
-                        "一位学生做错了下面的题，请围绕同一知识点出 " + count + " 道变式题帮他举一反三："
-                                + "考查点与原题一致，但情境、数据或提问角度必须不同，不得与原题雷同；题型与选项个数尽量与原题保持一致。\n"
-                                + "原题:" + origin.getStem() + "\n"
-                                + "原题选项:" + (origin.getOptions() == null ? "无" : origin.getOptions()) + "\n"
-                                + "原题正确答案:" + origin.getAnswer() + "\n"
-                                + "原题解析:" + (origin.getAnalysis() == null || origin.getAnalysis().isBlank() ? "无" : origin.getAnalysis()) + "\n"
-                                + "知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
-                                + "\n难度:" + difficulty + "\n请生成变式题。")));
-        List<Map<String, Object>> parsed = parseQuestionArray(raw);
-        String title = "错题变式（" + parsed.size() + " 题）· " + (kp == null || kp.isBlank() ? "未知考点" : kp);
-        return persistQuestions(userId, origin.getCourseId(), kp, difficulty, raw, parsed, title);
+        String reservation = billing.reserve(userId, "questions");
+        try {
+            String kp = origin.getKpName();
+            String difficulty = determineDifficulty(userId, origin.getCourseId(), kp);
+            ChatModel model = modelFactory.get();
+            String raw = model.complete(List.of(
+                    new AIChatMessage("system",
+                            "GEN_QUESTIONS\n你是出题老师，只输出 JSON 数组，字段: type(单选/多选/判断/问答), stem, options(数组[{k,v}]), answer, analysis, kpName, difficulty。难度要求：" + difficulty),
+                    new AIChatMessage("user",
+                            "一位学生做错了下面的题，请围绕同一知识点出 " + count + " 道变式题帮他举一反三："
+                                    + "考查点与原题一致，但情境、数据或提问角度必须不同，不得与原题雷同；题型与选项个数尽量与原题保持一致。\n"
+                                    + "原题:" + origin.getStem() + "\n"
+                                    + "原题选项:" + (origin.getOptions() == null ? "无" : origin.getOptions()) + "\n"
+                                    + "原题正确答案:" + origin.getAnswer() + "\n"
+                                    + "原题解析:" + (origin.getAnalysis() == null || origin.getAnalysis().isBlank() ? "无" : origin.getAnalysis()) + "\n"
+                                    + "知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
+                                    + "\n难度:" + difficulty + "\n请生成变式题。")));
+            List<Map<String, Object>> parsed = parseQuestionArray(raw);
+            String title = "错题变式（" + parsed.size() + " 题）· " + (kp == null || kp.isBlank() ? "未知考点" : kp);
+            return persistQuestions(userId, origin.getCourseId(), kp, difficulty, raw, parsed, title, reservation);
+        } catch (RuntimeException e) {
+            releaseReservation(reservation);
+            throw e;
+        }
     }
 
     /** 解析 LLM 出题返回（只接受 JSON 数组），为空视为未出题。 */
@@ -200,7 +230,8 @@ public class GeneratorService {
      * 中途失败不能留下半批题目——否则重试会叠加重复题，练习记录也指向不存在的题目。
      */
     private List<Question> persistQuestions(Long userId, Long courseId, String kp, String difficulty,
-                                            String raw, List<Map<String, Object>> parsed, String contentTitle) {
+                                            String raw, List<Map<String, Object>> parsed, String contentTitle,
+                                            String reservation) {
         List<Question> saved;
         try {
             saved = transactionTemplate.execute(status -> {
@@ -231,6 +262,7 @@ public class GeneratorService {
                 g.setContent(raw);
                 g.setCreatedAt(LocalDateTime.now());
                 contentMapper.insert(g);
+                billing.settle(reservation);
                 return rows;
             });
         } catch (com.example.learningassistant.common.BizException e) {
@@ -301,29 +333,41 @@ public class GeneratorService {
      */
     public void streamLecture(Long userId, Long courseId, String topic, String kp, List<Long> kbIds,
                               java.util.function.Consumer<String> onDelta, java.util.function.Consumer<GeneratedContent> onDone, java.util.function.Consumer<Throwable> onError) {
-        List<String> materials = retrieveMaterials(topic, kbIds);
-        ChatModel model = modelFactory.get();
-        StringBuilder acc = new StringBuilder();
-        model.stream(List.of(
-                        new AIChatMessage("system", "GEN_LECTURE\n你是课程教师助手，请为课程生成一份结构清晰的 Markdown 讲义。"),
-                        new AIChatMessage("user", "主题:" + topic + "\n知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
-                                + "\n请生成讲义。" + materialsBlock(materials))),
-                delta -> {
-                    acc.append(delta);
-                    onDelta.accept(delta);
-                },
-                ignored -> {
-                    GeneratedContent g = new GeneratedContent();
-                    g.setUserId(userId);
-                    g.setCourseId(courseId);
-                    g.setType("lecture");
-                    g.setTitle(topic);
-                    g.setContent(acc.toString());
-                    g.setCreatedAt(LocalDateTime.now());
-                    contentMapper.insert(g);
-                    onDone.accept(g);
-                },
-                onError);
+        String reservation = billing.reserve(userId, "lecture");
+        try {
+            List<String> materials = retrieveMaterials(topic, kbIds);
+            ChatModel model = modelFactory.get();
+            StringBuilder acc = new StringBuilder();
+            model.stream(List.of(
+                            new AIChatMessage("system", "GEN_LECTURE\n你是课程教师助手，请为课程生成一份结构清晰的 Markdown 讲义。"),
+                            new AIChatMessage("user", "主题:" + topic + "\n知识点:" + (kp == null || kp.isBlank() ? "核心概念" : kp)
+                                    + "\n请生成讲义。" + materialsBlock(materials))),
+                    delta -> {
+                        acc.append(delta);
+                        onDelta.accept(delta);
+                    },
+                    ignored -> {
+                        GeneratedContent g = new GeneratedContent();
+                        g.setUserId(userId);
+                        g.setCourseId(courseId);
+                        g.setType("lecture");
+                        g.setTitle(topic);
+                        g.setContent(acc.toString());
+                        g.setCreatedAt(LocalDateTime.now());
+                        transactionTemplate.executeWithoutResult(status -> {
+                            contentMapper.insert(g);
+                            billing.settle(reservation);
+                        });
+                        onDone.accept(g);
+                    },
+                    e -> {
+                        releaseReservation(reservation);
+                        onError.accept(e);
+                    });
+        } catch (RuntimeException e) {
+            releaseReservation(reservation);
+            throw e;
+        }
     }
 
     private String determineDifficulty(Long userId, Long courseId, String kp) {

@@ -70,6 +70,26 @@ docker compose ps
 
 更新 `.env` 中的运行配置而不更换源码版本时，可以在当前版本目录运行 `docker compose up -d --no-build --pull never` 使容器重新创建。全新数据库默认不创建固定密码演示账号。需要管理员时，先注册普通账号，再把用户名加到 `.env` 的 `ADMIN_USERNAMES`，然后用 `docker compose up -d --no-build --pull never backend` 重建后端容器。
 
+## AI 次数包与人工核对
+
+系统默认不限制次数，也不开放下单。确认收款平台允许相应业务后，可在服务器私有 `.env` 中设置 `BILLING_ENABLED=true`、至少 32 字符且独立于其他密钥的 `BILLING_OPERATOR_TOKEN`、面向用户的 `BILLING_PAYMENT_INSTRUCTIONS`，并可选设置 HTTPS 的 `BILLING_PAYMENT_URL`；重新创建后端容器后开放购买。具体金额（单位为分）、套餐次数和每人一次性赠送次数见 `.env.example`，其中 9.90 元/100 次、19.90 元/250 次只是示例，正式运营前请修改。套餐价格和次数创建订单时会固定，不受后续配置变动影响。
+
+启用后，智能答疑、AI 讲义、练习题及错题变式每次预留 1 次，成功保存后扣除，生成失败时退还。刷新页面只断开推送，不会取消后台生成或自动退回。其他 AI 功能暂未纳入次数包。用户在个人中心创建订单并提交付款平台和交易单号；这一步不会自动收款或开通额度。运营者必须先在收款平台核对实际到账、金额与交易单号，再确认订单。当前没有接入支付平台 API，不能将用户提交的交易单号或付款截图当作到账证明。
+
+运营接口使用独立的 `X-Billing-Token`，在服务器本机的 `127.0.0.1:8080` 调用；Nginx 不代理 `/internal/`。不要把该密钥放进前端、版本库或聊天中。以下示例在服务器操作，输入密钥时不显示：
+
+~~~bash
+read -rs -p '运营密钥: ' billing_token; echo
+curl -sS -H "X-Billing-Token: $billing_token" http://127.0.0.1:8080/internal/billing/orders
+# 核实收款平台的金额、渠道和交易单号后，将下面的订单号与 JSON 改成实际值。
+curl -sS -X POST -H "X-Billing-Token: $billing_token" -H 'Content-Type: application/json' \
+  -d '{"channel":"AFDIAN","reference":"平台交易单号"}' \
+  http://127.0.0.1:8080/internal/billing/orders/订单号/confirm
+unset billing_token
+~~~
+
+渠道值为 `AFDIAN`、`WECHAT`、`ALIPAY` 或 `OTHER`，需与用户提交的信息一致。同一渠道的交易单号只能用于一个订单；重复确认同一订单不会重复加额。后端进程异常退出可能留下未完成的次数预留；可用 `GET /internal/billing/usages/reserved` 查询。只有确认该任务未成功保存结果且不会继续运行后，才调用 `POST /internal/billing/usages/{预留单号}/release` 退回，接口使用相同运营密钥。
+
 ## 升级、备份与回滚
 
 每个新版本重复上传和解压流程，放在 `/opt/learning-assistant/releases/<新 SHA>/`，继续共用 `/opt/learning-assistant/.env`。Compose 工程名固定为 `learning-assistant`，因此正常更新复用 `mysql-data`、`redis-data`、`minio-data`、`backend-data`、`ai-data` 五个命名卷。升级前应备份数据库及需要保留的文件、对象和 AI 数据；镜像回滚不会恢复数据库结构或数据。

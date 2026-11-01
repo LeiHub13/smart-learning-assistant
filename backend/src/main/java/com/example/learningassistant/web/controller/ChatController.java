@@ -36,6 +36,7 @@ public class ChatController {
 
     private final ChatService chatService;
     private final AgentActionService agentActionService;
+    private final com.example.learningassistant.billing.BillingService billing;
 
     @GetMapping
     public ApiResponse<List<ChatSession>> sessions(HttpServletRequest request) {
@@ -93,29 +94,48 @@ public class ChatController {
         // 本轮起点：只把本轮新登记的动作挂到这条回复上，否则上一轮未确认的动作会在每条消息下重复出现
         java.time.LocalDateTime turnStart = java.time.LocalDateTime.now();
         AtomicBoolean clientGone = new AtomicBoolean(false);
-        chatService.streamMessage(id, question, u.id(),
-                delta -> safeSend(emitter, clientGone, Map.of("delta", delta)),
-                sources -> {
-                    // 同一条 done 事件里附带本轮登记的待确认动作（写操作只 proposal，不自动落库）
-                    List<Map<String, Object>> actions;
-                    try {
-                        actions = agentActionService.pendingFor(u.id(), id).stream()
-                                .filter(a -> a.getCreatedAt() == null || !a.getCreatedAt().isBefore(turnStart))
-                                .map(AgentActionService::toView)
-                                .toList();
-                    } catch (RuntimeException e) {
-                        log.warn("查询待确认动作失败: {}", e.getMessage());
-                        actions = List.of();
-                    }
-                    var r = sources == null ? ChatModel.SourceRefs.empty() : sources;
-                    safeSend(emitter, clientGone, Map.of(
-                            "sources", r.refs() == null ? "" : r.refs(),
-                            "sourceChunks", r.chunkIds() == null ? "" : r.chunkIds(),
-                            "followups", r.followups() == null ? "" : r.followups(),
-                            "actions", actions));
-                    safeComplete(emitter, clientGone);
-                });
+        chatService.requireOwnedSession(id, u.id());
+        String reservation = billing.reserve(u.id(), "chat");
+        try {
+            chatService.streamMessage(id, question, u.id(), reservation,
+                    delta -> safeSend(emitter, clientGone, Map.of("delta", delta)),
+                    sources -> {
+                        // 同一条 done 事件里附带本轮登记的待确认动作（写操作只 proposal，不自动落库）
+                        List<Map<String, Object>> actions;
+                        try {
+                            actions = agentActionService.pendingFor(u.id(), id).stream()
+                                    .filter(a -> a.getCreatedAt() == null || !a.getCreatedAt().isBefore(turnStart))
+                                    .map(AgentActionService::toView)
+                                    .toList();
+                        } catch (RuntimeException e) {
+                            log.warn("查询待确认动作失败: {}", e.getMessage());
+                            actions = List.of();
+                        }
+                        var r = sources == null ? ChatModel.SourceRefs.empty() : sources;
+                        safeSend(emitter, clientGone, Map.of(
+                                "sources", r.refs() == null ? "" : r.refs(),
+                                "sourceChunks", r.chunkIds() == null ? "" : r.chunkIds(),
+                                "followups", r.followups() == null ? "" : r.followups(),
+                                "actions", actions));
+                        safeComplete(emitter, clientGone);
+                    }, e -> {
+                        releaseReservation(reservation);
+                        safeSend(emitter, clientGone, Map.of("error", "生成失败，请重试"));
+                        safeComplete(emitter, clientGone);
+                    });
+        } catch (RuntimeException e) {
+            releaseReservation(reservation);
+            throw e;
+        }
         return emitter;
+    }
+
+    private void releaseReservation(String reservation) {
+        try {
+            billing.release(reservation);
+        } catch (RuntimeException e) {
+            log.error("退回答疑次数失败，预留单号 {}", reservation, e);
+        }
     }
 
     private static Long asLong(Object v) {
