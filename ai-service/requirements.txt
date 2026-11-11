@@ -13,3 +13,5 @@ pypdf>=5.0
 python-docx>=1.1
 # multipart 上传端点（FastAPI UploadFile 依赖）
 python-multipart>=0.0.9
+# 答疑会话直接复用 MySQL 中原有的数据；加密扩展供 MySQL 8 默认认证使用。
+PyMySQL[rsa]>=1.1.1

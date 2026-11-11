@@ -1,21 +1,34 @@
 # 智能学习助手
 
-基于大语言模型的个人学习助手：课程管理、知识库 RAG 答疑、AI 内容生成、题库练习、在线考试、学情分析与学习报告，另有跨用户实时「对话厅」与 uni-app 移动端。
+基于大语言模型的个人学习助手：课程管理、知识库 RAG 答疑、AI 内容生成、题库练习、在线考试、学情分析与学习报告，另有跨用户实时「对话厅」与 Android 移动端。
 
 ## 架构
 
 ```
 frontend/    Vue3 + Vite（dev 5173 / 生产 Nginx 托管）
-backend/     Spring Boot 3 + MyBatis-Plus（8080）：业务、落库、判分、JWT 鉴权
-ai-service/  FastAPI + langchain + DeepSeek（8000）：生成/批改/答疑、记忆、RAG 全链路
-mobile/      uni-app 移动端（对话 / 练习 / 报告等，后端地址在 config.js 配置）
+backend/     Spring Boot 3 + MyBatis-Plus（8080）：用户、课程、题库、判分、JWT 与计费
+ai-service/  FastAPI + LangChain（8000）：答疑会话与消息、Agent、生成/批改、记忆、RAG
+mobile/      Kotlin + Jetpack Compose 原生 Android；旧 uni-app 留作参考
 ```
 
-- Java ↔ Python 协议：`POST /ai/complete`、`POST /ai/stream`（SSE 逐块透传）、`GET /ai/health`；内部接口走 `X-Internal-Token` 鉴权
+- 答疑 `/api/chat/sessions/**` 在 Nginx / Vite 路由到 Python；Python 通过 Java 验证 JWT、校验课程与知识库权限并处理次数，直接管理 MySQL 会话和消息表。直连 Java 的旧客户端使用兼容转发
+- 其他 Java ↔ Python 协议：`POST /ai/complete`、`POST /ai/stream`、`GET /ai/health`；内部接口走 `X-Internal-Token` 鉴权
 - RAG 全链路在 Python 侧（embedding + Chroma 向量索引 + 改写/召回/重排）；正文唯一数据源是 MySQL `t_chunk`，Java 经 `PythonRagClient` 触发索引与召回
 - 文档解析与分块在 Python（pdf / docx / UTF-8 文本），chunks 落 `t_chunk`
 - 实时通信：答疑为 SSE 流式；对话厅为 WebSocket（`/ws/hall`）广播
 - 基础设施：MySQL 必选，Redis / MinIO 可选（Docker 编排内置；Redis 也可用 `--spring.profiles.active=redis` 本地启用）
+
+```mermaid
+flowchart LR
+    Client["Web / Android"] --> Gateway["Nginx"]
+    Gateway -->|"答疑会话与 SSE"| AI["Python AI 服务"]
+    Gateway -->|"其他业务 API"| Java["Java 业务服务"]
+    AI -->|"JWT 校验、课程权限、次数结算"| Java
+    Java -->|"闪卡读取、课程删除事件"| AI
+    AI -->|"答疑会话与消息"| DB[("MySQL")]
+    Java -->|"用户、课程与其他业务"| DB
+    AI --> RAG["Chroma · 记忆 · 模型"]
+```
 
 ## 功能
 
@@ -54,7 +67,7 @@ java -jar target/learning-assistant-1.0.0.jar
 ```
 
 环境：JDK 17+ / Maven 3.8+ / Python 3.10+ / MySQL 8。
-数据库默认 `localhost:3306/learning_assistant`（连接参数可用 `DB_*` 环境变量覆盖），首次启动自动建表；演示数据需显式启用。
+数据库默认 `localhost:3306/learning_assistant`（连接参数可用 `DB_*` 环境变量覆盖），Java 与 Python 须连接同一个数据库。Python 答疑连接可通过 `CHAT_DB_*` 单独覆盖；首次启动自动建表并保留旧会话；演示数据需显式启用。
 
 ## 演示账号
 

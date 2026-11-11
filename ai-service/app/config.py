@@ -45,6 +45,14 @@ LLM_TIMEOUT = int(os.getenv("AI_TIMEOUT", "120"))
 JAVA_TOOL_BASE = os.getenv("JAVA_TOOL_BASE", "http://localhost:8080")
 JAVA_TOOL_TOKEN = os.getenv("JAVA_TOOL_TOKEN", "internal-tool-token")
 
+# 答疑会话由本服务管理；沿用原有 MySQL 表，不迁移或复制历史消息。
+CHAT_DB_HOST = os.getenv("CHAT_DB_HOST", os.getenv("DB_HOST", "localhost"))
+CHAT_DB_PORT = int(os.getenv("CHAT_DB_PORT", os.getenv("DB_PORT", "3306")))
+CHAT_DB_NAME = os.getenv("CHAT_DB_NAME", os.getenv("DB_NAME", "learning_assistant"))
+CHAT_DB_USER = os.getenv("CHAT_DB_USER", os.getenv("DB_USER", "root"))
+CHAT_DB_PASSWORD = os.getenv("CHAT_DB_PASSWORD", os.getenv("DB_PASSWORD", "123456"))
+CHAT_AGENT_ENABLED = os.getenv("CHAT_AGENT_ENABLED", "true").lower() in ("1", "true", "yes")
+
 # Agent 写动作工具（排复习提醒 / 学习计划打卡）：默认关闭，只读工具不受影响
 AGENT_WRITE_TOOLS = os.getenv("AGENT_WRITE_TOOLS", "false").lower() in ("1", "true", "yes")
 

@@ -1,4 +1,4 @@
-"""AI 服务入口：FastAPI + SSE 流式接口，供 Java 骨架调用。
+"""AI 服务入口：提供答疑 API，以及供 Java 调用的 FastAPI / SSE 接口。
 
 接口约定（与 Java 端 PythonAIChatModel / PythonRagClient 对齐）：
 - GET  /ai/health          健康检查，返回模型配置摘要
@@ -6,7 +6,7 @@
 - POST /ai/stream          流式生成（SSE）{scene, question, chunks?, sessionId?, kbId?, kbIds?, note?}
                            -> data: {"delta": "..."} ... data: {"done": true, "sources": "1,2", "followups": "[\"...\"]"}
 - GET  /ai/history/{id}    会话记忆
-- POST /ai/memory/clear    清空某会话记忆 {sessionId}（Java 删会话时联动调用，需内部 token）
+- POST /ai/memory/clear    内部清空某会话记忆 {sessionId}（需内部 token）
 - GET  /ai/stats           LLM 调用观测
 RAG 端点（需 X-Internal-Token 头，仅供 Java 内部调用）：
 - POST /ai/retrieve        向量召回 {query, kbId?, kbIds?, topK?} -> {hits:[{chunkId, content, score}]}
@@ -26,11 +26,12 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from app import chains, config
+from app import chains, chat_api, chat_java, chat_store, config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("ai-service")
@@ -38,14 +39,32 @@ logger = logging.getLogger("ai-service")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # 答疑表属于 Python 服务；沿用历史 MySQL 表，启动时只做幂等建表/补列。
+    chat_store.initialize()
+    chat_api.start_reconciler()
     # 启动时预热 MCP 外部工具（未配置/失败均不影响启动）
     if config.MCP_SERVERS:
         from app import agent
         await agent.init_mcp_tools()
-    yield
+    try:
+        yield
+    finally:
+        chat_api.stop_reconciler()
 
 
 app = FastAPI(title="AI Service (langchain)", version="1.0.0", lifespan=lifespan)
+app.include_router(chat_api.router)
+
+
+@app.exception_handler(chat_store.ChatStoreError)
+async def chat_store_error(_request: Request, exc: chat_store.ChatStoreError):
+    return JSONResponse({"code": 400, "message": str(exc), "data": None})
+
+
+@app.exception_handler(chat_java.JavaBridgeError)
+async def chat_java_error(_request: Request, exc: chat_java.JavaBridgeError):
+    status = exc.code if exc.code in (401, 403, 503) else 200
+    return JSONResponse({"code": exc.code, "message": str(exc), "data": None}, status_code=status)
 
 SCENES = {"rag_qa", "free", "agent", "lecture", "questions", "review", "advice", "doc_overview", "flashcards",
           "rewrite", "rerank", "plan", "report", "recommend", "kg_extract"}

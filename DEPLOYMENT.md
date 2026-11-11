@@ -45,6 +45,10 @@ cd "$release_dir"
 
 首次部署时，编辑 `/opt/learning-assistant/.env`，至少填写 `AI_API_KEY`、`JWT_SECRET`、`MYSQL_ROOT_PASSWORD`、`MINIO_ACCESS_KEY`、`MINIO_SECRET_KEY` 和 `INTERNAL_TOOL_TOKEN`。`INTERNAL_TOOL_TOKEN` 必须在 Java 与 AI 服务间一致，编排文件从同一个变量注入。新库注册和找回密码需要配置 `MAIL_HOST`、`MAIL_USERNAME`、`MAIL_PASSWORD` 等 SMTP 参数；`MAIL_ENABLED` 只控制通知邮件。若旧库已有账号，保留原 MySQL、MinIO 凭据，不能只改 `.env` 就变更已初始化数据库的密码。`.env` 和 SMTP 授权码不能进入发布包或 Git；旧仓库历史中出现过的 SMTP 授权码应撤销重发。
 
+答疑会话已迁到 Python 服务：Compose 将同一 MySQL 库的连接配置注入 Java 与 ai-service，Python 启动时幂等创建或补齐答疑表。既有 `t_chat_session`、`t_chat_message` 及其 ID 原样保留，不需要额外导入。Nginx 将 `/api/chat/sessions/**` 转给 Python，其余 `/api/**` 转给 Java；旧客户端直连 Java 时仍可使用兼容转发。升级前按下文备份 MySQL 与 `ai-data`，回滚应用镜像不会回滚数据库中的新增轮次或清理任务表。
+
+当前编排运行单个 ai-service 实例，会话记忆和 Chroma 都保存在 `ai-data` 卷。若以后扩展为多个实例，需要先解决记忆文件和向量索引的共享与并发写入；不能只增加容器数量。
+
 Agent 联网搜索使用 DeepSeek 官方 Search API：在服务器私有 `.env` 设置 `DEEPSEEK_API_KEY`；若模型本身的 `AI_BASE_URL` 直接指向 `https://api.deepseek.com`，可留空复用 `AI_API_KEY`。其他模型提供商必须填写独立 DeepSeek Key。设置 `DEEPSEEK_SEARCH_ENABLED=false` 可关闭搜索；`AI_MCP_CONFIG=none` 只关闭其他 MCP 工具。修改配置后重建 ai-service 容器。搜索成功且有结果时按次计费，价格见 [DeepSeek 官方文档](https://api-docs.deepseek.com/zh-cn/guides/search/)。
 
 ## 构建并启动
@@ -105,3 +109,16 @@ docker compose logs --tail 100 backend ai-service frontend
 ~~~
 
 每次成功升级把上一个版本写入服务器私有 `.previous.env`。`rollback` 只使用服务器本地保留的旧版应用镜像；清理旧镜像前先确认不再需要回滚。部署脚本在新版本健康检查失败时也会尝试恢复上一版。版本目录保留各版 JAR、`dist/`、AI 服务运行源码、编排文件和 `RELEASE_SHA`，方便核对与重建；私有 `.env`、`.previous.env` 和备份放在版本目录外，不随发布包更换。
+
+回滚到答疑迁移前的版本时，先让当前服务处理完正在生成和待重试的轮次，以及课程/记忆清理事件；旧版服务不会处理这些新表中的待办。可在 MySQL 中检查：
+
+```sql
+SELECT state, memory_synced, COUNT(*) AS pending
+FROM t_chat_turn
+WHERE state IN ('STARTING', 'RUNNING', 'SUCCESS_SETTLE', 'FAILED_RELEASE') OR memory_synced = 0
+GROUP BY state, memory_synced;
+SELECT COUNT(*) AS pending_course_cleanup FROM t_chat_course_cleanup;
+SELECT COUNT(*) AS pending_memory_cleanup FROM t_chat_memory_cleanup;
+```
+
+记忆清理任务在立即清理后会保留一段时间，以处理生成线程迟到写入；如待办持续无法完成，应先核实对应会话、回答与预留状态，再按实际情况处理，不要直接批量退款。

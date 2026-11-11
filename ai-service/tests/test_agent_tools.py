@@ -275,30 +275,25 @@ def test_flashcard_and_mistake_propose_with_request_context(monkeypatch):
     assert [p["kind"] for _, p in calls] == ["add_flashcard"]
 
 
-def test_query_past_questions_scopes_to_user_and_excludes_current_session():
-    """定向检索过往会话：userId/session_id 由闭包绑定，当前会话被排除，关键词 URL 编码。"""
+def test_query_past_questions_scopes_to_user_and_excludes_current_session(monkeypatch):
+    """定向检索过往会话：userId/session_id 由闭包绑定，当前会话被排除。"""
+    from app import chat_store
     calls = []
-    original = agent._call_java_tool
-    agent._call_java_tool = lambda path: calls.append(path) or "captured"
-    try:
-        tools = {t.name: t for t in agent._make_tools([], user_id=8, session_id="42")}
-        tools["query_past_questions"].invoke({"keyword": "递归"})
-        tools["query_past_questions"].invoke({})
-        assert calls == [
-            "/internal/tools/past-qa?userId=8&keyword=%E9%80%92%E5%BD%92&limit=5&excludeSessionId=42",
-            "/internal/tools/past-qa?userId=8&keyword=&limit=5&excludeSessionId=42",
-        ]
-        # 无会话上下文时不带排除参数；无用户上下文时原地拒绝，不发回调
-        calls.clear()
-        no_session = {t.name: t for t in agent._make_tools([], user_id=8)}
-        no_session["query_past_questions"].invoke({"keyword": "x"})
-        assert calls == ["/internal/tools/past-qa?userId=8&keyword=x&limit=5"]
-        calls.clear()
-        anon = {t.name: t for t in agent._make_tools([], user_id=None)}
-        assert "未提供用户信息" in anon["query_past_questions"].invoke({"keyword": "x"})
-        assert calls == []
-    finally:
-        agent._call_java_tool = original
+    monkeypatch.setattr(chat_store, "past_questions",
+                        lambda user_id, keyword, exclude_session_id, limit:
+                        calls.append((user_id, keyword, exclude_session_id, limit)) or [])
+    tools = {t.name: t for t in agent._make_tools([], user_id=8, session_id="42")}
+    tools["query_past_questions"].invoke({"keyword": "递归"})
+    tools["query_past_questions"].invoke({})
+    assert calls == [(8, "递归", "42", 5), (8, "", "42", 5)]
+    calls.clear()
+    no_session = {t.name: t for t in agent._make_tools([], user_id=8)}
+    no_session["query_past_questions"].invoke({"keyword": "x"})
+    assert calls == [(8, "x", None, 5)]
+    calls.clear()
+    anon = {t.name: t for t in agent._make_tools([], user_id=None)}
+    assert "未提供用户信息" in anon["query_past_questions"].invoke({"keyword": "x"})
+    assert calls == []
 
 
 def test_system_prompt_carries_feynman(monkeypatch):

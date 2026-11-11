@@ -174,14 +174,34 @@ public class BillingService {
     /** 生成前原子预留一次；即使前端断线也由后台生成结果决定结算或退回。 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public String reserve(Long userId, String scene) {
+        return reserveWithId(userId, scene, UUID.randomUUID().toString());
+    }
+
+    /** Python 答疑使用稳定的轮次 ID 重试预留，避免网络超时后重复扣次。 */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public String reserveWithId(Long userId, String scene, String reservation) {
         if (!enabled) return null;
+        if (reservation == null || reservation.length() > 36 || userId == null || scene == null) {
+            throw new BizException("次数预留参数无效");
+        }
+        try {
+            jdbc.update("INSERT INTO t_billing_usage (reservation_id,user_id,scene,status) VALUES (?,?,?,'RESERVED')",
+                    reservation, userId, scene);
+        } catch (DuplicateKeyException e) {
+            List<UsageView> existing = jdbc.query(
+                    "SELECT reservation_id,user_id,scene,status,created_at FROM t_billing_usage WHERE reservation_id=? FOR UPDATE",
+                    (rs, n) -> new UsageView(rs.getString(1), rs.getLong(2), rs.getString(3), rs.getString(4),
+                            rs.getTimestamp(5).toLocalDateTime()), reservation);
+            if (existing.size() == 1 && userId.equals(existing.get(0).userId())
+                    && scene.equals(existing.get(0).scene()) && !"RELEASED".equals(existing.get(0).status())) {
+                return reservation;
+            }
+            throw new BizException("次数预留状态异常");
+        }
         ensureAccount(userId);
         if (jdbc.update("UPDATE t_billing_account SET balance=balance-1 WHERE user_id=? AND balance>0", userId) != 1) {
             throw new BizException("AI 次数不足，请前往个人中心购买次数包");
         }
-        String reservation = UUID.randomUUID().toString();
-        jdbc.update("INSERT INTO t_billing_usage (reservation_id,user_id,scene,status) VALUES (?,?,?,'RESERVED')",
-                reservation, userId, scene);
         return reservation;
     }
 
@@ -204,6 +224,33 @@ public class BillingService {
         if (changed == 1) {
             jdbc.update("UPDATE t_billing_account SET balance=balance+1 WHERE user_id=(SELECT user_id FROM t_billing_usage WHERE reservation_id=?)",
                     reservation);
+        }
+    }
+
+    /**
+     * 答疑的预留请求可能在网络超时后才到达：先登记已取消的轮次，阻止迟到请求再次扣次。
+     * 已结算的轮次不会被退回，重复调用也不会重复退款。
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void releaseChat(Long userId, String reservation) {
+        if (userId == null || reservation == null) throw new BizException("次数预留参数无效");
+        try {
+            jdbc.update("INSERT INTO t_billing_usage (reservation_id,user_id,scene,status) VALUES (?,?,'chat','RELEASED')",
+                    reservation, userId);
+            return;
+        } catch (DuplicateKeyException ignored) {
+            // 锁定已有记录后校验归属；预留和撤销并发时由唯一键和行锁串行化。
+        }
+        List<UsageView> existing = jdbc.query(
+                "SELECT reservation_id,user_id,scene,status,created_at FROM t_billing_usage WHERE reservation_id=? FOR UPDATE",
+                (rs, n) -> new UsageView(rs.getString(1), rs.getLong(2), rs.getString(3), rs.getString(4),
+                        rs.getTimestamp(5).toLocalDateTime()), reservation);
+        if (existing.size() != 1 || !userId.equals(existing.get(0).userId()) || !"chat".equals(existing.get(0).scene())) {
+            throw new BizException("次数预留状态异常");
+        }
+        if ("RESERVED".equals(existing.get(0).status())) {
+            jdbc.update("UPDATE t_billing_usage SET status='RELEASED' WHERE reservation_id=?", reservation);
+            jdbc.update("UPDATE t_billing_account SET balance=balance+1 WHERE user_id=?", userId);
         }
     }
 

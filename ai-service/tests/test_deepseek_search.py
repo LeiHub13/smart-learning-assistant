@@ -136,6 +136,7 @@ def test_both_agent_paths_can_call_deepseek_search(monkeypatch, search_key):
     requests = []
     prompts = []
     calls = []
+    remembered = []
 
     def fake_open(request, timeout):
         requests.append(json.loads(request.data))
@@ -143,7 +144,7 @@ def test_both_agent_paths_can_call_deepseek_search(monkeypatch, search_key):
 
     monkeypatch.setattr(deepseek_search.urllib.request, "urlopen", fake_open)
     monkeypatch.setattr(agent, "get_mcp_tools", lambda: [])
-    monkeypatch.setattr(agent, "_remember", lambda *_args: None)
+    monkeypatch.setattr(agent, "_remember", lambda *_args: remembered.append(True))
     monkeypatch.setattr(stats, "record", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(chains, "_attach_followups", lambda *_args: None)
 
@@ -173,6 +174,10 @@ def test_both_agent_paths_can_call_deepseek_search(monkeypatch, search_key):
     assert [r["query"] for r in requests] == ["最近动态", "实时信息"]
     assert all("https://example.org/" in result for result in calls)
     assert all("web_search" in prompt for prompt in prompts)
+    assert len(remembered) == 2
+    monkeypatch.setattr(chains, "get_model", lambda: FakeModel())
+    assert "".join(chains.stream("agent", "请搜索", remember=False)) == "流式回答"
+    assert len(remembered) == 2  # 对外答疑由消息落库成功后再同步记忆
 
 
 def test_actual_langchain_agent_invokes_search_tool(monkeypatch, search_key):

@@ -13,6 +13,7 @@
 import json
 import logging
 import os
+import tempfile
 import threading
 
 from app import config
@@ -61,6 +62,44 @@ def add(session_id: str, role: str, content: str) -> None:
             f.write(json.dumps({"role": role, "content": content}, ensure_ascii=False) + "\n")
 
 
+def add_turn_once(session_id: str, turn_id: str, question: str, answer: str) -> bool:
+    """按轮次幂等写入已落库的问答；崩溃留下半对时修复，不重复追加。"""
+    with _lock:
+        rows = _read_all_unlocked(session_id)
+        matching = [row for row in rows if row.get("turnId") == turn_id]
+        if {row.get("role") for row in matching} == {"user", "assistant"}:
+            return False
+        pair = [{"role": "user", "content": question, "turnId": turn_id},
+                {"role": "assistant", "content": answer, "turnId": turn_id}]
+        path = _file(session_id)
+        if matching:
+            # 同一轮写到一半时，保留其他有效行并原子替换，避免重复或顺序错乱。
+            rows = [row for row in rows if row.get("turnId") != turn_id] + pair
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=config.MEMORY_DIR,
+                                                 prefix="chat-memory-", delete=False) as out:
+                    temporary = out.name
+                    for row in rows:
+                        out.write(json.dumps(row, ensure_ascii=False) + "\n")
+                os.replace(temporary, path)
+            finally:
+                if temporary and os.path.exists(temporary):
+                    os.remove(temporary)
+        else:
+            needs_newline = False
+            if os.path.exists(path) and os.path.getsize(path) > 0:
+                with open(path, "rb") as existing:
+                    existing.seek(-1, os.SEEK_END)
+                    needs_newline = existing.read(1) != b"\n"
+            with open(path, "a", encoding="utf-8") as out:
+                if needs_newline:
+                    out.write("\n")
+                for row in pair:
+                    out.write(json.dumps(row, ensure_ascii=False) + "\n")
+        return True
+
+
 def _read_all_unlocked(session_id: str) -> list[dict]:
     path = _file(session_id)
     if not os.path.exists(path):
@@ -90,7 +129,8 @@ def recent(session_id: str, rounds: int = None) -> list[dict]:
     """最近 N 轮（user+assistant 对）历史消息。"""
     rows = _read_all(session_id)
     rounds = rounds or config.HISTORY_ROUNDS
-    return rows[-rounds * 2:]
+    # turnId 是本地幂等标记，不传给模型消息解析器。
+    return [{"role": row.get("role"), "content": row.get("content")} for row in rows[-rounds * 2:]]
 
 
 def summary(session_id: str) -> str:

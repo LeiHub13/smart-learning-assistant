@@ -19,6 +19,10 @@ export default defineConfig({
     host: "0.0.0.0", // 允许外部访问
     allowedHosts: ["42104654.nat123.top"],
     proxy: {
+      "/api/chat/sessions": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
       "/api": {
         target: "http://localhost:8080",
         changeOrigin: true,

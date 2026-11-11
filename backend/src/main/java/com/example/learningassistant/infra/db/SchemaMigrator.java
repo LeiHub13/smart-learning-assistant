@@ -35,10 +35,6 @@ public class SchemaMigrator implements CommandLineRunner {
             new ColumnSpec("t_course", "in_hub", "TINYINT DEFAULT 0 AFTER owner_name"),
             new ColumnSpec("t_knowledge_mastery", "last_practice_at", "TIMESTAMP NULL AFTER correct_count"),
             new ColumnSpec("t_notification", "scheduled_at", "TIMESTAMP NULL AFTER read_flag"),
-            new ColumnSpec("t_chat_session", "kb_scope", "VARCHAR(10) NULL AFTER kb_id"),
-            new ColumnSpec("t_chat_session", "socratic", "TINYINT DEFAULT 0 AFTER kb_scope"),
-            new ColumnSpec("t_chat_message", "source_chunks", "VARCHAR(300) NULL AFTER sources"),
-            new ColumnSpec("t_chat_message", "followups", "VARCHAR(600) NULL AFTER source_chunks"),
             new ColumnSpec("t_document", "overview", "TEXT NULL AFTER parse_status"),
             new ColumnSpec("t_hall_message", "course_id", "BIGINT NULL AFTER user_id"),
             new ColumnSpec("t_hall_message", "role", "TINYINT NOT NULL DEFAULT 0 AFTER course_id"),
@@ -48,7 +44,6 @@ public class SchemaMigrator implements CommandLineRunner {
             new ColumnSpec("t_announcement", "email_sent", "TINYINT NOT NULL DEFAULT 0 AFTER content"),
             new ColumnSpec("t_note", "shared", "TINYINT NOT NULL DEFAULT 0 AFTER content"),
             new ColumnSpec("t_flashcard", "due_at", "TIMESTAMP NULL AFTER last_reviewed_at"),
-            new ColumnSpec("t_chat_session", "feynman", "TINYINT DEFAULT 0 AFTER socratic"),
             new ColumnSpec("t_knowledge_graph", "stale", "TINYINT DEFAULT 0 AFTER edge_count"),
             new ColumnSpec("t_user", "mail_mute", "VARCHAR(200) NULL AFTER avatar"));
 

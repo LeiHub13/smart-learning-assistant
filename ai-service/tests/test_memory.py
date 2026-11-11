@@ -13,6 +13,19 @@ def test_add_and_recent(tmp_path, monkeypatch):
     assert recent[0]["role"] == "user"
 
 
+def test_saved_turn_is_idempotent_and_recovers_partial_write(tmp_path, monkeypatch):
+    monkeypatch.setattr(memory.config, "MEMORY_DIR", str(tmp_path))
+    memory.add("s1", "user", "更早的问题")
+    assert memory.add_turn_once("s1", "turn-1", "问题", "答案")
+    assert not memory.add_turn_once("s1", "turn-1", "问题", "答案")
+    assert [row["content"] for row in memory.recent("s1")] == ["更早的问题", "问题", "答案"]
+    assert all("turnId" not in row for row in memory.recent("s1"))
+    with open(memory._file("s2"), "w", encoding="utf-8") as output:
+        output.write('{"role":"user","content":"问题","turnId":"turn-2"}\n')
+    assert memory.add_turn_once("s2", "turn-2", "问题", "答案")
+    assert [row["role"] for row in memory.recent("s2")] == ["user", "assistant"]
+
+
 def test_clear(tmp_path, monkeypatch):
     monkeypatch.setattr(memory.config, "MEMORY_DIR", str(tmp_path))
     memory.add("s2", "user", "a")

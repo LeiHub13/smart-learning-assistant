@@ -270,6 +270,12 @@ def _remember(session_id: str, user_id, question: str, answer: str) -> None:
     if session_id:
         memory.add(session_id, "user", question)
         memory.add(session_id, "assistant", answer)
+    _after_remember(session_id, user_id, question, answer)
+
+
+def _after_remember(session_id: str, user_id, question: str, answer: str) -> None:
+    """已保存记忆后的旁路压缩与画像提炼。"""
+    if session_id:
         memory.maybe_compress(session_id, _summarizer)
     if user_id and _PROFILE_SLOTS.acquire(blocking=False):
         # 有限并发：闸门占满时直接放弃本轮提炼（旁路任务，合并式 prompt 会由后续轮次补上），
@@ -422,7 +428,7 @@ def complete(scene: str, question: str, chunks=None, session_id: str = None,
 def stream(scene: str, question: str, chunks=None, session_id: str = None,
            user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
            course_id=None, kb_name: str = None, kb_scope: str = None, socratic: bool = False,
-           feynman: bool = False):
+           feynman: bool = False, remember: bool = True):
     """流式生成，yield 增量文本；检索到的引用编号通过 meta["sources"] 传出。"""
     meta = meta if meta is not None else {}
     if scene == "agent":
@@ -430,7 +436,7 @@ def stream(scene: str, question: str, chunks=None, session_id: str = None,
         yield from agent.stream_agent(get_model(), question, chunks=chunks, session_id=session_id,
                                       user_id=user_id, kb_id=kb_id, kb_ids=kb_ids, note=note, meta=meta,
                                       course_id=course_id, kb_name=kb_name, kb_scope=kb_scope,
-                                      socratic=socratic, feynman=feynman)
+                                      socratic=socratic, feynman=feynman, remember=remember)
         return
     chunks = _prepare_rag(scene, question, chunks, session_id, kb_id, meta, kb_ids=kb_ids)
     msgs = _assemble(scene, question, chunks, session_id, note, kb_name=kb_name,
@@ -463,7 +469,8 @@ def stream(scene: str, question: str, chunks=None, session_id: str = None,
     finally:
         _SEMAPHORE.release()
     if _memorable(scene):
-        _remember(session_id, user_id, question, full)
+        if remember:
+            _remember(session_id, user_id, question, full)
         # 追问推荐随 meta 走 done 事件回传（agent 场景在 agent.stream_agent 收尾处同样挂载）
         _attach_followups(meta, question, full, session_id)
 

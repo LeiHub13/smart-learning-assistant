@@ -6,18 +6,20 @@
 
 ## 架构
 
-- `backend/`：Java 业务骨架（Spring Boot 3 + MyBatis-Plus，8080 端口），默认 MySQL（localhost:3306/learning_assistant，连接参数可用 DB_* 环境变量覆盖；H2 已移除），Redis 为可选 profile（`--spring.profiles.active=redis`，配置见 `application-redis.yml`）
-- `ai-service/`：Python AI 服务（FastAPI + langchain + DeepSeek，8000 端口），负责生成/批改/答疑、记忆（会话级 JSONL + 滚动摘要按 sessionId 持久化、跨会话学生画像按 userId 持久化，见 `app/memory.py`；删会话时 Java 经 `/ai/memory/clear` 联动清空会话记忆）与 **RAG 全链路**（embedding + Chroma 向量索引 + 改写/召回/重排，见 `app/rag.py`、`app/retriever.py`）
+- `backend/`：Java 业务服务（Spring Boot 3 + MyBatis-Plus，8080 端口），负责用户认证、课程、练习、计费等；默认 MySQL（localhost:3306/learning_assistant，连接参数可用 DB_* 环境变量覆盖；H2 已移除），Redis 为可选 profile（`--spring.profiles.active=redis`，配置见 `application-redis.yml`）
+- `ai-service/`：Python AI 服务（FastAPI + langchain，8000 端口），负责答疑会话与消息、Agent、生成/批改、记忆（会话级 JSONL + 滚动摘要按 sessionId 持久化、跨会话学生画像按 userId 持久化，见 `app/memory.py`）与 **RAG 全链路**（embedding + Chroma 向量索引 + 改写/召回/重排，见 `app/rag.py`、`app/retriever.py`）
 - `frontend/`：Vue3 前端（5173 dev / Nginx 生产）
 
 ## 关键约定
 
-- Java ↔ Python 协议：`POST /ai/complete`、`POST /ai/stream`（SSE）、`GET /ai/health`；场景标记见 `PythonAIChatModel`
+- 答疑 `/api/chat/sessions/**` 在 Nginx/Vite 直接路由到 Python；旧客户端直连 Java 8080 时由 Java 兼容转发。Python 通过 Java `/api/auth/me` 验证 JWT，通过 `/internal/chat/**` 获取经授权的课程上下文并预留/结算次数，内部回调使用 `X-Internal-Token`
+- 会话和消息由 Python 管理，继续使用 MySQL 的 `t_chat_session` / `t_chat_message`，历史 ID 与数据保持不变；轮次状态及结算重试见 `app/chat_store.py`、`app/chat_api.py`。删会话由 Python 清理会话记忆；Java 删除课程通过事务内事件异步通知 Python 清理对应会话
+- 其他 Java ↔ Python AI 协议：`POST /ai/complete`、`POST /ai/stream`（SSE）、`GET /ai/health`；场景标记见 `PythonAIChatModel`
 - RAG 检索在 Python 侧：Java 只持有 chunk 正文（`t_chunk` 是唯一数据源），通过 `PythonRagClient` 调 `/ai/index`、`/ai/retrieve` 等触发索引与召回；Python 反向经 `GET /internal/tools/chunks` 拉正文建索引。Java 侧不再有任何向量库实现
 - 文档解析与分块在 Python 侧（`app/parsing.py`，端点 `/ai/parse`、`/ai/chunk`）：Java 把上传的原始字节 multipart 转发给 ai-service，拿回 chunks 后落 `t_chunk`。支持 pdf（pypdf）/docx（python-docx）/UTF-8 文本；**旧版 .doc 已不支持**，需另存为 .docx
-- 引用来源 `sources`（如 `"1,2,3"`）由 Python 随 SSE done 事件回传，Java 落 `t_chat_message.sources`
+- 引用来源 `sources`（如 `"1,2,3"`）由 Python 随 SSE 完成事件回传，并由 Python 落 `t_chat_message.sources`
 - 内部接口鉴权：`X-Internal-Token`（Java `app.internal-tool-token` ↔ Python `JAVA_TOOL_TOKEN`，两侧默认值必须一致）
-- LLM provider 仅支持 `python` / `openai-compatible`，无 mock 降级；`openai-compatible`/`spring-ai` 不经过 ai-service，因此没有知识库检索能力
+- 智能答疑固定由 Python 提供模型和 Agent；Java 其他 AI 场景按 `app.model.provider` 选择模型，无 mock 降级。Python 答疑的 Agent 开关为 `CHAT_AGENT_ENABLED`（默认开启）
 - 系统无用户角色概念：所有用户权限一致，资源按 userId 隔离；仅显式开启 `APP_DEMO_SEED_ENABLED=true` 时播种演示账号 pg13/xiaozhang/xiaodi（密码 123456），生产默认关闭
 - 生产部署：CI 从提交编译后端 JAR 与前端 `dist/`，连同 AI 服务源码、Dockerfile 和编排文件打成发布包；服务器保留私有 `.env`，按 `RELEASE_SHA` 只把 JAR/`dist/` 装进后端与前端运行镜像、按源码构建 AI 服务，不从 GHCR 拉取应用镜像；详见 `DEPLOYMENT.md`
 - 一个任务完成后,你觉着可以commit了,你就commit,要push的时候询问我!!

@@ -1,7 +1,8 @@
 # 智学助手 · 原生 Android 客户端
 
 Kotlin + Jetpack Compose 的原生 Android 工程，复刻 Web 端（`frontend/`）的全部功能与业务流程，
-直连现有 Java 后端（`backend/`，8080），**不新增业务后端、不让客户端直连 ai-service 或任何 `/internal/*` 接口**。
+使用统一的服务地址。生产环境由 Nginx 将答疑接口路由到 Python、其他接口路由到 Java；
+本地直连 Java 8080 时由 Java 兼容转发答疑请求。客户端不调用任何 `/internal/*` 接口。
 
 - 功能与验收清单：[FEATURE_MATRIX.md](FEATURE_MATRIX.md)
 - 旧的 uni-app 移动端仍保留在 `mobile/` 上层目录（`pages/`、`utils/` 等）作交互参考，不参与本工程的构建。

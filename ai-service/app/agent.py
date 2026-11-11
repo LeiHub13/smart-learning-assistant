@@ -10,7 +10,7 @@
 - query_notes             查当前用户的学习笔记（回调 Java）
 - query_favorites         查当前用户的收藏夹题目（回调 Java）
 - query_question_bank     按关键词检索本课程题库（回调 Java）
-- query_past_questions    定向检索该学生过往其他会话的问答片段（回调 Java，
+- query_past_questions    定向检索该学生过往其他会话的问答片段（Python 持有的会话库，
                           排除当前会话——其内容已在会话记忆里）
 - 写动作（AGENT_WRITE_TOOLS 开关）：
   - query_plan_tasks / schedule_review / finish_plan_task / add_plan_task   学习计划查看、打卡、复习提醒与新建任务
@@ -24,7 +24,7 @@
 - MCP 外部工具            通过 AI_MCP_CONFIG 接入其他自定义工具，
                           与内置工具平权合并进 Agent，加载失败自动降级为仅内置工具
 
-chunks/userId 由 Java 端随请求传入，工具用闭包绑定本次请求上下文。
+用户身份由 Java 验证；课程范围经 Java 校验，工具用闭包绑定本次请求上下文。
 Java 回调走内部 API（/internal/tools/**，带内部 token，不暴露给前端）。
 """
 import asyncio
@@ -370,11 +370,14 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
         keyword 留空返回最近的提问清单。"""
         if not user_id:
             return "未提供用户信息，无法查询历史会话。"
-        from urllib.parse import quote
-        kw = quote((keyword or "").strip())
-        extra = f"&excludeSessionId={session_id}" if session_id else ""
-        return _call_java_tool(
-            f"/internal/tools/past-qa?userId={user_id}&keyword={kw}&limit=5{extra}")
+        from app import chat_store
+        try:
+            rows = chat_store.past_questions(user_id, (keyword or "").strip(),
+                                              exclude_session_id=session_id, limit=5)
+            return json.dumps(rows, ensure_ascii=False)
+        except Exception as e:
+            logger.warning("查询历史会话失败: %s", e)
+            return "操作未能完成，请稍后重试。"
 
     read_tools = [list_material_topics, search_materials,
                   query_wrong_book, query_mastery, query_recent_practices, query_kb_documents,
@@ -655,7 +658,7 @@ def complete_agent(model, question: str, chunks=None, session_id: str = None,
 def stream_agent(model, question: str, chunks=None, session_id: str = None,
                  user_id=None, kb_id=None, kb_ids=None, note: str = None, meta: dict | None = None,
                  course_id=None, kb_name: str = None, kb_scope: str = None, socratic: bool = False,
-                 feynman: bool = False):
+                 feynman: bool = False, remember: bool = True):
     """流式：逐块 yield 最终回答的 token。"""
     meta = meta if meta is not None else {}
     start = time.time()
@@ -685,7 +688,8 @@ def stream_agent(model, question: str, chunks=None, session_id: str = None,
         raise RuntimeError(f"Agent 调用失败: {e}") from e
     from app import stats
     stats.record("agent", True, int((time.time() - start) * 1000), tokens=usage.tokens)
-    _remember(session_id, user_id, question, full)
+    if remember:
+        _remember(session_id, user_id, question, full)
     # 追问推荐与 chains.stream 同约定：挂到 meta，由 done 事件回传 Java
     from app import chains
     chains._attach_followups(meta, question, full, session_id)

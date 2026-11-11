@@ -73,7 +73,7 @@ app:
     # LLM 接入：python(Python langchain ai-service) | openai-compatible(OpenAI/通义/DeepSeek/智谱等) | spring-ai(Spring AI 框架, 内置 Tool Calling)
     provider: python
     python-base-url: http://localhost:8000
-    # Agent 模式：true 时答疑(RAG_QA/FREE)升级为 ReAct Agent，模型自主调用检索工具，接口不变
+    # Java 发起的旧场景映射开关；智能答疑现由 Python 的 CHAT_AGENT_ENABLED 控制
     agent-enabled: true
     base-url: https://api.openai.com/v1
     api-key: ""

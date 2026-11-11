@@ -54,6 +54,12 @@ CREATE TABLE IF NOT EXISTS t_billing_usage (
     KEY idx_billing_usage_status (status, created_at)
 );
 
+-- Java 课程删除事件：事务提交后由 Python 答疑服务清理会话，失败可重试。
+CREATE TABLE IF NOT EXISTS t_chat_course_cleanup (
+    course_id BIGINT NOT NULL PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS t_study_log (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
     tenant_id   BIGINT DEFAULT 1,
@@ -161,31 +167,6 @@ CREATE TABLE IF NOT EXISTS t_question (
     kp_name    VARCHAR(50),
     difficulty VARCHAR(20),
     source     VARCHAR(10),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS t_chat_session (
-    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    tenant_id  BIGINT DEFAULT 1,
-    user_id    BIGINT,
-    course_id  BIGINT,
-    kb_id      BIGINT,
-    kb_scope   VARCHAR(10),
-    socratic   TINYINT DEFAULT 0,
-    feynman    TINYINT DEFAULT 0,
-    title      VARCHAR(100),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS t_chat_message (
-    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    tenant_id  BIGINT DEFAULT 1,
-    session_id BIGINT,
-    role       VARCHAR(20) NOT NULL,
-    content    TEXT NOT NULL,
-    sources    VARCHAR(1000),
-    source_chunks VARCHAR(300),
-    followups VARCHAR(600),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

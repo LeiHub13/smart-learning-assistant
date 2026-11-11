@@ -142,4 +142,60 @@ class BillingMySqlIntegrationTest {
         assertEquals(9, billing.overview(user).balance());
         assertEquals("CONSUMED", jdbc.queryForObject("SELECT status FROM t_billing_usage WHERE reservation_id=?", String.class, successful));
     }
+
+    @Test
+    void chatReservationRetriesAndLateCancellationAreIdempotent() {
+        long user = users.incrementAndGet();
+        String turn = UUID.randomUUID().toString();
+        assertEquals(turn, billing.reserveWithId(user, "chat", turn));
+        assertEquals(turn, billing.reserveWithId(user, "chat", turn));
+        assertEquals(9, billing.overview(user).balance());
+        billing.releaseChat(user, turn);
+        billing.releaseChat(user, turn);
+        assertEquals(10, billing.overview(user).balance());
+        assertThrows(BizException.class, () -> billing.reserveWithId(user, "chat", turn));
+
+        String cancelledBeforeReserve = UUID.randomUUID().toString();
+        billing.releaseChat(user, cancelledBeforeReserve);
+        assertThrows(BizException.class, () -> billing.reserveWithId(user, "chat", cancelledBeforeReserve));
+        assertEquals(10, billing.overview(user).balance());
+
+        String completed = UUID.randomUUID().toString();
+        billing.reserveWithId(user, "chat", completed);
+        billing.settle(completed);
+        billing.settle(completed);
+        billing.releaseChat(user, completed);
+        assertEquals(9, billing.overview(user).balance());
+        assertEquals("CONSUMED", jdbc.queryForObject("SELECT status FROM t_billing_usage WHERE reservation_id=?",
+                String.class, completed));
+    }
+
+    @Test
+    void concurrentChatReserveAndCancellationNeverLeaveACharge() throws Exception {
+        long user = users.incrementAndGet();
+        billing.overview(user);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            for (int i = 0; i < 10; i++) {
+                String turn = UUID.randomUUID().toString();
+                CountDownLatch start = new CountDownLatch(1);
+                Future<?> reserve = pool.submit(() -> {
+                    start.await();
+                    try { billing.reserveWithId(user, "chat", turn); } catch (BizException ignored) { }
+                    return null;
+                });
+                Future<?> release = pool.submit(() -> {
+                    start.await();
+                    billing.releaseChat(user, turn);
+                    return null;
+                });
+                start.countDown();
+                reserve.get(20, TimeUnit.SECONDS);
+                release.get(20, TimeUnit.SECONDS);
+                assertEquals("RELEASED", jdbc.queryForObject("SELECT status FROM t_billing_usage WHERE reservation_id=?",
+                        String.class, turn));
+                assertEquals(10, billing.overview(user).balance());
+            }
+        } finally { pool.shutdownNow(); }
+    }
 }

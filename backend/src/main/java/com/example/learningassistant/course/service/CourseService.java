@@ -50,8 +50,7 @@ public class CourseService {
     private final com.example.learningassistant.report.mapper.ReportMapper reportMapper;
     private final com.example.learningassistant.plan.mapper.StudyPlanMapper planMapper;
     private final com.example.learningassistant.plan.mapper.PlanTaskMapper planTaskMapper;
-    private final com.example.learningassistant.chat.mapper.ChatSessionMapper chatSessionMapper;
-    private final com.example.learningassistant.chat.mapper.ChatMessageMapper chatMessageMapper;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     /**
      * 我的课程：自己创建 + 已加入的课程（不再全量返回，公开课程走 Hub）。
@@ -287,15 +286,9 @@ public class CourseService {
             planMapper.deleteByIds(planIds);
         }
 
-        // 课程绑定的答疑会话（自由会话 courseId 为空，保留）
-        List<Long> sessionIds = chatSessionMapper.selectList(new LambdaQueryWrapper<com.example.learningassistant.chat.entity.ChatSession>()
-                        .eq(com.example.learningassistant.chat.entity.ChatSession::getCourseId, courseId))
-                .stream().map(com.example.learningassistant.chat.entity.ChatSession::getId).toList();
-        if (!sessionIds.isEmpty()) {
-            chatMessageMapper.delete(new LambdaQueryWrapper<com.example.learningassistant.chat.entity.ChatMessage>()
-                    .in(com.example.learningassistant.chat.entity.ChatMessage::getSessionId, sessionIds));
-            chatSessionMapper.deleteByIds(sessionIds);
-        }
+        // 提交课程删除的同一事务登记清理任务，由 Python 答疑服务删除会话并清理记忆。
+        jdbc.update("INSERT INTO t_chat_course_cleanup (course_id) VALUES (?) "
+                + "ON DUPLICATE KEY UPDATE course_id=course_id", courseId);
 
         courseUserMapper.delete(new LambdaQueryWrapper<com.example.learningassistant.course.entity.CourseUser>()
                 .eq(com.example.learningassistant.course.entity.CourseUser::getCourseId, courseId));

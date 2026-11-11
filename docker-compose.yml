@@ -167,12 +167,22 @@ services:
       # Agent 工具回调 + chunk 下发：Java 内部 API（容器间访问）
       JAVA_TOOL_BASE: http://backend:8080
       JAVA_TOOL_TOKEN: ${INTERNAL_TOOL_TOKEN:?请在 .env 配置 INTERNAL_TOOL_TOKEN}
+      # 答疑会话、消息与轮次账本：Python 管理原有 MySQL 表。
+      CHAT_DB_HOST: mysql
+      CHAT_DB_PORT: 3306
+      CHAT_DB_NAME: ${DB_NAME:-learning_assistant}
+      CHAT_DB_USER: root
+      CHAT_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 配置 MYSQL_ROOT_PASSWORD}
+      CHAT_AGENT_ENABLED: ${CHAT_AGENT_ENABLED:-true}
       # Agent 写动作（记笔记/打卡/出题/建任务/加题等）：全部走「提议+用户确认」门禁。
       # 默认关闭；置 true 后答疑 Agent 才挂载写工具，用户须在聊天里点「确认执行」才真正落库
       AGENT_WRITE_TOOLS: ${AGENT_WRITE_TOOLS:-false}
     volumes:
       - ai-data:/app/data
     networks: [la-net]
+    depends_on:
+      mysql:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/ai/health')"]
       interval: 10s

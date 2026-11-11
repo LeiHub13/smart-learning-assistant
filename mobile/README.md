@@ -1,7 +1,7 @@
 # mobile — 移动端
 
 **当前主力是原生 Android 工程：[`mobile/android`](android/README.md)**（Kotlin + Jetpack Compose，
-复刻 Web 端全部功能，直连现有 Java 后端）。打开方式、后端地址配置、构建与测试命令都在
+复刻 Web 端全部功能，通过统一服务地址访问 Java 业务服务和 Python 答疑服务）。打开方式、后端地址配置、构建与测试命令都在
 [android/README.md](android/README.md)，功能验收清单在 [android/FEATURE_MATRIX.md](android/FEATURE_MATRIX.md)。
 
 本目录下层的 `pages/`、`utils/`、`components/`、`manifest.json`、`pages.json` 是**旧的 uni-app 版本**，

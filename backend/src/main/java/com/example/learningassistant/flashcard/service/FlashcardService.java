@@ -4,8 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.learningassistant.ai.AIChatMessage;
 import com.example.learningassistant.ai.ChatModel;
 import com.example.learningassistant.ai.ChatModelFactory;
-import com.example.learningassistant.chat.entity.ChatMessage;
-import com.example.learningassistant.chat.service.ChatService;
+import com.example.learningassistant.ai.PythonChatClient;
 import com.example.learningassistant.common.BizException;
 import com.example.learningassistant.flashcard.entity.Flashcard;
 import com.example.learningassistant.flashcard.mapper.FlashcardMapper;
@@ -45,7 +44,7 @@ public class FlashcardService {
     private final FlashcardMapper flashcardMapper;
     private final ChatModelFactory modelFactory;
     private final ObjectMapper objectMapper;
-    private final ChatService chatService;
+    private final PythonChatClient chatClient;
     private final DocumentMapper documentMapper;
     private final ChunkMapper chunkMapper;
     private final QuestionMapper questionMapper;
@@ -53,16 +52,16 @@ public class FlashcardService {
 
     /** 从答疑会话提炼闪卡：取最近对话轮次交给 LLM 提炼问对。 */
     public int generateFromChat(Long userId, Long sessionId) {
-        List<ChatMessage> msgs = chatService.messages(sessionId, userId);
+        List<PythonChatClient.Message> msgs = chatClient.messages(userId, sessionId);
         if (msgs.size() < 2) {
             throw new BizException("会话内容太少，先聊几个来回再生成闪卡");
         }
         StringBuilder material = new StringBuilder();
         int taken = 0;
         for (int i = msgs.size() - 1; i >= 0 && taken < 12; i--) {
-            ChatMessage m = msgs.get(i);
-            String role = "user".equals(m.getRole()) ? "学生" : "AI";
-            material.insert(0, role + "：" + clip(m.getContent(), 600) + "\n");
+            PythonChatClient.Message m = msgs.get(i);
+            String role = "user".equals(m.role()) ? "学生" : "AI";
+            material.insert(0, role + "：" + clip(m.content(), 600) + "\n");
             taken++;
         }
         return generateByLlm(userId, sessionId, "chat", material.toString());
