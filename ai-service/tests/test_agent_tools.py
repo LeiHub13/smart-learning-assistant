@@ -313,3 +313,109 @@ def test_system_prompt_carries_selected_kb_context():
     # 未下发 KB_NAME（自由对话/旧版 Java）时不添加该段，空白名同样忽略
     assert "会话上下文" not in agent._system_prompt([])
     assert "会话上下文" not in agent._system_prompt([], kb_name="  ", kb_scope="single")
+
+
+def test_usage_handler_reads_aimessage_on_the_generation():
+    """on_llm_end 的 response 是 LLMResult，用量在其中的 AIMessage 上，不在 result 本身。"""
+    from langchain_core.messages import AIMessage
+    from langchain_core.outputs import ChatGeneration, LLMResult
+
+    handler = agent._AgentUsageHandler()
+    message = AIMessage(
+        content="答案",
+        usage_metadata={"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
+    )
+    handler.on_llm_end(LLMResult(generations=[[ChatGeneration(message=message)]]))
+    assert handler.known is True
+    assert handler.tokens == 18
+
+    # 消息上没有用量时，仍接受旧的 llm_output.token_usage
+    legacy = agent._AgentUsageHandler()
+    plain = AIMessage(content="答案")
+    handler_result = LLMResult(
+        generations=[[ChatGeneration(message=plain)]],
+        llm_output={"token_usage": {"prompt_tokens": 4, "completion_tokens": 6, "total_tokens": 10}},
+    )
+    legacy.on_llm_end(handler_result)
+    assert legacy.tokens == 10
+
+    # 两处都有时以 AIMessage 为准，避免和 llm_output 加两次
+    both = agent._AgentUsageHandler()
+    both.on_llm_end(LLMResult(
+        generations=[[ChatGeneration(message=message)]],
+        llm_output={"token_usage": {"prompt_tokens": 100, "completion_tokens": 100, "total_tokens": 200}},
+    ))
+    assert both.tokens == 18
+
+
+def test_complete_agent_sums_usage_across_aimessages(monkeypatch):
+    """一次 ReAct 里每步模型调用各自带 usage_metadata，记账时相加，历史消息没有用量则不计。"""
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    from app import stats
+
+    recorded = {}
+    monkeypatch.setattr(agent, "get_mcp_tools", lambda: [])
+    monkeypatch.setattr(agent, "_remember", lambda *_args: None)
+    monkeypatch.setattr(stats, "record", lambda *_args, **kwargs: recorded.update(kwargs))
+
+    class FakeModel:
+        def with_config(self, **_kwargs):
+            return self
+
+    class FakeAgent:
+        def invoke(self, *_args, **_kwargs):
+            return {"messages": [
+                HumanMessage(content="问题"),
+                AIMessage(content="上次回答"),
+                AIMessage(content="先查", usage_metadata={"input_tokens": 2, "output_tokens": 1, "total_tokens": 3}),
+                AIMessage(content="回答", usage_metadata={"input_tokens": 4, "output_tokens": 2, "total_tokens": 6}),
+            ]}
+
+    monkeypatch.setattr(agent, "create_agent", lambda *_args, **_kwargs: FakeAgent())
+    assert agent.complete_agent(FakeModel(), "问题") == "回答"
+    assert recorded["tokens"] == 9
+    assert recorded["tokens_estimated"] is False
+
+
+def test_stream_agent_sums_chunk_usage_and_estimates_when_absent(monkeypatch):
+    from langchain_core.messages import AIMessageChunk
+
+    from app import stats
+
+    from app import chains
+
+    recorded = []
+    monkeypatch.setattr(agent, "get_mcp_tools", lambda: [])
+    monkeypatch.setattr(agent, "_remember", lambda *_args: None)
+    monkeypatch.setattr(chains, "_attach_followups", lambda *_args: None)
+    monkeypatch.setattr(stats, "record", lambda *_args, **kwargs: recorded.append(kwargs))
+
+    class FakeModel:
+        def with_config(self, **_kwargs):
+            return self
+
+    class WithUsage:
+        def stream(self, *_args, **_kwargs):
+            yield (AIMessageChunk(
+                content="流",
+                usage_metadata={"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
+            ), {})
+            yield (AIMessageChunk(
+                content="式",
+                usage_metadata={"input_tokens": 3, "output_tokens": 1, "total_tokens": 4},
+            ), {})
+
+    class WithoutUsage:
+        def stream(self, *_args, **_kwargs):
+            yield AIMessageChunk(content="回答")
+
+    monkeypatch.setattr(agent, "create_agent", lambda *_args, **_kwargs: WithUsage())
+    assert "".join(agent.stream_agent(FakeModel(), "问题", remember=False)) == "流式"
+    assert recorded[-1]["tokens"] == 6
+    assert recorded[-1]["tokens_estimated"] is False
+
+    monkeypatch.setattr(agent, "create_agent", lambda *_args, **_kwargs: WithoutUsage())
+    assert "".join(agent.stream_agent(FakeModel(), "问题", remember=False)) == "回答"
+    assert recorded[-1]["tokens"] == max(1, (len("回答") + 2) // 3)
+    assert recorded[-1]["tokens_estimated"] is True

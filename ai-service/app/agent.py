@@ -554,22 +554,84 @@ def _make_tools(chunks, user_id, kb_id=None, course_id=None, kb_ids=None, sessio
                          if config.AGENT_WRITE_TOOLS else [])
 
 
+def _usage_tokens(usage) -> int | None:
+    """把 AIMessage.usage_metadata（或旧的 token_usage）折成 token 数。没有用量时返回 None。"""
+    if usage is None:
+        return None
+    if not hasattr(usage, "get"):
+        usage = {
+            "input_tokens": getattr(usage, "input_tokens", None),
+            "output_tokens": getattr(usage, "output_tokens", None),
+            "total_tokens": getattr(usage, "total_tokens", None),
+        }
+    keys = ("input_tokens", "output_tokens", "total_tokens", "prompt_tokens", "completion_tokens")
+    if not any(usage.get(key) is not None for key in keys):
+        return None
+    total = int(usage.get("total_tokens") or 0)
+    summed = int(usage.get("input_tokens") or usage.get("prompt_tokens") or 0) + int(
+        usage.get("output_tokens") or usage.get("completion_tokens") or 0)
+    return total or summed
+
+
+def _messages_usage(messages) -> tuple[int, bool]:
+    """累加各条 AIMessage 上的 usage_metadata。流式 chunk 的用量按增量相加，与消息合并规则一致。"""
+    total = 0
+    known = False
+    for message in messages or []:
+        if not isinstance(message, AIMessage):
+            continue
+        tokens = _usage_tokens(getattr(message, "usage_metadata", None))
+        if tokens is None:
+            continue
+        known = True
+        total += tokens
+    return total, known
+
+
+def _estimate_tokens(answer) -> int:
+    text = answer if isinstance(answer, str) else str(answer or "")
+    return max(1, (len(text) + 2) // 3)
+
+
+def _resolve_usage(handler, messages, answer: str) -> tuple[int, bool]:
+    """优先用消息上的真实用量；回调只补消息里没有、但 llm_output 里还有的旧格式。都没有则按字符估算。"""
+    tokens, known = _messages_usage(messages)
+    if known:
+        return tokens, False
+    if handler.known:
+        return handler.tokens, False
+    return _estimate_tokens(answer), True
+
+
 class _AgentUsageHandler(BaseCallbackHandler):
-    """统计一次 Agent 运行内的 LLM 调用次数与 token 总量（经 with_config 回调）。"""
+    """统计一次 Agent 运行内的 LLM 调用次数与 token 总量（经 with_config 回调）。
+
+    on_llm_end 收到的是 LLMResult，本身没有 usage_metadata。提供方把用量放在
+    该次生成的 AIMessage.usage_metadata 上；更老的响应才只放在 llm_output.token_usage。
+    """
 
     def __init__(self):
         self.calls = 0
         self.tokens = 0
+        self.known = False
 
     def on_llm_end(self, response, **kwargs) -> None:
         self.calls += 1
-        usage = getattr(response, "usage_metadata", None)
-        if not usage:
+        messages = []
+        for gen_list in getattr(response, "generations", None) or []:
+            for gen in gen_list or []:
+                message = getattr(gen, "message", None)
+                if message is not None:
+                    messages.append(message)
+        tokens, known = _messages_usage(messages)
+        if not known:
             llm_output = getattr(response, "llm_output", None) or {}
-            tu = llm_output.get("token_usage") or {}
-            usage = {"input_tokens": tu.get("prompt_tokens", 0) or 0,
-                     "output_tokens": tu.get("completion_tokens", 0) or 0}
-        self.tokens += int(usage.get("input_tokens", 0) or 0) + int(usage.get("output_tokens", 0) or 0)
+            legacy = _usage_tokens(llm_output.get("token_usage"))
+            if legacy is not None:
+                tokens, known = legacy, True
+        if known:
+            self.known = True
+            self.tokens += tokens
 
 
 def _build_messages(question: str, session_id: str = None, user_id=None) -> list:
@@ -649,8 +711,9 @@ def complete_agent(model, question: str, chunks=None, session_id: str = None,
     )
     answer = result["messages"][-1].content
     from app import stats
+    tokens, estimated = _resolve_usage(usage, result["messages"], answer)
     stats.record("agent", True, int((time.time() - start) * 1000),
-                 tokens=usage.tokens, tokens_estimated=False)
+                 tokens=tokens, tokens_estimated=estimated)
     _remember(session_id, user_id, question, answer)
     return answer
 
@@ -672,6 +735,7 @@ def stream_agent(model, question: str, chunks=None, session_id: str = None,
                                                       socratic=socratic, feynman=feynman,
                                                       web_search_enabled=bool(search_tools)))
     full = ""
+    observed = []
     try:
         for item in agent.stream(
             {"messages": _build_messages(question, session_id, user_id=user_id)},
@@ -679,15 +743,25 @@ def stream_agent(model, question: str, chunks=None, session_id: str = None,
             config={"recursion_limit": RECURSION_LIMIT},
         ):
             chunk = item[0] if isinstance(item, tuple) else item
+            if isinstance(chunk, AIMessage):
+                observed.append(chunk)
             if isinstance(chunk, AIMessageChunk) and chunk.content:
                 full += chunk.content
                 yield chunk.content
     except Exception as e:  # noqa: BLE001
         from app import stats
-        stats.record("agent", False, int((time.time() - start) * 1000), tokens=usage.tokens)
+        tokens, estimated = _resolve_usage(usage, observed, full)
+        # 失败时不按残缺正文估算，只保留已经拿到的真实用量
+        if estimated:
+            stats.record("agent", False, int((time.time() - start) * 1000))
+        else:
+            stats.record("agent", False, int((time.time() - start) * 1000),
+                         tokens=tokens, tokens_estimated=False)
         raise RuntimeError(f"Agent 调用失败: {e}") from e
     from app import stats
-    stats.record("agent", True, int((time.time() - start) * 1000), tokens=usage.tokens)
+    tokens, estimated = _resolve_usage(usage, observed, full)
+    stats.record("agent", True, int((time.time() - start) * 1000),
+                 tokens=tokens, tokens_estimated=estimated)
     if remember:
         _remember(session_id, user_id, question, full)
     # 追问推荐与 chains.stream 同约定：挂到 meta，由 done 事件回传 Java
