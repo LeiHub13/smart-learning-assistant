@@ -2,7 +2,13 @@
   <div class="tk-wrap">
     <!-- 左：品牌面板 -->
     <section class="tk-brand">
-      <div class="tk-brand-top">
+      <div class="tk-deco" aria-hidden="true">
+        <span class="tk-orb tk-orb-1"></span>
+        <span class="tk-orb tk-orb-2"></span>
+        <span class="tk-orb tk-orb-3"></span>
+        <span class="tk-grid"></span>
+      </div>
+      <div class="tk-brand-top tk-rise">
         <div class="tk-logo">
           <div class="tk-logo-mark">智</div>
           <div class="tk-logo-text">智学助手</div>
@@ -13,17 +19,17 @@
       </div>
 
       <div class="tk-hero">
-        <div class="tk-eyebrow">AI · RAG · Agnes</div>
+        <div class="tk-eyebrow tk-rise" style="--d:.05s"><span class="tk-eyebrow-dot"></span>AI · RAG · Agnes</div>
         <h1>
-          <span class="tk-h-sm">用大模型</span>
-          <span class="tk-h-sm">重新定义</span>
-          <span class="tk-h-lg">智能学习</span>
+          <span class="tk-h-sm tk-rise" style="--d:.1s">用大模型</span>
+          <span class="tk-h-sm tk-rise" style="--d:.15s">重新定义</span>
+          <span class="tk-h-lg-wrap tk-rise" style="--d:.2s"><span class="tk-h-lg">智能学习</span></span>
         </h1>
-        <p>基于 RAG 检索增强生成，覆盖答疑、生成、批改与学情的完整学习闭环。</p>
+        <p class="tk-rise" style="--d:.26s">基于 RAG 检索增强生成，覆盖答疑、生成、批改与学情的完整学习闭环。</p>
       </div>
 
       <div class="tk-feats">
-        <div class="tk-feat" v-for="f in feats" :key="f.name">
+        <div class="tk-feat tk-rise" v-for="(f, i) in feats" :key="f.name" :style="{ '--d': (.32 + i * .07) + 's' }">
           <span class="tk-feat-ico"><AppIcon :name="f.icon" :size="15" /></span>
           <div class="tk-feat-body">
             <div class="tk-feat-name">{{ f.name }}</div>
@@ -32,12 +38,12 @@
         </div>
       </div>
 
-      <div class="tk-tech">Java 业务骨架 · Python langchain AI 服务 · Agnes</div>
+      <div class="tk-tech tk-rise" style="--d:.58s">Java 业务骨架 · Python langchain AI 服务 · Agnes</div>
     </section>
 
     <!-- 右：登录 / 注册 -->
     <section class="tk-auth">
-      <div class="tk-card">
+      <div class="tk-card tk-rise" style="--d:.3s">
         <div class="tk-tabs" v-if="mode !== 'forgot'">
           <button type="button" :class="{ on: mode === 'login' }" @click="switchMode('login')">登 录</button>
           <button type="button" :class="{ on: mode === 'register' }" @click="switchMode('register')">注 册</button>
@@ -46,6 +52,7 @@
           <button type="button" class="tk-link" @click="switchMode('login')">← 返回登录</button>
         </div>
 
+        <div class="tk-mode" :key="mode">
         <h2>{{ mode === 'login' ? '欢迎回来' : mode === 'register' ? '创建账号' : '重置密码' }}</h2>
         <p class="tk-sub">{{ mode === 'login' ? '登录你的智学助手账号' : mode === 'register' ? '注册一个新账号开始学习' : '通过绑定邮箱的验证码设置新密码' }}</p>
 
@@ -85,8 +92,8 @@
             <label class="tk-label" for="fp-confirm" style="margin-top:14px">确认新密码</label>
             <input id="fp-confirm" v-model="forgotForm.confirm" type="password" class="tk-input" placeholder="再输入一次新密码" autocomplete="new-password" />
           </template>
-          <div v-if="error" class="tk-error">{{ error }}</div>
-          <div v-if="success" class="tk-success">{{ success }}</div>
+          <div v-if="error" class="tk-error" :key="error">{{ error }}</div>
+          <div v-if="success" class="tk-success" :key="success">{{ success }}</div>
           <button type="submit" class="tk-btn" :class="{ loading }" :disabled="loading">
             <span class="spinner"></span>
             <span class="btn-text">{{ mode === 'login' ? '登 录' : mode === 'register' ? '注 册' : '重置密码' }}</span>
@@ -102,9 +109,10 @@
             </button>
           </div>
         </div>
+        </div><!-- /tk-mode -->
       </div>
 
-      <div class="tk-foot">© {{ year }} 智学助手 · 让每一次学习都有反馈</div>
+      <div class="tk-foot tk-rise" style="--d:.5s">© {{ year }} 智学助手 · 让每一次学习都有反馈</div>
     </section>
   </div>
 </template>
@@ -256,6 +264,7 @@ const submit = async () => {
   --blue: #0969da;
   --green: #1f883d;
   --danger: #cf222e;
+  --g1: #0969da; --g2: #1a7f37; --g3: #8250df;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
 
   position: fixed;
@@ -275,47 +284,90 @@ const submit = async () => {
 .tk-wrap a:focus-visible,
 .tk-wrap input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
+/* ===== 动效 ===== */
+/* 入场级联：--d 控制延迟，backwards 保证动画开始前隐藏 */
+.tk-rise { animation: tk-rise .7s cubic-bezier(.22, .61, .36, 1) backwards; animation-delay: var(--d, 0s); }
+@keyframes tk-rise { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+/* 登录/注册/忘记密码切换时内容过渡 */
+.tk-mode { animation: tk-in .35s ease backwards; }
+@keyframes tk-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* 错误抖动 / 成功弹入（v-if + :key 重新挂载时触发） */
+.tk-error { animation: tk-shake .45s cubic-bezier(.36, .07, .19, .97); }
+@keyframes tk-shake { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(2px); } 30%, 50%, 70% { transform: translateX(-4px); } 40%, 60% { transform: translateX(4px); } }
+.tk-success { animation: tk-pop .3s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes tk-pop { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+
 /* ===== 左侧品牌面板 ===== */
 .tk-brand {
   position: relative; z-index: 1;
   display: flex; flex-direction: column; justify-content: center;
   gap: 30px; min-width: 0;
   padding: 54px clamp(32px, 6vw, 88px);
+  overflow: hidden;
+}
+.tk-brand-top, .tk-hero, .tk-feats, .tk-tech { position: relative; z-index: 1; }
+
+/* 背景装饰：漂浮光斑 + 点阵网格（与 welcome 页一致） */
+.tk-deco { position: absolute; inset: 0; pointer-events: none; }
+.tk-orb { position: absolute; border-radius: 50%; filter: blur(70px); opacity: .55; will-change: transform; }
+.tk-orb-1 { width: 380px; height: 380px; left: -110px; top: -90px; background: radial-gradient(circle at 30% 30%, rgba(9, 105, 218, .16), transparent 65%); animation: tk-drift-1 22s ease-in-out infinite alternate; }
+.tk-orb-2 { width: 340px; height: 340px; right: -90px; top: 28%; background: radial-gradient(circle at 60% 40%, rgba(31, 136, 61, .14), transparent 65%); animation: tk-drift-2 26s ease-in-out infinite alternate; }
+.tk-orb-3 { width: 300px; height: 300px; left: 30%; bottom: -130px; background: radial-gradient(circle at 50% 50%, rgba(130, 80, 223, .12), transparent 65%); animation: tk-drift-3 30s ease-in-out infinite alternate; }
+@keyframes tk-drift-1 { to { transform: translate(70px, 50px) scale(1.18); } }
+@keyframes tk-drift-2 { to { transform: translate(-60px, -50px) scale(1.12); } }
+@keyframes tk-drift-3 { to { transform: translate(50px, -60px) scale(1.2); } }
+.tk-grid {
+  position: absolute; inset: 0;
+  background-image: radial-gradient(circle, rgba(31, 35, 40, .10) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(ellipse 75% 65% at 42% 45%, #000 30%, transparent 75%);
+  mask-image: radial-gradient(ellipse 75% 65% at 42% 45%, #000 30%, transparent 75%);
 }
 .tk-brand-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .tk-logo { display: flex; align-items: center; gap: 12px; }
 .tk-logo-mark {
   width: 38px; height: 38px; flex: none; border-radius: 8px;
-  background: #24292f; color: #fff;
+  background: linear-gradient(135deg, #24292f, #40484f); color: #fff;
   display: flex; align-items: center; justify-content: center;
   font-size: 17px; font-weight: 700;
+  box-shadow: 0 2px 8px rgba(31, 35, 40, .22);
 }
 .tk-logo-text { font-size: 17px; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
 .tk-gh {
   width: 36px; height: 36px; flex: none; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
   color: var(--ink-3); background: var(--bg); border: 1px solid var(--line);
-  transition: color .15s ease, background .15s ease;
+  transition: color .15s ease, background .15s ease, transform .2s ease;
 }
-.tk-gh:hover { color: var(--ink); background: var(--soft); }
+.tk-gh:hover { color: var(--ink); background: var(--soft); transform: translateY(-1px); }
 
 .tk-eyebrow {
-  display: inline-block; margin-bottom: 22px;
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-bottom: 22px;
   padding: 3px 12px; border-radius: 999px;
   background: var(--soft); border: 1px solid var(--line);
   font-family: var(--mono); font-size: 11px; font-weight: 500;
   letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3);
 }
+.tk-eyebrow-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: tk-pulse 1.8s ease-in-out infinite; }
+@keyframes tk-pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(31, 136, 61, .35); } 50% { opacity: .75; box-shadow: 0 0 0 4px rgba(31, 136, 61, 0); } }
 .tk-hero h1 { line-height: 1.08; }
 .tk-h-sm {
   display: block; font-size: clamp(22px, 2.2vw, 30px); font-weight: 400;
   letter-spacing: -.01em; color: var(--ink-3);
 }
+.tk-h-lg-wrap { display: block; margin-top: 2px; }
 .tk-h-lg {
-  display: block; margin-top: 2px;
+  display: inline-block;
   font-size: clamp(42px, 5vw, 68px); font-weight: 700;
-  letter-spacing: -.03em; color: var(--ink);
+  letter-spacing: -.03em;
+  background: linear-gradient(90deg, var(--g1), var(--g2), var(--g3), var(--g1));
+  background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  animation: tk-hue 9s ease-in-out infinite;
 }
+@keyframes tk-hue { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
 .tk-hero p { margin-top: 18px; max-width: 470px; font-size: 15px; line-height: 1.75; color: var(--ink-2); }
 
 .tk-feats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 640px; }
@@ -323,14 +375,16 @@ const submit = async () => {
   display: flex; gap: 12px; align-items: flex-start;
   padding: 14px 16px; border-radius: 8px;
   background: var(--soft); border: 1px solid var(--line);
-  transition: background .15s ease;
+  transition: background .15s ease, transform .25s ease, box-shadow .25s ease, border-color .25s ease;
 }
-.tk-feat:hover { background: #eef1f4; }
+.tk-feat:hover { background: #eef1f4; transform: translateY(-2px); border-color: #b7c0cb; box-shadow: 0 8px 20px rgba(31, 35, 40, .08); }
 .tk-feat-ico {
   width: 30px; height: 30px; flex: none; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
   background: var(--accent-subtle); color: var(--blue);
+  transition: transform .25s cubic-bezier(.34, 1.56, .64, 1);
 }
+.tk-feat:hover .tk-feat-ico { transform: scale(1.12) rotate(-4deg); }
 .tk-feat:nth-child(2) .tk-feat-ico { background: #dafbe1; color: #1a7f37; }
 .tk-feat:nth-child(3) .tk-feat-ico { background: #fff1e5; color: #bc4c00; }
 .tk-feat:nth-child(4) .tk-feat-ico { background: #fbefff; color: #8250df; }
@@ -432,11 +486,11 @@ const submit = async () => {
   font-size: 14px; font-weight: 600; font-family: inherit;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  transition: background .15s ease, box-shadow .15s ease;
+  transition: background .15s ease, box-shadow .2s ease, transform .2s ease;
 }
-.tk-btn:hover { background: #1a7f37; }
-.tk-btn:active { background: #188531; box-shadow: inset 0 1px 2px rgba(0, 0, 0, .15); }
-.tk-btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+.tk-btn:hover { background: #1a7f37; box-shadow: 0 6px 16px rgba(31, 136, 61, .28); transform: translateY(-1px); }
+.tk-btn:active { background: #188531; box-shadow: inset 0 1px 2px rgba(0, 0, 0, .15); transform: none; }
+.tk-btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; transform: none; }
 .tk-btn .spinner {
   width: 14px; height: 14px; border: 2px solid rgba(255, 255, 255, .4);
   border-top-color: #fff; border-radius: 50%;
@@ -457,9 +511,9 @@ const submit = async () => {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   background: var(--soft); border: 1px solid rgba(31, 35, 40, .15); border-radius: 6px;
   font-family: inherit; cursor: pointer;
-  transition: background .15s ease, border-color .15s ease;
+  transition: background .15s ease, border-color .15s ease, transform .2s ease;
 }
-.tk-chip:hover { background: var(--hover); border-color: rgba(31, 35, 40, .25); }
+.tk-chip:hover { background: var(--hover); border-color: rgba(31, 35, 40, .25); transform: translateY(-1px); }
 .dc-name { font-size: 12.5px; font-weight: 600; color: var(--ink); white-space: nowrap; }
 .dc-user { font-family: var(--mono); font-size: 11px; color: var(--ink-4); white-space: nowrap; }
 
@@ -491,12 +545,28 @@ const submit = async () => {
   .tk-foot { font-size: 11px; }
 }
 
+/* ===== 降低动效偏好 ===== */
+@media (prefers-reduced-motion: reduce) {
+  .tk-wrap *, .tk-wrap *::before, .tk-wrap *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  .tk-rise, .tk-mode, .tk-error, .tk-success { opacity: 1 !important; transform: none !important; }
+}
+
 /* ===== 深色模式：翻转局部令牌，规则自动跟随 ===== */
 html.dark .tk-wrap {
   --bg: #0d1117; --soft: #161b22; --line: #3d444d;
   --ink: #e6edf3; --ink-2: #9198a1; --ink-3: #9198a1; --ink-4: #6e7681;
   --blue: #4493f8; --green: #238636; --danger: #f85149;
+  --g1: #4493f8; --g2: #3fb950; --g3: #d2a8ff;
 }
+html.dark .tk-grid { background-image: radial-gradient(circle, rgba(230, 237, 243, .09) 1px, transparent 1px); }
+html.dark .tk-orb-1 { background: radial-gradient(circle at 30% 30%, rgba(56, 139, 253, .2), transparent 65%); }
+html.dark .tk-orb-2 { background: radial-gradient(circle at 60% 40%, rgba(63, 185, 80, .16), transparent 65%); }
+html.dark .tk-orb-3 { background: radial-gradient(circle at 50% 50%, rgba(163, 113, 247, .18), transparent 65%); }
+html.dark .tk-card { box-shadow: 0 8px 30px rgba(0, 0, 0, .4); }
 html.dark .tk-feat:hover { background: #1c2128; }
 html.dark .tk-feat:nth-child(2) .tk-feat-ico { background: rgba(63,185,80,.16); color: #3fb950; }
 html.dark .tk-feat:nth-child(3) .tk-feat-ico { background: rgba(210,153,34,.16); color: #d29922; }
