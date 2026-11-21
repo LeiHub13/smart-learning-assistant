@@ -4,19 +4,18 @@
     <div class="page-sub">今天也保持学习节奏 —— 概览、推荐与快捷入口</div>
 
     <!-- 数据概览 -->
-    <div class="card">
-      <div class="row">
-        <div class="stat" style="flex:1"><div class="num">{{ fmtHours(study?.totalMinutes) }}</div><div class="lab">学习时长</div></div>
-        <div class="stat" style="flex:1"><div class="num">{{ streak }} 天</div><div class="lab">连续学习</div></div>
-        <div class="stat" style="flex:1"><div class="num">{{ study?.activeDays ?? 0 }}</div><div class="lab">活跃天数</div></div>
-        <div class="stat" style="flex:1"><div class="num">{{ practiceCount }}</div><div class="lab">练习次数</div></div>
-        <div class="stat" style="flex:1"><div class="num">{{ favCount }}</div><div class="lab">收藏题目</div></div>
-        <div class="stat" style="flex:1"><div class="num">{{ unread }}</div><div class="lab">未读通知</div></div>
+    <div class="card rv">
+      <div class="stat-grid">
+        <div v-for="(s, i) in statItems" :key="s.label" class="stat-item" :style="{ '--d': (i * .05) + 's' }">
+          <span class="stat-ico" :class="s.tone"><AppIcon :name="s.icon" :size="15" /></span>
+          <div class="stat-num">{{ s.value }}</div>
+          <div class="stat-lab">{{ s.label }}</div>
+        </div>
       </div>
     </div>
 
     <!-- 快捷入口 -->
-    <div class="card">
+    <div class="card rv" style="--d:.08s">
       <div class="row quick-row">
         <button class="btn" @click="go('/practice')"><AppIcon name="practice" :size="14" /> 开始练习</button>
         <button class="btn" @click="go('/mistakes')"><AppIcon name="target" :size="14" /> 错题本{{ mistakeTotal ? '（' + mistakeTotal + '）' : '' }}</button>
@@ -31,7 +30,7 @@
     <div class="grid2">
       <div class="col-left">
         <!-- 成绩曲线 -->
-        <div class="card">
+        <div class="card rv" style="--d:.16s">
         <h3>最近成绩曲线</h3>
         <div v-if="seriesList.length" class="trend-wrap">
           <div ref="chartRef" class="d-chart"></div>
@@ -50,11 +49,11 @@
             <div v-if="activeId" class="tl-tip">再次点击取消高亮</div>
           </div>
         </div>
-        <div v-if="!seriesList.length" class="empty">暂无练习数据</div>
+        <EmptyState v-else icon="progress" title="暂无练习数据" hint="完成一组练习后，成绩曲线会从这里开始生长" />
         </div>
 
         <!-- 学习热力图 -->
-        <div class="card">
+        <div class="card rv" style="--d:.22s">
           <div class="hm-top">
             <h3>学习热力图（近 12 周）</h3>
             <div v-if="heat" class="hm-stats">
@@ -64,15 +63,16 @@
             </div>
           </div>
           <StudyHeatmap v-if="heat" :calendar="study?.calendar || []" />
-                <div v-else class="empty">暂无数据（使用系统期间每分钟自动记录）</div>
+          <EmptyState v-else compact icon="clock" title="暂无学习记录" hint="使用系统期间每分钟自动记录学习时长" />
         </div>
       </div>
 
       <!-- 今日推荐 -->
-      <div class="card">
+      <div class="card rv" style="--d:.2s">
         <h3>今日推荐</h3>
-        <div v-if="!recommend.length" class="empty">暂无推荐，做一组练习后生成</div>
-        <div v-for="(r, i) in recommend" :key="i" class="rc-item"
+        <EmptyState v-if="!recommend.length" icon="lightbulb" title="暂无推荐"
+                    hint="做一组练习后，AI 会根据错题与薄弱知识点生成今日推荐" />
+        <div v-for="(r, i) in recommend" :key="i" class="rc-item rv" :style="{ '--d': (.26 + i * .06) + 's' }"
              :class="{ clickable: r.action }" @click="r.action && router.push(r.action)">
           <span class="rc-icon"><AppIcon :name="rcIcon(r.type)" :size="16" /></span>
           <div class="rc-body">
@@ -100,6 +100,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { api, unreadCount } from '../api'
 import AppIcon from '../components/AppIcon.vue'
 import StudyHeatmap from '../components/StudyHeatmap.vue'
+import EmptyState from '../components/EmptyState.vue'
 import { chartTheme, onThemeChange } from '../theme'
 
 echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
@@ -144,6 +145,16 @@ const streak = computed(() => {
 const rcIcon = (t) => ({ startup: 'zap', review_kp: 'alarm', practice_kp: 'practice', document: 'report' }[t] || 'lightbulb')
 const goLabel = (t) => (t === 'startup' ? '去摸底 →' : '去做题 →')
 
+/** 概览统计：图标 + 数值 + 标签（彩色图标区分指标类别） */
+const statItems = computed(() => [
+  { icon: 'clock', tone: 't-blue', value: fmtHours(study.value?.totalMinutes), label: '学习时长' },
+  { icon: 'zap', tone: 't-green', value: streak.value + ' 天', label: '连续学习' },
+  { icon: 'progress', tone: 't-orange', value: study.value?.activeDays ?? 0, label: '活跃天数' },
+  { icon: 'practice', tone: 't-purple', value: practiceCount.value, label: '练习次数' },
+  { icon: 'star', tone: 't-yellow', value: favCount.value, label: '收藏题目' },
+  { icon: 'bell', tone: 't-red', value: unread.value, label: '未读通知' },
+])
+
 /** 热力图统计（网格渲染在 StudyHeatmap 组件内） */
 const heat = computed(() => {
   const cal = study.value?.calendar || []
@@ -170,54 +181,63 @@ const renderChart = () => {
     chart = null
   }
   if (!chart) chart = echarts.init(chartRef.value)
-  // 刻度对齐数据日期，且始终包含今天（当日没做题只显示日期、不画点）
+  // 类目轴：横轴为「所有课程出现过的日期 + 今天」的并集，按天均匀分布，
+  // 标签由 ECharts 自动抽样避免挤叠（time 轴 + customValues 在数据扎堆时会把标签挤成一团）
   const dateSet = new Set()
   seriesList.value.forEach((s) => s.points.forEach((p) => dateSet.add(Array.isArray(p) ? p[0] : p.value[0])))
   const now = new Date()
   const pad = (x) => String(x).padStart(2, '0')
+  // 始终包含今天（当日没做题只占一个刻度、不画点）
   dateSet.add(now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()))
-  let tickDates = [...dateSet].sort()
-  if (tickDates.length > 12) {
-    const step = Math.ceil(tickDates.length / 12)
-    tickDates = tickDates.filter((d, i) => i % step === 0 || i === tickDates.length - 1)
+  const allDates = [...dateSet].sort()
+  const fmtDay = (d) => { const dt = new Date(d + 'T00:00:00'); return (dt.getMonth() + 1) + '-' + dt.getDate() }
+  // 面积填充用低透明度 rgba 字符串。echarts 6.1 的 LinearGradient 渐变实例在部分
+  // 渲染路径会被吞掉、回落成默认 0.7 实色（浏览器像素实测），字符串全路径稳定。
+  const hexToRgba = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16)
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'
   }
-  const ticks = tickDates.map((d) => new Date(d + 'T00:00:00'))
   const th = chartTheme()
+  const buildSeries = () => seriesList.value.map((s) => {
+    // 把各课程的散点对齐到统一横轴：没练到的日期补 null，配合 connectNulls 保持连线
+    const byDate = new Map(s.points.map((p) => [Array.isArray(p) ? p[0] : p.value[0], Array.isArray(p) ? p[1] : p.value[1]]))
+    const active = activeId.value === s.id
+    const dim = activeId.value != null && !active
+    return {
+      name: s.name,
+      type: 'line',
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: active ? 8 : 6,
+      connectNulls: true,
+      data: allDates.map((d) => byDate.get(d) ?? null),
+      itemStyle: { color: s.color, opacity: dim ? 0.15 : 1 },
+      lineStyle: { width: active ? 3.5 : 2, opacity: dim ? 0.12 : 1 },
+      areaStyle: { color: hexToRgba(s.color, dim ? 0 : (active ? 0.2 : 0.08)) },
+      emphasis: { focus: 'series' },
+      z: active ? 10 : 2
+    }
+  })
   chart.setOption({
     tooltip: { trigger: 'axis', backgroundColor: th.tipBg, borderColor: th.tipLine, textStyle: { color: th.tipText } },
     grid: { left: 40, right: 16, top: 20, bottom: 24 },
+    animationDuration: 700,
     xAxis: {
-      type: 'time',
-      max: new Date(),
-      axisTick: { customValues: ticks },
+      type: 'category',
+      data: allDates,
+      boundaryGap: false,
+      axisTick: { show: false },
       axisLabel: {
-        customValues: ticks,
-        rotate: 90,
-        fontSize: 10,
-        margin: 11,
-        color: th.text,
-        formatter: (v) => { const d = new Date(v); return (d.getMonth() + 1) + '-' + d.getDate() }
+        interval: 'auto', hideOverlap: true,
+        showMinLabel: true, showMaxLabel: true,
+        fontSize: 10, margin: 12, color: th.text,
+        formatter: fmtDay
       },
       axisLine: { lineStyle: { color: th.split } }
     },
     yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%', color: th.text }, splitLine: { lineStyle: { color: th.split } } },
-    series: seriesList.value.map((s) => {
-      const active = activeId.value === s.id
-      const dim = activeId.value != null && !active
-      return {
-        name: s.name,
-        type: 'line',
-        smooth: true,
-        symbolSize: active ? 8 : 6,
-        data: s.points,
-        itemStyle: { color: s.color, opacity: dim ? 0.15 : 1 },
-        lineStyle: { width: active ? 3.5 : 2, opacity: dim ? 0.12 : 1 },
-        areaStyle: active ? { opacity: 0.1 } : { opacity: dim ? 0 : 0.06 },
-        emphasis: { focus: 'series' },
-        z: active ? 10 : 2
-      }
-    })
-  }, { notMerge: true })
+    series: buildSeries()
+  })
 }
 
 const toggleSeries = (id) => {
@@ -277,6 +297,39 @@ onBeforeUnmount(() => {
 .grid2 { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
 .col-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+
+/* ===== 入场级联（--d 控制延迟，backwards 保证动画开始前隐藏） ===== */
+.rv { animation: rv-rise .55s cubic-bezier(.22, .61, .36, 1) backwards; animation-delay: var(--d, 0s); }
+@keyframes rv-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+/* ===== 概览统计：彩色图标 + 数值 + 标签 ===== */
+.stat-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.stat-item {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 12px 8px 10px; border-radius: 8px;
+  animation: rv-rise .5s cubic-bezier(.22, .61, .36, 1) backwards; animation-delay: var(--d, 0s);
+  transition: background .15s ease, transform .2s ease;
+}
+.stat-item:hover { background: var(--soft); transform: translateY(-2px); }
+.stat-ico { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+.t-blue { background: #ddf4ff; color: #0969da; }
+.t-green { background: #dafbe1; color: #1a7f37; }
+.t-orange { background: #fff1e5; color: #bc4c00; }
+.t-purple { background: #fbefff; color: #8250df; }
+.t-yellow { background: #fff8c5; color: #9a6700; }
+.t-red { background: #ffebe9; color: #cf222e; }
+.stat-num { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: -.01em; }
+.stat-lab { margin-top: 3px; font-size: 12px; color: var(--muted); }
+@media (max-width: 900px) { .stat-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 480px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } }
+html.dark .t-blue { background: rgba(56, 139, 253, .16); color: #4493f8; }
+html.dark .t-green { background: rgba(63, 185, 80, .16); color: #3fb950; }
+html.dark .t-orange { background: rgba(240, 136, 62, .16); color: #f0883e; }
+html.dark .t-purple { background: rgba(163, 113, 247, .16); color: #d2a8ff; }
+html.dark .t-yellow { background: rgba(187, 128, 9, .2); color: #e3b341; }
+html.dark .t-red { background: rgba(248, 81, 73, .16); color: #f85149; }
+@media (prefers-reduced-motion: reduce) { .rv, .stat-item { animation: none !important; } }
+
 .d-chart { width: 100%; height: 240px; flex: 1; min-width: 0; }
 .trend-wrap { display: flex; align-items: stretch; }
 .trend-legend {

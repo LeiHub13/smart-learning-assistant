@@ -199,6 +199,15 @@ body {
   animation: bootsp .8s linear infinite;
 }
 
+/* 路由切换渐入（Layout 的 Transition name="page-fade"） */
+.page-fade-enter-active { transition: opacity .28s ease, transform .28s cubic-bezier(.22,.61,.36,1); }
+.page-fade-leave-active { transition: opacity .16s ease; }
+.page-fade-enter-from { opacity: 0; transform: translateY(10px); }
+.page-fade-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .page-fade-enter-active, .page-fade-leave-active { transition: none; }
+}
+
 /* ======== 控件（GitHub 按钮风格：灰底描边 6px 圆角，primary 绿） ======== */
 .btn {
   display: inline-flex; align-items: center; gap: 6px; justify-content: center;

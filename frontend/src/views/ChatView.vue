@@ -38,7 +38,8 @@
             </span>
           </template>
         </div>
-        <div v-if="!filteredSessions.length" class="empty">暂无会话</div>
+        <EmptyState v-if="!filteredSessions.length" compact icon="chat" title="暂无会话"
+                    hint="点击上方「+ 新建会话」，或直接在右侧开始提问" />
       </div>
     </div>
 
@@ -61,12 +62,10 @@
         <span v-if="feynman" class="socratic-hint">费曼模式：你讲 AI 问，讲完后说「讲完了」可得评分</span>
       </div>
       <div class="msgs" ref="bodyRef">
-        <div v-if="!messages.length" class="empty">
-          <div style="font-size:16px;font-weight:600;margin-bottom:8px">你好，我是 AI 学习助手</div>
-          <div style="margin:10px 0 16px">
-            {{ mode === 'kb' ? '选择课程知识库后提问，回答将基于资料并标注引用' : '学习问题随时问我' }}
-          </div>
-        </div>
+        <EmptyState v-if="!messages.length" icon="sparkles" title="你好，我是 AI 学习助手"
+                    :hint="mode === 'kb' ? '选择课程知识库后提问，回答将基于资料并标注引用' : '学习问题随时问我'">
+          <button v-for="q in suggestQs" :key="q" class="ce-chip" :title="q" @click="fill(q)">{{ q }}</button>
+        </EmptyState>
         <div v-for="(m, i) in messages" :key="i" class="m" :class="m.role === 'user' ? 'me' : 'ai'">
           <div class="av">{{ m.role === 'user' ? '我' : 'AI' }}</div>
           <div class="bub">
@@ -142,6 +141,7 @@ import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { api, sseStream, getCourses } from '../api'
 import QuotaBadge from '../components/QuotaBadge.vue'
+import EmptyState from '../components/EmptyState.vue'
 import { mdToHtml } from '../utils'
 
 defineOptions({ name: 'ChatView' })
@@ -157,6 +157,12 @@ const messages = ref([])
 const input = ref('')
 const streaming = ref(false)
 const mode = ref('kb')
+
+// 空状态「猜你想问」：点击填入输入框（不直接发送，让用户先确认/补全上下文）
+const suggestQs = computed(() => (mode.value === 'kb'
+  ? ['帮我梳理这门课的核心知识框架', '出一道题检验我的掌握程度', '这门课有哪些常见易错点？']
+  : ['帮我制定一份两周复习计划', '如何提高刷题效率？', '讲讲艾宾浩斯遗忘曲线的用法']))
+const fill = (q) => { input.value = q }
 const socratic = ref(false)
 const feynman = ref(false)
 const courseId = ref(null)
@@ -617,6 +623,18 @@ html.dark .src-item.flash { box-shadow: 0 0 0 3px rgba(56,139,253,.35); }
   text-align: left; line-height: 1.5; transition: background .15s ease;
 }
 .fu-chip:hover { background: #c9e7ff; }
+
+/* 空状态「猜你想问」chips */
+.ce-chip {
+  max-width: 260px; padding: 6px 13px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--muted);
+  font-size: 12px; font-family: inherit; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.ce-chip:hover {
+  color: var(--text); border-color: var(--primary); background: var(--accent-subtle);
+}
 
 /* 苏格拉底引导模式 */
 .chat-toolbar {
