@@ -15,8 +15,8 @@ CI 从一个 Git 提交编译后端 JAR 和前端 `dist/`，再把它们、AI �
 在本机上传发布包：
 
 ~~~bash
-scp deployment-package.tar.gz root@101.37.65.217:/tmp/
-ssh root@101.37.65.217
+scp deployment-package.tar.gz root@47.117.57.44:/tmp/
+ssh root@47.117.57.44
 ~~~
 
 在服务器上读取包内 SHA 并解压。`/opt/learning-assistant/.env` 是服务器私有配置；每个版本目录的 `.env` 链接到这一个文件，升级时不要用模板覆盖它：

@@ -32,4 +32,4 @@
 
 ## 服务器地址
 
-- 服务器地址: 101.37.65.217（CentOS 7.9，Docker 26.1.4，Compose 2.27.1）；SSH 配置位于 C:\Users\Lenovo\.ssh\config
+- 服务器地址: 47.117.57.44（Ubuntu，Docker 29.9.3，Compose v5.7.0）；SSH 配置位于 C:\Users\Lenovo\.ssh\config
