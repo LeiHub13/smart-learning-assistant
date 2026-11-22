@@ -59,3 +59,7 @@ Thumbs.db
 # ===== 本地智能体工作数据（不入库）=====
 .workbuddy/
 .zcode/
+
+# ===== 本地向量库误生成路径 / 数据同步临时目录 =====
+ai-service/app/data/
+data-sync-tmp/
