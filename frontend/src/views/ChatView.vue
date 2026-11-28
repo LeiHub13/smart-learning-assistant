@@ -28,23 +28,29 @@
       </template>
       <div style="flex:1;overflow:auto;margin-top:10px">
         <div class="sess-sec">最近</div>
-        <!-- 知识库模式按课程分组（组序随组内最新会话），自由对话保持平铺 -->
+        <!-- 知识库模式按课程分组（组序随组内最新会话），组头可点击收起/展开；自由对话保持平铺 -->
         <div v-for="g in groupedSessions" :key="g.id ?? 'none'" class="sess-group">
-          <div v-if="g.name" class="sess-group-head">
+          <button v-if="g.name" class="sess-group-head" :title="isCollapsed(g.id) ? '展开' : '收起'"
+                  @click="toggleGroup(g.id)">
             <span class="sess-group-name">{{ g.name }}</span>
-            <span class="sess-group-n">{{ g.items.length }}</span>
-          </div>
-          <div v-for="s in g.items" :key="s.id" class="sess" :class="{ on: s.id === sessionId }" @click="openSession(s.id)">
-            <input v-if="renamingId === s.id" v-model="renameVal" class="sess-input"
-                   @click.stop @keyup.enter="doRename(s)" @keyup.esc="cancelRename" @blur="doRename(s)" />
-            <template v-else>
-              <span class="sess-title">{{ s.title }}</span>
-              <span class="sess-mode-tag">{{ s.feynman ? '费曼' : (s.socratic ? '引导' : (s.kbId ? '知识库' : '自由')) }}</span>
-              <span class="sess-ops" @click.stop>
-                <button class="sess-btn" title="重命名" @click="startRename(s)">✎</button>
-                <button class="sess-btn" title="删除" @click="removeSession(s)">✕</button>
-              </span>
-            </template>
+            <span class="sess-group-meta">
+              <span class="sess-group-n">{{ g.items.length }}</span>
+              <AppIcon name="chev" class="grp-arrow" :class="{ open: !isCollapsed(g.id) }" :size="12" />
+            </span>
+          </button>
+          <div v-show="!g.name || !isCollapsed(g.id)">
+            <div v-for="s in g.items" :key="s.id" class="sess" :class="{ on: s.id === sessionId }" @click="openSession(s.id)">
+              <input v-if="renamingId === s.id" v-model="renameVal" class="sess-input"
+                     @click.stop @keyup.enter="doRename(s)" @keyup.esc="cancelRename" @blur="doRename(s)" />
+              <template v-else>
+                <span class="sess-title">{{ s.title }}</span>
+                <span class="sess-mode-tag">{{ s.feynman ? '费曼' : (s.socratic ? '引导' : (s.kbId ? '知识库' : '自由')) }}</span>
+                <span class="sess-ops" @click.stop>
+                  <button class="sess-btn" title="重命名" @click="startRename(s)">✎</button>
+                  <button class="sess-btn" title="删除" @click="removeSession(s)">✕</button>
+                </span>
+              </template>
+            </div>
           </div>
         </div>
         <EmptyState v-if="!filteredSessions.length" compact icon="chat" title="暂无会话"
@@ -226,6 +232,17 @@ const groupedSessions = computed(() => {
   }
   return [...groups.values()]
 })
+
+/* 分组折叠：默认全展开，点组头切换（key 用字符串区分 null 组） */
+const collapsedGroups = ref(new Set())
+const groupKey = (id) => String(id ?? 'none')
+const isCollapsed = (id) => collapsedGroups.value.has(groupKey(id))
+const toggleGroup = (id) => {
+  const k = groupKey(id)
+  const next = new Set(collapsedGroups.value)
+  next.has(k) ? next.delete(k) : next.add(k)
+  collapsedGroups.value = next
+}
 
 /* ===== 刷新后恢复现场：记住用户最后选择的模式、知识库绑定与所在会话 ===== */
 const LS_KEYS = { mode: 'chat-mode', kbCourse: 'chat-kb-course', kbKb: 'chat-kb-id', kbScope: 'chat-kb-scope' }
@@ -752,14 +769,20 @@ html.dark .src-item.flash { box-shadow: 0 0 0 3px rgba(56,139,253,.35); }
 }
 /* 侧栏底色是 --soft，悬停换 --hover 才看得见 */
 .sess:hover { background: var(--hover); }
-/* 课程分组头 */
+/* 课程分组头：可点击收起/展开 */
 .sess-group-head {
   display: flex; align-items: center; justify-content: space-between;
-  margin: 10px 4px 4px; padding: 0 2px;
-  font-size: 11px; font-weight: 600; color: var(--muted);
+  width: 100%; margin: 10px 4px 4px; padding: 4px 8px;
+  border: none; background: transparent; cursor: pointer; border-radius: 6px;
+  font-size: 13px; font-weight: 600; color: var(--text); font-family: inherit;
+  transition: background .15s ease;
 }
+.sess-group-head:hover { background: var(--hover); }
 .sess-group:first-of-type .sess-group-head { margin-top: 2px; }
-.sess-group-n { font-weight: 500; opacity: .65; }
+.sess-group-meta { display: inline-flex; align-items: center; gap: 5px; flex: none; }
+.sess-group-n { font-size: 11px; font-weight: 500; color: var(--muted); }
+.grp-arrow { color: var(--muted); transition: transform .2s ease; }
+.grp-arrow.open { transform: rotate(180deg); }
 .sess-group-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ===== 顶栏工具行：会话标题 + 配额/闪卡/模式开关 ===== */
