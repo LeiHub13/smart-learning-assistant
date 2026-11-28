@@ -28,17 +28,24 @@
       </template>
       <div style="flex:1;overflow:auto;margin-top:10px">
         <div class="sess-sec">最近</div>
-        <div v-for="s in filteredSessions" :key="s.id" class="sess" :class="{ on: s.id === sessionId }" @click="openSession(s.id)">
-          <input v-if="renamingId === s.id" v-model="renameVal" class="sess-input"
-                 @click.stop @keyup.enter="doRename(s)" @keyup.esc="cancelRename" @blur="doRename(s)" />
-          <template v-else>
-            <span class="sess-title">{{ s.title }}</span>
-            <span class="sess-mode-tag">{{ s.feynman ? '费曼' : (s.socratic ? '引导' : (s.kbId ? '知识库' : '自由')) }}</span>
-            <span class="sess-ops" @click.stop>
-              <button class="sess-btn" title="重命名" @click="startRename(s)">✎</button>
-              <button class="sess-btn" title="删除" @click="removeSession(s)">✕</button>
-            </span>
-          </template>
+        <!-- 知识库模式按课程分组（组序随组内最新会话），自由对话保持平铺 -->
+        <div v-for="g in groupedSessions" :key="g.id ?? 'none'" class="sess-group">
+          <div v-if="g.name" class="sess-group-head">
+            <span class="sess-group-name">{{ g.name }}</span>
+            <span class="sess-group-n">{{ g.items.length }}</span>
+          </div>
+          <div v-for="s in g.items" :key="s.id" class="sess" :class="{ on: s.id === sessionId }" @click="openSession(s.id)">
+            <input v-if="renamingId === s.id" v-model="renameVal" class="sess-input"
+                   @click.stop @keyup.enter="doRename(s)" @keyup.esc="cancelRename" @blur="doRename(s)" />
+            <template v-else>
+              <span class="sess-title">{{ s.title }}</span>
+              <span class="sess-mode-tag">{{ s.feynman ? '费曼' : (s.socratic ? '引导' : (s.kbId ? '知识库' : '自由')) }}</span>
+              <span class="sess-ops" @click.stop>
+                <button class="sess-btn" title="重命名" @click="startRename(s)">✎</button>
+                <button class="sess-btn" title="删除" @click="removeSession(s)">✕</button>
+              </span>
+            </template>
+          </div>
         </div>
         <EmptyState v-if="!filteredSessions.length" compact icon="chat" title="暂无会话"
                     hint="点击上方「新聊天」，或直接在右侧开始提问" />
@@ -205,6 +212,20 @@ const activeStream = { sid: null, target: null }
 const sessionMode = (s) => (s && s.kbId ? 'kb' : 'free')
 const filteredSessions = computed(() => sessions.value.filter((s) => sessionMode(s) === mode.value))
 const currentSession = computed(() => sessions.value.find((x) => x.id === sessionId.value))
+/* 会话分组：知识库模式按课程归类（课程名取自已加载课程表，已删课程兜底展示），
+   组序随组内最新会话（filteredSessions 已按时间倒序，首现顺序即组序）；自由对话单组平铺不显示组头 */
+const groupedSessions = computed(() => {
+  if (mode.value !== 'kb') return [{ id: null, name: '', items: filteredSessions.value }]
+  const groups = new Map()
+  for (const s of filteredSessions.value) {
+    const key = s.courseId ?? null
+    if (!groups.has(key)) {
+      groups.set(key, { id: key, name: key ? (courses.value.find((c) => c.id === key)?.name || '已删除课程') : '未绑定课程', items: [] })
+    }
+    groups.get(key).items.push(s)
+  }
+  return [...groups.values()]
+})
 
 /* ===== 刷新后恢复现场：记住用户最后选择的模式、知识库绑定与所在会话 ===== */
 const LS_KEYS = { mode: 'chat-mode', kbCourse: 'chat-kb-course', kbKb: 'chat-kb-id', kbScope: 'chat-kb-scope' }
@@ -731,6 +752,15 @@ html.dark .src-item.flash { box-shadow: 0 0 0 3px rgba(56,139,253,.35); }
 }
 /* 侧栏底色是 --soft，悬停换 --hover 才看得见 */
 .sess:hover { background: var(--hover); }
+/* 课程分组头 */
+.sess-group-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 10px 4px 4px; padding: 0 2px;
+  font-size: 11px; font-weight: 600; color: var(--muted);
+}
+.sess-group:first-of-type .sess-group-head { margin-top: 2px; }
+.sess-group-n { font-weight: 500; opacity: .65; }
+.sess-group-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ===== 顶栏工具行：会话标题 + 配额/闪卡/模式开关 ===== */
 .chat-topbar {
