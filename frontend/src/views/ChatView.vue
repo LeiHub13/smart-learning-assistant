@@ -154,7 +154,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { api, sseStream, getCourses } from '../api'
 import QuotaBadge from '../components/QuotaBadge.vue'
@@ -206,6 +206,17 @@ const sessionMode = (s) => (s && s.kbId ? 'kb' : 'free')
 const filteredSessions = computed(() => sessions.value.filter((s) => sessionMode(s) === mode.value))
 const currentSession = computed(() => sessions.value.find((x) => x.id === sessionId.value))
 
+/* ===== 刷新后恢复现场：记住用户最后选择的模式、知识库绑定与所在会话 ===== */
+const LS_KEYS = { mode: 'chat-mode', kbCourse: 'chat-kb-course', kbKb: 'chat-kb-id', kbScope: 'chat-kb-scope' }
+const lastSidKey = (m) => (m === 'kb' ? 'chat-last-sid-kb' : 'chat-last-sid-free')
+const lsGet = (k) => { try { return localStorage.getItem(k) } catch { return null } }
+const lsSet = (k, v) => { try { v == null || v === '' ? localStorage.removeItem(k) : localStorage.setItem(k, String(v)) } catch { /* 隐私模式忽略 */ } }
+
+watch(mode, (m) => lsSet(LS_KEYS.mode, m))
+watch(courseId, (v) => lsSet(LS_KEYS.kbCourse, v ?? ''))
+watch(kbId, (v) => lsSet(LS_KEYS.kbKb, v ?? ''))
+watch(kbScope, (v) => lsSet(LS_KEYS.kbScope, v))
+
 /* 输入框自动增高（ChatGPT 式），上限 200px；发送后由 send() 复位 */
 const inputRef = ref(null)
 const autoGrow = (e) => {
@@ -237,7 +248,31 @@ onMounted(async () => {
     router.replace({ path: '/chat' })
     return
   }
-  if (list.length) await openSession(list[0].id)
+  // 恢复刷新前的模式与知识库绑定（此前总是打开最新会话并把模式拽成它的，用户选的模式被覆盖）
+  const savedMode = lsGet(LS_KEYS.mode) === 'free' ? 'free' : 'kb'
+  mode.value = savedMode
+  if (savedMode === 'kb') {
+    const cid = Number(lsGet(LS_KEYS.kbCourse))
+    courseId.value = courses.value.some((c) => c.id === cid) ? cid : null
+    if (courseId.value) {
+      kbs.value = await api('/api/courses/' + courseId.value + '/kb').catch(() => [])
+      const kid = Number(lsGet(LS_KEYS.kbKb))
+      kbId.value = kbs.value.some((k) => k.id === kid) ? kid : null
+      kbScope.value = lsGet(LS_KEYS.kbScope) === 'course' ? 'course' : 'single'
+    } else {
+      kbs.value = []
+      kbId.value = null
+    }
+  } else {
+    courseId.value = null
+    kbId.value = null
+    kbs.value = []
+  }
+  // 优先回到上次打开的会话（须属于当前模式），否则打开该模式最新会话；都没有则保持空态，不自动建会话
+  const savedSid = Number(lsGet(lastSidKey(savedMode)))
+  const saved = list.find((x) => x.id === savedSid && sessionMode(x) === savedMode)
+  const target = saved || filteredSessions.value[0]
+  if (target) await openSession(target.id)
 })
 
 /* 图谱跳转提问：校验并绑定 query 里的课程/知识库，复用既有会话或新建后自动发送；返回是否成功受理 */
@@ -480,6 +515,8 @@ const openSession = async (id) => {
       kbs.value = []
     }
   }
+  // 记住本次打开的会话，刷新后回到这里（按模式分开记）
+  lsSet(lastSidKey(mode.value), id)
   scrollDown()
 }
 
