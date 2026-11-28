@@ -285,15 +285,19 @@ textarea { resize: vertical; min-height: 80px; }
   padding: 10px 14px; border-radius: 6px; margin-bottom: 14px;
 }
 
-/* ======== 答疑 ======== */
-.chat-wrap { display: flex; gap: 16px; height: calc(100vh - 60px - 68px); height: calc(100dvh - 60px - 68px); }
-.side {
-  width: 252px; flex-shrink: 0; display: flex; flex-direction: column;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 8px; padding: 14px; overflow: hidden; margin-bottom: 0;
-  box-shadow: none; transition: none;
+/* ======== 答疑（ChatGPT 风格壳：全出血 + 扁平会话侧栏；消息行/输入条由 ChatView scoped 定义） ======== */
+.chat-wrap {
+  display: flex;
+  height: calc(100vh - 60px);
+  height: calc(100dvh - 60px);
+  margin: -24px -32px -40px;   /* 全出血：抵消 .main 内边距 */
+  overflow: hidden;
 }
-.chat-wrap .side.card:hover { box-shadow: none; }
+.side {
+  width: 268px; flex-shrink: 0; display: flex; flex-direction: column;
+  background: var(--soft); border-right: 1px solid var(--border);
+  padding: 12px 10px; overflow: hidden;
+}
 .mode-tabs { display: flex; gap: 4px; margin: 4px 0 12px; background: var(--soft); border: 1px solid var(--border); border-radius: 6px; padding: 3px; }
 .mode-tabs button {
   flex: 1; padding: 6px 0; border: none; border-radius: 4px;
@@ -330,9 +334,8 @@ textarea { resize: vertical; min-height: 80px; }
 .sess:hover { background: var(--soft); }
 .sess.on { background: var(--accent-subtle); color: var(--primary-dark); font-weight: 600; }
 .chatbox {
-  flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--card);
-  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
-  box-shadow: 0 1px 2px rgba(31,35,40,.05);
+  flex: 1; min-width: 0; display: flex; flex-direction: column;
+  background: var(--bg); overflow: hidden;
 }
 .msgs { flex: 1; overflow-y: auto; padding: 22px 24px; }
 .m { display: flex; gap: 10px; margin-bottom: 18px; animation: msg-in .22s ease; }
@@ -349,18 +352,39 @@ textarea { resize: vertical; min-height: 80px; }
   background: var(--soft); border: 1px solid var(--border);
 }
 .m.me .bub { background: var(--primary); color: #fff; border-color: var(--primary); border-radius: 8px 4px 8px 8px; }
-.bub p { margin: 4px 0; }
-.bub ul { padding-left: 18px; margin: 4px 0; }
-.bub h1, .bub h2, .bub h3, .bub h4 { margin: 8px 0 4px; }
-.bub pre {
+/* 答疑 AI 正文容器 .cm-body 与对话厅气泡 .bub 共用同一套 Markdown 排版 */
+.bub p, .cm-body p { margin: 4px 0; }
+.bub ul, .cm-body ul { padding-left: 18px; margin: 4px 0; }
+.bub h1, .bub h2, .bub h3, .bub h4, .cm-body h1, .cm-body h2, .cm-body h3, .cm-body h4 { margin: 8px 0 4px; }
+.bub pre, .cm-body pre {
   background: var(--soft); color: var(--text); border: 1px solid var(--border);
   padding: 12px; border-radius: 6px;
   overflow-x: auto; font-size: 12.5px; margin: 8px 0; line-height: 1.6;
 }
-.bub pre code { background: transparent; padding: 0; color: inherit; }
-.bub blockquote { border-left: 3px solid var(--border); padding-left: 10px; color: var(--muted); margin: 6px 0; }
-.bub code { background: rgba(175,184,193,.2); padding: 1px 5px; border-radius: 5px; font-size: 12.5px; }
+.bub pre code, .cm-body pre code { background: transparent; padding: 0; color: inherit; }
+.bub blockquote, .cm-body blockquote { border-left: 3px solid var(--border); padding-left: 10px; color: var(--muted); margin: 6px 0; }
+.bub code, .cm-body code { background: rgba(175,184,193,.2); padding: 1px 5px; border-radius: 5px; font-size: 12.5px; }
 .m.me .bub code { background: rgba(255,255,255,.22); }
+/* 代码块容器：mdToHtml 输出，头部语言标签 + 复制按钮（复制走 main.js 全局事件委托） */
+.md-code {
+  background: var(--soft); border: 1px solid var(--border);
+  border-radius: 10px; margin: 10px 0; overflow: hidden;
+}
+.md-code-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 8px 5px 12px; font-size: 12px; color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.md-code-copy {
+  border: none; background: transparent; color: var(--muted);
+  font-size: 12px; font-family: inherit; cursor: pointer;
+  padding: 3px 9px; border-radius: 6px; transition: background .15s ease, color .15s ease;
+}
+.md-code-copy:hover { background: var(--hover); color: var(--text); }
+/* 容器自带圆角与边框，压掉 .bub pre/.cm-body pre 的重复包装感 */
+.md-code pre {
+  margin: 0; border: none; border-radius: 0; background: transparent; padding: 12px 14px;
+}
 .sources {
   margin-top: 8px; font-size: 12px; color: var(--primary);
   background: var(--accent-subtle); border-radius: 6px; padding: 6px 10px; line-height: 1.7;
@@ -371,13 +395,7 @@ textarea { resize: vertical; min-height: 80px; }
   vertical-align: -2px; animation: blink 1s steps(2) infinite;
 }
 @keyframes blink { 50% { opacity: 0; } }
-.input-bar {
-  border-top: 1px solid var(--border); padding: 14px 18px;
-  display: flex; gap: 12px; align-items: flex-end;
-  background: var(--bg);
-}
-.input-bar textarea { flex: 1; min-height: 44px; max-height: 130px; border-radius: 6px; }
-.input-bar .btn { border-radius: 6px; height: 44px; padding: 0 20px; }
+/* 输入条已由 ChatView scoped 的 .composer 与对话厅 scoped 的 .input-bar 各自定义 */
 
 /* ======== Markdown 渲染（mdToHtml：答疑/讲义/学情建议/学习报告 v-html 内容） ======== */
 .md-divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
@@ -466,6 +484,8 @@ a.link:hover { text-decoration: underline; }
 @media (max-width: 1024px) {
   .main { padding: 18px 16px; }
   .grid2 { grid-template-columns: 1fr; }
+  /* 全出血页（答疑/对话厅）跟随内边距收紧负边距 */
+  .chat-wrap { margin: -18px -16px; }
 }
 
 /* 手机（≤768px）：侧边栏 → 顶部导航栏，内容纵向堆叠 */
@@ -514,9 +534,16 @@ a.link:hover { text-decoration: underline; }
   .row { flex-direction: column; align-items: stretch; gap: 10px; }
   .row > * { flex: none !important; width: 100%; }
 
-  /* 答疑：会话栏转顶部卡片 */
-  .chat-wrap { flex-direction: column; height: calc(100dvh - 60px - 40px); }
-  .side { width: 100%; max-height: 240px; min-height: 0; }
+  /* 答疑：会话栏转顶部卡片（全出血方案，同对话厅：扣顶栏 60px + 置顶导航约 72px） */
+  .chat-wrap {
+    flex-direction: column;
+    margin: -14px -12px calc(-22px - env(safe-area-inset-bottom));
+    height: calc(100dvh - 132px - env(safe-area-inset-bottom));
+  }
+  .side {
+    width: 100%; max-height: 240px; min-height: 0;
+    border-right: none; border-bottom: 1px solid var(--border);
+  }
   .chatbox { min-height: 0; }
   .m .bub { max-width: 88%; }
   .gen { max-height: 60vh; }

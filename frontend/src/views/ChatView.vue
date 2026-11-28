@@ -1,9 +1,10 @@
 <template>
   <div class="chat-wrap">
-    <div class="side card">
-      <h3>会话</h3>
-      <button class="btn small" style="margin:8px 0" @click="onNewSession">+ 新建会话</button>
-      <div v-if="hint" style="margin-bottom:8px;font-size:12px;color:var(--warn)">{{ hint }}</div>
+    <aside class="side">
+      <button class="new-chat" @click="onNewSession">
+        <AppIcon name="practice" :size="15" /> 新聊天
+      </button>
+      <div v-if="hint" class="side-hint">{{ hint }}</div>
       <div class="mode-tabs">
         <button :class="{ on: mode === 'kb' }" @click="setMode('kb')">知识库答疑</button>
         <button :class="{ on: mode === 'free' }" @click="setMode('free')">自由对话</button>
@@ -26,6 +27,7 @@
         </select>
       </template>
       <div style="flex:1;overflow:auto;margin-top:10px">
+        <div class="sess-sec">最近</div>
         <div v-for="s in filteredSessions" :key="s.id" class="sess" :class="{ on: s.id === sessionId }" @click="openSession(s.id)">
           <input v-if="renamingId === s.id" v-model="renameVal" class="sess-input"
                  @click.stop @keyup.enter="doRename(s)" @keyup.esc="cancelRename" @blur="doRename(s)" />
@@ -39,87 +41,102 @@
           </template>
         </div>
         <EmptyState v-if="!filteredSessions.length" compact icon="chat" title="暂无会话"
-                    hint="点击上方「+ 新建会话」，或直接在右侧开始提问" />
+                    hint="点击上方「新聊天」，或直接在右侧开始提问" />
       </div>
-    </div>
+    </aside>
 
     <div class="chatbox">
-      <div class="chat-toolbar">
-        <QuotaBadge />
-        <button class="btn ghost small" :disabled="streaming || !sessionId" @click="genFlashcards">生成闪卡</button>
-        <label class="socratic-toggle" title="开启后 AI 不直接给答案，拆步骤反问引导你思考">
-          <input type="checkbox" :checked="socratic" @change="toggleSocratic" />
-          苏格拉底引导
-        </label>
-        <label class="socratic-toggle" title="费曼技巧：角色互换，你把概念讲给 AI 听，AI 扮演不懂的学生追问；说「讲完了」可得讲解评分">
-          <input type="checkbox" :checked="feynman" @change="toggleFeynman" />
-          费曼讲解
-        </label>
-        <template v-if="socratic">
-          <span class="socratic-hint">引导模式：AI 逐步反问，不直接给答案</span>
-          <a class="link" style="margin-left:auto;font-size:12px" @click="askDirect">卡住了？直接讲解</a>
-        </template>
-        <span v-if="feynman" class="socratic-hint">费曼模式：你讲 AI 问，讲完后说「讲完了」可得评分</span>
+      <div class="chat-topbar">
+        <div class="ct-title">{{ currentSession ? currentSession.title : '新对话' }}</div>
+        <div class="ct-ops">
+          <QuotaBadge />
+          <button class="btn ghost small" :disabled="streaming || !sessionId" @click="genFlashcards">生成闪卡</button>
+          <label class="mode-pill" title="开启后 AI 不直接给答案，拆步骤反问引导你思考">
+            <input type="checkbox" :checked="socratic" @change="toggleSocratic" />
+            苏格拉底
+          </label>
+          <label class="mode-pill" title="费曼技巧：角色互换，你把概念讲给 AI 听，AI 扮演不懂的学生追问；说「讲完了」可得讲解评分">
+            <input type="checkbox" :checked="feynman" @change="toggleFeynman" />
+            费曼
+          </label>
+        </div>
       </div>
-      <div class="msgs" ref="bodyRef">
+      <div v-if="socratic || feynman" class="mode-banner">
+        <template v-if="socratic">引导模式：AI 逐步反问，不直接给答案</template>
+        <template v-else>费曼模式：你讲 AI 问，讲完后说「讲完了」可得评分</template>
+        <a v-if="socratic" class="link" @click="askDirect">卡住了？直接讲解</a>
+      </div>
+      <div class="msgs" ref="bodyRef" :class="{ 'is-empty': !messages.length }">
         <EmptyState v-if="!messages.length" icon="sparkles" title="你好，我是 AI 学习助手"
                     :hint="mode === 'kb' ? '选择课程知识库后提问，回答将基于资料并标注引用' : '学习问题随时问我'">
           <button v-for="q in suggestQs" :key="q" class="ce-chip" :title="q" @click="fill(q)">{{ q }}</button>
         </EmptyState>
-        <div v-for="(m, i) in messages" :key="i" class="m" :class="m.role === 'user' ? 'me' : 'ai'">
-          <div class="av">{{ m.role === 'user' ? '我' : 'AI' }}</div>
-          <div class="bub">
-            <div v-if="streaming && i === messages.length - 1" class="stream-txt">{{ m.content }}<span class="cursor"></span></div>
-            <div v-else-if="m.role === 'user'">{{ m.content }}</div>
-            <div v-else v-html="mdToHtml(m.content)"></div>
-            <div v-if="m.sources && m.role === 'assistant' && !(streaming && i === messages.length - 1)" class="sources">
-              <template v-if="m.sourceChunks">
-                <span>引用来源：</span>
-                <a v-for="(cid, si) in m.sourceChunks.split(',')" :key="si"
-                   class="src-chip" @click="jumpSource(m, si + 1, $event)">[{{ si + 1 }}]</a>
-              </template>
-              <template v-else>引用来源：知识库片段 {{ m.sources.split(',').join('、') }}</template>
-            </div>
-            <div v-if="m.showSources && m.sourceChunks" class="src-panel">
-              <div class="src-panel-head">
-                <span>引用原文</span>
-                <button class="src-close" @click="closeSources(m)">收起</button>
+        <div v-for="(m, i) in messages" :key="i" class="cm" :class="m.role === 'user' ? 'me' : 'ai'">
+          <div v-if="m.role === 'user'" class="cm-bub">{{ m.content }}</div>
+          <div v-else class="cm-ai">
+            <div class="cm-body">
+              <div v-if="streaming && i === messages.length - 1" class="stream-txt">{{ m.content }}<span class="cursor"></span></div>
+              <div v-else v-html="mdToHtml(m.content)"></div>
+              <div v-if="m.sources && !(streaming && i === messages.length - 1)" class="sources">
+                <template v-if="m.sourceChunks">
+                  <span>引用来源：</span>
+                  <a v-for="(cid, si) in m.sourceChunks.split(',')" :key="si"
+                     class="src-chip" @click="jumpSource(m, si + 1, $event)">[{{ si + 1 }}]</a>
+                </template>
+                <template v-else>引用来源：知识库片段 {{ m.sources.split(',').join('、') }}</template>
               </div>
-              <div v-for="(d, di) in m.sourceDetails || []" :key="di" class="src-item"
-                   :class="{ flash: m.flashSrc === di + 1 }">
-                <div class="src-doc">[{{ di + 1 }}] 《{{ d.docName }}》</div>
-                <div class="src-txt">{{ d.content }}</div>
-              </div>
-            </div>
-            <!-- Agent 待确认动作：只有点击「确认执行」后 Java 侧才真正写库 -->
-            <div v-for="a in m.actions || []" :key="a.id" class="agent-action">
-              <div v-if="a.state === 'done'" class="sources">{{ a.result }}</div>
-              <template v-else>
-                <div class="agent-action-summary">{{ a.summary }}</div>
-                <div class="agent-action-ops">
-                  <button class="btn small" :disabled="a.busy" @click="confirmAction(m, a)">确认执行</button>
-                  <button class="btn ghost small" :disabled="a.busy" @click="cancelAction(m, a)">取消</button>
+              <div v-if="m.showSources && m.sourceChunks" class="src-panel">
+                <div class="src-panel-head">
+                  <span>引用原文</span>
+                  <button class="src-close" @click="closeSources(m)">收起</button>
                 </div>
-              </template>
+                <div v-for="(d, di) in m.sourceDetails || []" :key="di" class="src-item"
+                     :class="{ flash: m.flashSrc === di + 1 }">
+                  <div class="src-doc">[{{ di + 1 }}] 《{{ d.docName }}》</div>
+                  <div class="src-txt">{{ d.content }}</div>
+                </div>
+              </div>
+              <!-- Agent 待确认动作：只有点击「确认执行」后 Java 侧才真正写库 -->
+              <div v-for="a in m.actions || []" :key="a.id" class="agent-action">
+                <div v-if="a.state === 'done'" class="sources">{{ a.result }}</div>
+                <template v-else>
+                  <div class="agent-action-summary">{{ a.summary }}</div>
+                  <div class="agent-action-ops">
+                    <button class="btn small" :disabled="a.busy" @click="confirmAction(m, a)">确认执行</button>
+                    <button class="btn ghost small" :disabled="a.busy" @click="cancelAction(m, a)">取消</button>
+                  </div>
+                </template>
+              </div>
+              <!-- 追问推荐：回答结束后自动给出 2~3 个可继续问的问题，点一下直接提问 -->
+              <div v-if="m.followups && m.followups.length && !(streaming && i === messages.length - 1)"
+                   class="followups">
+                <span class="fu-label">继续问</span>
+                <button v-for="(q, qi) in m.followups" :key="qi" class="fu-chip" :title="q" @click="send(q)">{{ q }}</button>
+              </div>
             </div>
-            <!-- 追问推荐：回答结束后自动给出 2~3 个可继续问的问题，点一下直接提问 -->
-            <div v-if="m.role === 'assistant' && m.followups && m.followups.length && !(streaming && i === messages.length - 1)"
-                 class="followups">
-              <span class="fu-label">继续问</span>
-              <button v-for="(q, qi) in m.followups" :key="qi" class="fu-chip" :title="q" @click="send(q)">{{ q }}</button>
+            <div v-if="!(streaming && i === messages.length - 1) && m.content" class="cm-ops">
+              <button class="ai-op" @click="copyMessage(m, i)">{{ copiedId === i ? '已复制' : '复制' }}</button>
             </div>
           </div>
         </div>
       </div>
-      <div class="input-bar">
-        <textarea v-model="input"
-                  :placeholder="feynman ? '用你的话把概念讲给 AI 听…（费曼模式，说「讲完了」可得评分）'
-                    : (socratic ? '输入你的思考或回答…（引导模式）' : '输入问题，Enter 发送')"
-                  :disabled="streaming"
-                  @keydown.enter.exact.prevent="send()"></textarea>
-        <button class="btn" :disabled="streaming || !input.trim()" @click="send()">
-          {{ streaming ? '生成中…' : '发送' }}
-        </button>
+      <div class="composer">
+        <div class="composer-box">
+          <textarea ref="inputRef" v-model="input" rows="1"
+                    :placeholder="feynman ? '用你的话把概念讲给 AI 听…（费曼模式，说「讲完了」可得评分）'
+                      : (socratic ? '输入你的思考或回答…（引导模式）' : '询问任何学习问题，Enter 发送')"
+                    :disabled="streaming"
+                    @input="autoGrow"
+                    @keydown.enter.exact.prevent="send()"></textarea>
+          <button class="composer-send" :disabled="streaming || !input.trim()"
+                  :title="streaming ? '生成中…' : '发送'" @click="send()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 19V5" /><path d="m5 12 7-7 7 7" />
+            </svg>
+          </button>
+        </div>
+        <div class="composer-note">AI 回答可能出错，请核查重要信息</div>
       </div>
     </div>
 
@@ -142,7 +159,8 @@ import { useRouter, useRoute } from 'vue-router'
 import { api, sseStream, getCourses } from '../api'
 import QuotaBadge from '../components/QuotaBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
-import { mdToHtml } from '../utils'
+import AppIcon from '../components/AppIcon.vue'
+import { mdToHtml, copyText } from '../utils'
 
 defineOptions({ name: 'ChatView' })
 
@@ -186,6 +204,28 @@ const activeStream = { sid: null, target: null }
 
 const sessionMode = (s) => (s && s.kbId ? 'kb' : 'free')
 const filteredSessions = computed(() => sessions.value.filter((s) => sessionMode(s) === mode.value))
+const currentSession = computed(() => sessions.value.find((x) => x.id === sessionId.value))
+
+/* 输入框自动增高（ChatGPT 式），上限 200px；发送后由 send() 复位 */
+const inputRef = ref(null)
+const autoGrow = (e) => {
+  const el = e.target
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 200) + 'px'
+}
+
+/* 复制 AI 回复：沿用全局 copyText（非 https 环境自动降级 execCommand） */
+const copiedId = ref(-1)
+let copiedTimer = null
+const copyMessage = async (m, i) => {
+  if (await copyText(m.content)) {
+    copiedId.value = i
+    clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => (copiedId.value = -1), 1500)
+  } else {
+    showHint('复制失败，请手动选择文本复制')
+  }
+}
 
 onMounted(async () => {
   courses.value = await getCourses()
@@ -468,6 +508,7 @@ const send = async (textArg) => {
   activeStream.sid = sid
   activeStream.target = messages.value[messages.value.length - 1]
   input.value = ''
+  if (inputRef.value) inputRef.value.style.height = 'auto'
   streaming.value = true
   scrollDown()
   try {
@@ -531,8 +572,8 @@ const jumpSource = async (m, n, ev) => {
     }
   }
   nextTick(() => {
-    // 从点击处向上找所在气泡，避免多条消息同时展开面板时定位到别家
-    const bub = ev && ev.target ? ev.target.closest('.bub') : null
+    // 从点击处向上找所在 AI 正文块，避免多条消息同时展开面板时定位到别家
+    const bub = ev && ev.target ? ev.target.closest('.cm-ai') : null
     const item = bub && bub.querySelectorAll('.src-item')[n - 1]
     if (item) item.scrollIntoView({ behavior: 'smooth', block: 'center' })
   })
@@ -636,18 +677,112 @@ html.dark .src-item.flash { box-shadow: 0 0 0 3px rgba(56,139,253,.35); }
   color: var(--text); border-color: var(--primary); background: var(--accent-subtle);
 }
 
-/* 苏格拉底引导模式 */
-.chat-toolbar {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 18px 0; font-size: 12.5px;
+/* ===== 会话侧栏（ChatGPT 扁平风格，侧栏底色用全局 .side 的 --soft） ===== */
+.new-chat {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%; padding: 9px 12px; margin: 2px 0 10px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); color: var(--text);
+  font-size: 13.5px; font-weight: 600; font-family: inherit; cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
 }
-.socratic-toggle {
-  display: inline-flex; align-items: center; gap: 6px;
-  cursor: pointer; user-select: none; font-weight: 600; color: var(--muted);
+.new-chat:hover { background: var(--hover); border-color: var(--muted); }
+.side-hint { font-size: 12px; color: var(--warn); margin: 0 2px 8px; }
+.sess-sec {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  letter-spacing: .05em; margin: 4px 4px 6px;
 }
-.socratic-toggle input { width: auto; margin: 0; accent-color: var(--primary); }
-.socratic-toggle:has(input:checked) { color: var(--primary); }
-.socratic-hint { color: var(--muted); }
+/* 侧栏底色是 --soft，悬停换 --hover 才看得见 */
+.sess:hover { background: var(--hover); }
+
+/* ===== 顶栏工具行：会话标题 + 配额/闪卡/模式开关 ===== */
+.chat-topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.ct-title {
+  font-size: 14px; font-weight: 600; letter-spacing: -.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ct-ops { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.mode-pill {
+  display: inline-flex; align-items: center;
+  padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--bg); color: var(--muted);
+  font-size: 12.5px; font-weight: 600; cursor: pointer; user-select: none;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.mode-pill input { display: none; }
+.mode-pill:has(input:checked) { color: var(--primary); border-color: var(--primary); background: var(--accent-subtle); }
+.mode-banner {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  padding: 6px 16px; font-size: 12px; color: var(--muted);
+  background: var(--accent-subtle);
+}
+.mode-banner .link { margin-left: auto; font-size: 12px; }
+
+/* ===== 消息区（ChatGPT 形态：用户右侧灰气泡，AI 全宽正文无气泡） ===== */
+.msgs { padding: 24px 20px 10px; }
+.msgs.is-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.cm { max-width: 760px; margin: 0 auto 26px; }
+.cm.me { display: flex; justify-content: flex-end; }
+.cm-bub {
+  max-width: 85%; padding: 10px 16px; border-radius: 18px;
+  background: var(--soft); border: 1px solid var(--border);
+  line-height: 1.75; white-space: pre-wrap; word-break: break-word;
+}
+.cm-ai { min-width: 0; }
+.cm-body { line-height: 1.75; word-break: break-word; }
+.cm-ops { display: flex; gap: 4px; margin-top: 4px; }
+.ai-op {
+  border: none; background: transparent; color: var(--muted);
+  font-size: 12px; font-family: inherit; cursor: pointer;
+  padding: 3px 9px; border-radius: 6px;
+  transition: background .15s ease, color .15s ease;
+}
+.ai-op:hover { background: var(--hover); color: var(--text); }
+
+/* ===== 胶囊输入条 ===== */
+.composer { flex-shrink: 0; background: var(--bg); padding: 6px 16px 10px; }
+.composer-box {
+  max-width: 760px; margin: 0 auto;
+  display: flex; align-items: flex-end; gap: 10px;
+  border: 1px solid var(--border); border-radius: 24px;
+  background: var(--card); padding: 8px 8px 8px 16px;
+  box-shadow: 0 2px 14px rgba(31,35,40,.06);
+  transition: border-color .15s ease;
+}
+.composer-box:focus-within { border-color: var(--muted); }
+.composer-box textarea {
+  flex: 1; border: none; outline: none; box-shadow: none; background: transparent;
+  padding: 6px 0; min-height: 24px; max-height: 200px;
+  line-height: 1.6; resize: none;
+}
+/* 发送按钮：ChatGPT 式深色圆形箭头（跟随主题文字色） */
+.composer-send {
+  flex: none; width: 36px; height: 36px; border-radius: 50%; border: none;
+  background: var(--text); color: var(--bg); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity .15s ease, transform .15s ease;
+}
+.composer-send svg { width: 18px; height: 18px; }
+.composer-send:disabled { background: var(--soft); color: var(--muted); cursor: not-allowed; }
+.composer-send:not(:disabled):hover { transform: translateY(-1px); }
+.composer-note {
+  max-width: 760px; margin: 6px auto 0; text-align: center;
+  font-size: 11px; color: var(--muted);
+}
+
+/* 移动端：内容列收窄、气泡放宽、工具行紧凑 */
+@media (max-width: 768px) {
+  .cm { margin-bottom: 20px; }
+  .cm-bub { max-width: 92%; }
+  .chat-topbar { padding: 8px 12px; }
+  .ct-ops { gap: 6px; }
+  .mode-pill { padding: 4px 10px; font-size: 12px; }
+  .composer { padding: 4px 10px 8px; }
+  .composer-box { border-radius: 20px; }
+}
 
 html.dark .fu-chip:hover { background: rgba(56,139,253,.3); }
 </style>

@@ -51,16 +51,25 @@ export function mdToHtml(text) {
   const lines = esc(text).split('\n')
   let html = ''
   let inCode = false
+  let codeLang = ''
   const codeBuf = []
+  // 代码块统一包 .md-code（头部语言标签 + 复制按钮，复制走 main.js 的全局事件委托）
+  const flushCode = () => {
+    html += '<div class="md-code"><div class="md-code-head"><span>'
+      + (codeLang || '代码') + '</span><button type="button" class="md-code-copy">复制</button></div><pre>'
+      + codeBuf.join('\n') + '</pre></div>'
+    codeBuf.length = 0
+    codeLang = ''
+    inCode = false
+  }
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]
     if (raw.startsWith('```')) {
       if (inCode) {
-        html += '<pre>' + codeBuf.join('\n') + '</pre>'
-        codeBuf.length = 0
-        inCode = false
+        flushCode()
       } else {
-        html += '<p></p>'
+        const lang = raw.slice(3).trim()
+        codeLang = lang ? lang.charAt(0).toUpperCase() + lang.slice(1) : ''
         inCode = true
       }
       continue
@@ -98,10 +107,28 @@ export function mdToHtml(text) {
       html += '<p>' + rendered + '</p>'
     }
   }
-  if (inCode) html += '<pre>' + codeBuf.join('\n') + '</pre>'
+  if (inCode) flushCode()
   return html
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`(.+?)`/g, '<code>$1</code>')
+}
+
+/** 剪贴板写入：优先 Clipboard API，非安全上下文（http 裸 IP）降级 execCommand */
+export async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch (e) {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'
+    document.body.appendChild(ta)
+    ta.select()
+    let ok = false
+    try { ok = document.execCommand('copy') } catch (e2) { /* 忽略 */ }
+    ta.remove()
+    return ok
+  }
 }
 
 export function fmtTime(t) {
