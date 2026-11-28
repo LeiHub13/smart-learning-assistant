@@ -44,16 +44,16 @@
       <div class="card">
         <h3>考试列表</h3>
         <div v-if="!exams.length" class="empty">暂无考试，点击「创建考试」开一场</div>
-        <table v-if="exams.length">
+        <table v-if="exams.length" class="card-table">
           <thead><tr><th>考试</th><th>课程</th><th>时长</th><th>总分</th><th>我的成绩</th><th></th></tr></thead>
           <tbody>
             <tr v-for="e in exams" :key="e.id">
-              <td><b>{{ e.title }}</b></td>
-              <td>{{ e.courseName }}</td>
-              <td>{{ e.durationMin ? e.durationMin + ' 分钟' : '不限时' }}</td>
-              <td>{{ e.totalScore }}</td>
-              <td>{{ e.attemptCount ? '最好 ' + e.myBestScore + ' / ' + e.totalScore + '（' + e.attemptCount + ' 次）' : '未参加' }}</td>
-              <td><button class="btn small" @click="enter(e)">进入考试</button></td>
+              <td data-label="考试"><b>{{ e.title }}</b></td>
+              <td data-label="课程">{{ e.courseName }}</td>
+              <td data-label="时长">{{ e.durationMin ? e.durationMin + ' 分钟' : '不限时' }}</td>
+              <td data-label="总分">{{ e.totalScore }}</td>
+              <td data-label="成绩">{{ e.attemptCount ? '最好 ' + e.myBestScore + ' / ' + e.totalScore + '（' + e.attemptCount + ' 次）' : '未参加' }}</td>
+              <td data-label="操作"><button class="btn small" @click="enter(e)">进入考试</button></td>
             </tr>
           </tbody>
         </table>

@@ -68,11 +68,11 @@
           <button class="btn ghost small" @click="loadUsers(1)">搜索</button>
         </div>
       </div>
-      <table v-if="uRecords.length">
+      <table v-if="uRecords.length" class="card-table">
         <thead><tr><th>用户名</th><th>昵称</th><th>邮箱</th><th>练习次数</th><th>最近学习</th><th>注册时间</th><th>角色</th></tr></thead>
         <tbody>
           <tr v-for="u in uRecords" :key="u.id">
-            <td>
+            <td data-label="用户">
               <div class="u-cell">
                 <img v-if="u.avatar" :src="u.avatar" class="u-av" alt="" />
                 <span v-else class="u-av">{{ (u.nickname || u.username || '?').slice(0, 1).toUpperCase() }}</span>
@@ -80,12 +80,12 @@
                 <span v-if="u.admin" class="tag">管理员</span>
               </div>
             </td>
-            <td>{{ u.nickname || '—' }}</td>
-            <td>{{ u.email || '—' }}</td>
-            <td>{{ u.practiceCount }}</td>
-            <td>{{ u.lastStudy || '—' }}</td>
-            <td>{{ (u.createdAt || '').replace('T', ' ').slice(0, 16) }}</td>
-            <td>{{ u.admin ? '管理员' : '普通用户' }}</td>
+            <td data-label="昵称">{{ u.nickname || '—' }}</td>
+            <td data-label="邮箱">{{ u.email || '—' }}</td>
+            <td data-label="练习次数">{{ u.practiceCount }}</td>
+            <td data-label="最近学习">{{ u.lastStudy || '—' }}</td>
+            <td data-label="注册时间">{{ (u.createdAt || '').replace('T', ' ').slice(0, 16) }}</td>
+            <td data-label="角色">{{ u.admin ? '管理员' : '普通用户' }}</td>
           </tr>
         </tbody>
       </table>
@@ -99,15 +99,15 @@
 
     <div class="card">
       <h3>按场景统计（近 14 天）</h3>
-      <table v-if="d && d.byScene && d.byScene.length">
+      <table v-if="d && d.byScene && d.byScene.length" class="card-table">
         <thead><tr><th>场景</th><th>调用</th><th>失败</th><th>平均耗时</th><th>tokens</th></tr></thead>
         <tbody>
           <tr v-for="s in d.byScene" :key="s.scene">
-            <td>{{ sceneLabel(s.scene) }}</td>
-            <td>{{ s.calls }}</td>
-            <td>{{ s.failures }}</td>
-            <td>{{ s.avgMs }} ms</td>
-            <td>{{ fmtTokens(s.tokens) }}</td>
+            <td data-label="场景">{{ sceneLabel(s.scene) }}</td>
+            <td data-label="调用">{{ s.calls }}</td>
+            <td data-label="失败">{{ s.failures }}</td>
+            <td data-label="平均耗时">{{ s.avgMs }} ms</td>
+            <td data-label="tokens">{{ fmtTokens(s.tokens) }}</td>
           </tr>
         </tbody>
       </table>

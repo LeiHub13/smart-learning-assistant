@@ -44,17 +44,17 @@
     </div>
 
     <div class="card">
-      <table v-if="records.length">
+      <table v-if="records.length" class="card-table">
         <thead><tr><th>时间</th><th>类型</th><th>难度</th><th>知识点</th><th>来源</th><th>题干</th><th></th></tr></thead>
         <tbody>
           <tr v-for="q in records" :key="q.id">
-            <td class="nowrap">{{ fmtTime(q.createdAt) }}</td>
-            <td><span class="tag">{{ q.type }}</span></td>
-            <td>{{ q.difficulty || '-' }}</td>
-            <td>{{ q.kpName || '-' }}</td>
-            <td><span class="tag" :class="q.source === 'AI' ? 'ok' : ''">{{ sourceName(q.source) }}</span></td>
-            <td class="stem" :title="q.stem">{{ q.stem }}</td>
-            <td class="nowrap">
+            <td class="nowrap" data-label="时间">{{ fmtTime(q.createdAt) }}</td>
+            <td data-label="类型"><span class="tag">{{ q.type }}</span></td>
+            <td data-label="难度">{{ q.difficulty || '-' }}</td>
+            <td data-label="知识点">{{ q.kpName || '-' }}</td>
+            <td data-label="来源"><span class="tag" :class="q.source === 'AI' ? 'ok' : ''">{{ sourceName(q.source) }}</span></td>
+            <td class="stem" :title="q.stem" data-label="题干">{{ q.stem }}</td>
+            <td class="nowrap" data-label="操作">
               <span v-if="collected.has(q.id)" class="tag ok">已收录</span>
               <a v-else class="link" @click="collect(q)">收录错题</a>
               <a class="link" @click="openEdit(q)">编辑</a>
@@ -73,7 +73,8 @@
 
     <!-- 录入 / 编辑弹窗 -->
     <div v-if="editing" class="modal-mask" @click.self="editing = null">
-      <div class="modal-box" style="max-width:560px">
+      <!-- 基础宽度 min(400px,92vw) 会盖住 max-width，这里显式放宽 -->
+      <div class="modal-box" style="width:min(560px,92vw)">
         <h3>{{ editing.id ? '编辑题目' : '录入题目' }}</h3>
         <div class="row" style="margin-bottom:10px">
           <div>
@@ -305,6 +306,10 @@ const doDelete = async () => {
 <style scoped>
 .stem { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nowrap { white-space: nowrap; }
+/* 手机卡片模式下题干放开限宽，完整展示 */
+@media (max-width: 768px) {
+  .card-table .stem { max-width: none; overflow: visible; white-space: normal; }
+}
 .pager { margin-top: 8px; display: flex; align-items: center; gap: 10px; }
 .link + .link { margin-left: 8px; }
 .ok-hint {

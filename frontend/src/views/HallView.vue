@@ -24,7 +24,7 @@
 
         <div v-for="r in incoming" :key="'r' + r.requestId" class="req-item">
           <span class="shrink">{{ r.nickname }}</span>
-          <span class="row" style="gap:4px;margin-left:auto">
+          <span class="inline-ops">
             <button class="btn small" @click="acceptReq(r)">同意</button>
             <button class="btn ghost small" @click="rejectReq(r)">拒绝</button>
           </span>
@@ -73,7 +73,7 @@
 
       <div v-if="askRemove" class="row" style="margin:8px 16px 0;background:var(--bad-soft,#fdebec);border-radius:8px;padding:8px 12px">
         <span class="shrink" style="font-size:13px">确认删除好友「{{ active.name }}」？聊天记录将保留但无法继续私聊。</span>
-        <span class="row" style="gap:8px;margin-left:auto">
+        <span class="inline-ops">
           <button class="btn danger small" @click="doRemove">确认删除</button>
           <button class="btn ghost small" @click="askRemove = false">取消</button>
         </span>
@@ -641,6 +641,7 @@ onUnmounted(() => {
 .hall-page {
   display: flex;
   height: calc(100vh - 60px);
+  height: calc(100dvh - 60px);
   margin: -24px -32px -40px;
   overflow: hidden;
 }
@@ -682,6 +683,11 @@ onUnmounted(() => {
 .req-item {
   display: flex; align-items: center; gap: 6px;
   padding: 6px 10px; font-size: 13px; overflow-wrap: anywhere;
+}
+/* 行内按钮组：不用全局 .row（手机端会被改写成纵向堆叠） */
+.inline-ops {
+  display: flex; align-items: center; gap: 6px;
+  margin-left: auto; flex: none;
 }
 
 .chat { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
@@ -751,12 +757,23 @@ onUnmounted(() => {
 .av-img { object-fit: cover; }
 
 @media (max-width: 1024px) {
-  .hall-page { margin: -18px -16px; height: calc(100vh - 60px); }
+  .hall-page { margin: -18px -16px; height: calc(100vh - 60px); height: calc(100dvh - 60px); }
   .side { width: 210px; }
 }
+/* 手机：侧栏转顶部卡片、聊天区占余下高度（高度扣掉顶栏 60px + 置顶导航约 72px） */
 @media (max-width: 768px) {
-  .hall-page { margin: -14px -12px calc(-22px - env(safe-area-inset-bottom)); height: calc(100vh - 60px); }
-  .side { width: 180px; }
+  .hall-page {
+    flex-direction: column;
+    margin: -14px -12px calc(-22px - env(safe-area-inset-bottom));
+    height: calc(100dvh - 132px - env(safe-area-inset-bottom));
+  }
+  .side {
+    width: 100%; max-height: 260px; flex: none;
+    border-right: none; border-bottom: 1px solid var(--border);
+  }
+  .chat { min-height: 0; }
+  .chat-head { padding: 8px 12px; }
+  .chat-tabs { padding: 8px 12px; }
   .bub-wrap { max-width: 85%; }
 }
 </style>

@@ -433,7 +433,7 @@ img.avatar { object-fit: cover; padding: 0; }
 .bell:hover { background: var(--hover); }
 .bell .badge { position: absolute; top: 1px; right: 0; background: #d1242f; color: #fff; font-size: 10px; border-radius: 8px; padding: 0 5px; line-height: 14px; box-shadow: 0 0 0 2px var(--bg); }
 .notify-pop {
-  position: absolute; top: 42px; right: -10px; width: 344px; max-height: 440px; overflow-y: auto;
+  position: absolute; top: 42px; right: -10px; width: min(344px, calc(100vw - 24px)); max-height: 440px; overflow-y: auto;
   background: var(--card); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.14);
   padding: 0 0 4px; z-index: 100;
   animation: pop-in .16s ease;
@@ -544,6 +544,10 @@ html.dark .sess-btn:hover { background: rgba(240,246,252,.12); }
 html.dark .sess.on .sess-btn:hover { background: rgba(56,139,253,.35); }
 
 @media (max-width: 768px) {
+  /* iOS 聚焦输入框时字号 <16px 会自动放大页面，这里提到 16px */
+  .global-search :deep(.el-input__inner) { font-size: 16px; }
+  /* 通知下拉改锚定 .tb-right：铃铛右侧还有头像/退出按钮，锚在铃铛上会向左溢出屏幕 */
+  .bell { position: static; }
   /* 顶栏导航模式下拍平：隐藏分组头，子项直接平铺进横条 */
   .grp { display: none; }
   .sub, .sub-in { display: contents; }

@@ -36,15 +36,15 @@
               <button class="btn ghost small" :disabled="!bankQuestions.length" @click="selAll">全选</button>
               <button class="btn small" :disabled="!selIds.length || loading" @click="startByIds">练习选中的 {{ selIds.length }} 题</button>
             </div>
-            <table v-if="bankQuestions.length">
+            <table v-if="bankQuestions.length" class="card-table">
               <thead><tr><th style="width:30px"></th><th>题目</th><th>类型</th><th>知识点</th><th>难度</th></tr></thead>
               <tbody>
                 <tr v-for="q in bankQuestions" :key="q.id">
-                  <td><input type="checkbox" :checked="selIds.includes(q.id)" @change="toggleSel(q.id)" /></td>
-                  <td class="stem">{{ q.stem }}</td>
-                  <td>{{ q.type }}</td>
-                  <td>{{ q.kpName || '—' }}</td>
-                  <td>{{ q.difficulty || '—' }}</td>
+                  <td data-label="选择"><input type="checkbox" :checked="selIds.includes(q.id)" @change="toggleSel(q.id)" /></td>
+                  <td class="stem" data-label="题目">{{ q.stem }}</td>
+                  <td data-label="类型">{{ q.type }}</td>
+                  <td data-label="知识点">{{ q.kpName || '—' }}</td>
+                  <td data-label="难度">{{ q.difficulty || '—' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -54,14 +54,14 @@
 
         <div style="margin-top:14px">
           <span class="label">最近练习</span>
-          <table v-if="history.length">
+          <table v-if="history.length" class="card-table">
             <thead><tr><th>时间</th><th>课程</th><th>得分</th><th></th></tr></thead>
             <tbody>
               <tr v-for="p in history" :key="p.id">
-                <td>{{ fmtTime(p.createdAt) }}</td>
-                <td>{{ p.courseName || '—' }}</td>
-                <td><b>{{ p.score }}</b> / {{ p.totalScore }}</td>
-                <td><a class="link" @click="viewReport(p.id)">查看报告</a></td>
+                <td data-label="时间">{{ fmtTime(p.createdAt) }}</td>
+                <td data-label="课程">{{ p.courseName || '—' }}</td>
+                <td data-label="得分"><b>{{ p.score }}</b> / {{ p.totalScore }}</td>
+                <td data-label="操作"><a class="link" @click="viewReport(p.id)">查看报告</a></td>
               </tr>
             </tbody>
           </table>
@@ -294,7 +294,12 @@ watch(courseId, () => {
 
 const offTheme = onThemeChange(() => renderChart())
 
+/* 横竖屏切换/窗口尺寸变化时重绘成绩曲线 */
+const onResize = () => { if (chart) chart.resize() }
+window.addEventListener('resize', onResize)
+
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize)
   offTheme()
   if (chart) { chart.dispose(); chart = null }
 })
@@ -439,6 +444,10 @@ watch(courseId, () => {
 .pager { margin-top: 8px; display: flex; align-items: center; gap: 10px; }
 /* 选题练习：题干列限宽防撑破表格 */
 .stem { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 手机卡片模式下题干放开限宽，完整展示 */
+@media (max-width: 768px) {
+  .card-table .stem { max-width: none; overflow: visible; white-space: normal; }
+}
 /* 主观题评分点逐项批改 */
 .rv-line { display: flex; gap: 8px; align-items: baseline; margin-top: 6px; font-size: 13px; line-height: 1.7; }
 .rv-line i { font-style: normal; font-weight: 700; flex-shrink: 0; width: 16px; text-align: center; }
